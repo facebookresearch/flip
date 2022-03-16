@@ -14,19 +14,15 @@ WORKDIR=gs://kmh-gcp/checkpoints/flax/examples/imagenet/$(date +%Y%m%d_%H%M)
 # git config --global credential.helper store &&
 # git clone -b $BRANCH $REPO &&
 
-# pip install -r requirements.txt
-
 gcloud alpha compute tpus tpu-vm ssh ${VM_NAME} --zone europe-west4-a \
     --worker=all --command "
-git config --global credential.helper store &&
-git clone -b $BRANCH $REPO
+cd ~/flax_dev &&
+git pull &&
+cd ~/flax_dev/examples/imagenet &&
+export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets &&
+python3 main.py \
+    --workdir=$WORKDIR \
+    --config=configs/tpu.py \
+    --config.batch_size=32768
 "
 
-# cd ~/flax_dev &&
-# git pull &&
-# cd ~/flax_dev/examples/imagenet &&
-# export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets &&
-# python3 main.py \
-#     --workdir=$WORKDIR \
-#     --config=configs/tpu.py \
-#     --config.batch_size=32768

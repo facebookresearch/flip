@@ -1,4 +1,4 @@
-source run_env.sh
+# source run_env.sh
 
 export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets
 
