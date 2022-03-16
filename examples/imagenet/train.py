@@ -315,6 +315,19 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   state = restore_checkpoint(state, workdir)
   # step_offset > 0 if restarting from checkpoint
   step_offset = int(state.step)
+
+  # --------------------------------------------------------------------------------
+  # up til now, state.params are for one device
+  # image = jnp.ones([2, 224, 224, 3])
+  # label = jnp.ones([2,], dtype=jnp.int32)
+  # logits, new_model_state = state.apply_fn(
+  #     {'params': state.params, 'batch_stats': state.batch_stats},
+  #     image,
+  #     mutable=['batch_stats'])
+  # train_step = functools.partial(train_step, learning_rate_fn=learning_rate_fn)
+  # new_state, metrics = train_step(state, {'image': image, 'label': label})
+  # --------------------------------------------------------------------------------
+
   state = jax_utils.replicate(state)
 
   p_train_step = jax.pmap(

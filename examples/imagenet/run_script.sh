@@ -1,6 +1,8 @@
-# export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets
+source run_env.sh
 
-# python3 main.py \
-#     --workdir=./imagenet_tpu \
-#     --config=configs/tpu.py \
-#     --config.batch_size=8192
+export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets
+
+python3 main.py \
+    --workdir=./imagenet_tpu \
+    --config=configs/tpu.py \
+    --config.batch_size=1024
