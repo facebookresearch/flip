@@ -4,9 +4,8 @@ REPO=https://71d519550fe3430ecbf39b70467e9210aed5da69:@github.com/KaimingHe/flax
 BRANCH=main
 WORKDIR=gs://kmh-gcp/checkpoints/flax/examples/imagenet/$(date +%Y%m%d_%H%M)
 
-# install venv
-# pip3 install virtualenv
-# python3 -m virtualenv env
+## install conda
+# apt-get install libgl1-mesa-glx libegl1-mesa libxrandr2 libxrandr2 libxss1 libxcursor1 libxcomposite1 libasound2 libxi6 libxtst6
 
 ## install jax and flax
 # pip install 'jax[tpu]>=0.2.21' -f https://storage.googleapis.com/jax-releases/libtpu_releases.html &&
@@ -20,14 +19,20 @@ WORKDIR=gs://kmh-gcp/checkpoints/flax/examples/imagenet/$(date +%Y%m%d_%H%M)
 
 gcloud alpha compute tpus tpu-vm ssh ${VM_NAME} --zone europe-west4-a \
     --worker=all --command "
+# git config --global credential.helper store &&
+# git clone -b $BRANCH $REPO &&
+
 # pip install 'jax[tpu]>=0.2.21' -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
 # pip install --upgrade clu
+
 # python3 -c 'import jax; print(jax.device_count())'
 # python3 -c 'import flax'
-# cd ~/flax_dev &&
-# git pull &&
-cd ~/flax_dev/examples/imagenet &&
-export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets &&
+
+cd ~/flax_dev &&
+git pull
+
+cd ~/flax_dev/examples/imagenet
+export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets
 python3 main.py \
     --workdir=$WORKDIR \
     --config=configs/tpu.py \
