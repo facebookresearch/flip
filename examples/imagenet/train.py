@@ -107,13 +107,13 @@ def create_learning_rate_fn(
   return schedule_fn
 
 
-def train_step(state, batch, rng, learning_rate_fn):
+def train_step(state, batch, learning_rate_fn):
   """Perform a single training step."""
-  _, new_rng = jax.random.split(rng)
+  _, new_rng = jax.random.split(state.rng)
   # Bind the rng key to the device id (which is unique across hosts)
   # Note: This is only used for multi-host training (i.e. multiple computers
   # each with multiple accelerators).
-  dropout_rng = jax.random.fold_in(rng, jax.lax.axis_index('batch'))
+  dropout_rng = jax.random.fold_in(state.rng, jax.lax.axis_index('batch'))
   def loss_fn(params):
     """loss function used for training."""
     logits, new_model_state = state.apply_fn(
@@ -151,7 +151,7 @@ def train_step(state, batch, rng, learning_rate_fn):
   metrics['learning_rate'] = lr
 
   new_state = state.apply_gradients(
-      grads=grads, batch_stats=new_model_state['batch_stats'])
+      grads=grads, batch_stats=new_model_state['batch_stats'], rng=new_rng)
   if dynamic_scale:
     # if is_fin == False the gradients contain Inf/NaNs and optimizer state and
     # params should be restored (= skip this step).
@@ -201,6 +201,7 @@ def create_input_iter(dataset_builder, batch_size, image_size, dtype, train,
 
 
 class TrainState(train_state.TrainState):
+  rng: Any
   batch_stats: Any
   dynamic_scale: flax.optim.DynamicScale
 
@@ -239,7 +240,10 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
   else:
     dynamic_scale = None
 
-  params, batch_stats = initialized(rng, image_size, model)
+  # split rng for init and for state
+  rng_init, rng_state = jax.random.split(rng)
+
+  params, batch_stats = initialized(rng_init, image_size, model)
   tx = optax.sgd(
       learning_rate=learning_rate_fn,
       momentum=config.momentum,
@@ -249,6 +253,7 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
       apply_fn=model.apply,
       params=params,
       tx=tx,
+      rng=rng_state,
       batch_stats=batch_stats,
       dynamic_scale=dynamic_scale)
   return state
@@ -334,11 +339,11 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   # label = jnp.ones([2,], dtype=jnp.int32)
   # logits, new_model_state = state.apply_fn(
   #     {'params': state.params,
-  #     #  'batch_stats': state.batch_stats,
+  #      'batch_stats': state.batch_stats,
   #     },
-  #     rngs=dict(dropout=rng),
+  #     rngs=dict(dropout=state.rng),
   #     inputs=image,
-  #     # mutable=['batch_stats'],
+  #     mutable=['batch_stats'],
   #     train=True)
   # --------------------------------------------------------------------------------
   state = jax_utils.replicate(state)
@@ -355,9 +360,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   train_metrics_last_t = time.time()
   logging.info('Initial compilation, this might take some minutes...')
 
-  update_rng_repl = flax.jax_utils.replicate(jax.random.PRNGKey(0))
   for step, batch in zip(range(step_offset, num_steps), train_iter):
-    state, metrics = p_train_step(state, batch, update_rng_repl)
+    state, metrics = p_train_step(state, batch)
     for h in hooks:
       h(step)
     if step == step_offset:
