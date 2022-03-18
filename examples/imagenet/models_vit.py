@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from inspect import trace
 from typing import Any, Callable, Optional, Tuple
 
 import flax.linen as nn
@@ -219,7 +220,6 @@ class VisionTransformer(nn.Module):
 
   @nn.compact
   def __call__(self, inputs, *, train):
-
     x = inputs
     # (Possibly partial) ResNet root.
     assert self.resnet == None

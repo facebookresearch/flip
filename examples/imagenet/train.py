@@ -66,9 +66,10 @@ def initialized(key, image_size, model):
   def init(*args):
     return model.init(*args, train=False)
   variables = init({'params': key}, jnp.ones(input_shape, model.dtype))
-  from IPython import embed; embed();
-  if (0 == 0): raise NotImplementedError
-  return variables['params'], variables['batch_stats']
+
+  batch_stats = variables['batch_stats'] if 'batch_stats' in variables else []
+
+  return variables['params'], batch_stats
 
 
 def cross_entropy_loss(logits, labels):
@@ -320,18 +321,20 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   # step_offset > 0 if restarting from checkpoint
   step_offset = int(state.step)
 
-  from IPython import embed; embed();
-  if (0 == 0): raise NotImplementedError
-
-
   # --------------------------------------------------------------------------------
   # up til now, state.params are for one device
-  # image = jnp.ones([2, 224, 224, 3])
-  # label = jnp.ones([2,], dtype=jnp.int32)
-  # logits, new_model_state = state.apply_fn(
-  #     {'params': state.params, 'batch_stats': state.batch_stats},
-  #     image,
-  #     mutable=['batch_stats'])
+  image = jnp.ones([2, 224, 224, 3])
+  label = jnp.ones([2,], dtype=jnp.int32)
+
+  # dropout_rng = jax.random.fold_in(rng, jax.lax.axis_index('batch'))
+  _, new_rng = jax.random.split(rng)
+  logits, new_model_state = state.apply_fn(
+      {'params': state.params},
+      rngs=dict(dropout=rng),
+      inputs=image,
+      train=True)
+  from IPython import embed; embed();
+  if (0 == 0): raise NotImplementedError
   # train_step = functools.partial(train_step, learning_rate_fn=learning_rate_fn)
   # new_state, metrics = train_step(state, {'image': image, 'label': label})
   # --------------------------------------------------------------------------------
