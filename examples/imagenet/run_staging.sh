@@ -4,7 +4,7 @@ REPO=https://71d519550fe3430ecbf39b70467e9210aed5da69:@github.com/KaimingHe/flax
 BRANCH=main
 
 CONFIG=tpu_vit_base
-WORKDIR=gs://kmh-gcp/checkpoints/flax/examples/imagenet/$CONFIG_$(date +%Y%m%d_%H%M)
+WORKDIR=gs://kmh-gcp/checkpoints/flax/examples/imagenet/${CONFIG}_$(date +%Y%m%d_%H%M)
 
 ## install conda
 # apt-get install libgl1-mesa-glx libegl1-mesa libxrandr2 libxrandr2 libxss1 libxcursor1 libxcomposite1 libasound2 libxi6 libxtst6
@@ -27,9 +27,9 @@ gcloud alpha compute tpus tpu-vm ssh ${VM_NAME} --zone europe-west4-a \
 # pip install 'jax[tpu]>=0.2.21' -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
 # pip install --upgrade clu
 
-# cd ~/flax_dev
-# git checkout vit
-# git pull
+cd ~/flax_dev
+git checkout vit
+git pull
 
 # sudo pkill python
 # source ~/flax_dev/examples/imagenet/run_kill.sh

@@ -28,6 +28,7 @@ import tensorflow as tf
 
 import train
 
+from utils import logging_util
 
 FLAGS = flags.FLAGS
 
@@ -39,15 +40,15 @@ config_flags.DEFINE_config_file(
     lock_config=True)
 
 
-from termcolor import colored
-def _set_time_logging():
-  import logging as _logging
+# from termcolor import colored
+# def _set_time_logging(logger):
+#   import logging as _logging
 
-  if not (jax.process_index() == 0):  # not first process
-    logging.set_verbosity(logging.ERROR)  # disable info/warning
-  prefix = "[%(asctime)s.%(msecs)03d %(levelname)s:%(filename)s] "
-  # _logging.BASIC_FORMAT
-  logging.get_absl_handler().setFormatter(_logging.Formatter(colored(prefix, "green") + '%(message)s', datefmt='%m%d %H:%M:%S'))
+#   if not (jax.process_index() == 0):  # not first process
+#     logger.set_verbosity(logger.ERROR)  # disable info/warning
+#   prefix = "[%(asctime)s.%(msecs)03d %(levelname)s:%(filename)s:%(lineno)d] "
+#   str = colored(prefix, "green") + '%(message)s'
+#   logger.get_absl_handler().setFormatter(_logging.Formatter(str, datefmt='%m%d %H:%M:%S'))
   
 
 def main(argv):
@@ -77,6 +78,8 @@ def main(argv):
 
 
 if __name__ == '__main__':
-  _set_time_logging()
+  if not (jax.process_index() == 0):  # not first process
+    logging.set_verbosity(logging.ERROR)  # disable info/warning
+  logging_util.set_time_logging(logging)
   flags.mark_flags_as_required(['config', 'workdir'])
   app.run(main)
