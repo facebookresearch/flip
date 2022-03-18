@@ -60,7 +60,7 @@ def get_config():
   config.half_precision = False  # kaiming: TODO, support it
 
   # model config
-  config.model = vit.get_testing_config()
-  # config.model = vit.get_b16_config()  # ViT-B/16
+  # config.model = vit.get_testing_config()
+  config.model = vit.get_b16_config()  # ViT-B/16
 
   return config

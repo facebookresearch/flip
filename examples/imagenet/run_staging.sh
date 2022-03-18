@@ -21,21 +21,19 @@ WORKDIR=gs://kmh-gcp/checkpoints/flax/examples/imagenet/$CONFIG_$(date +%Y%m%d_%
 
 gcloud alpha compute tpus tpu-vm ssh ${VM_NAME} --zone europe-west4-a \
     --worker=all --command "
-# git config --global credential.helper store &&
-# git clone -b $BRANCH $REPO &&
+# git config --global credential.helper store
+# git clone -b $BRANCH $REPO
 
 # pip install 'jax[tpu]>=0.2.21' -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
 # pip install --upgrade clu
 
-echo start
 # cd ~/flax_dev
 # git checkout vit
 # git pull
 
-# cd ~/flax_dev/examples/imagenet
 sudo pkill python
-# source run_kill.sh
-# sudo lsof -w /dev/accel0
+source ~/flax_dev/examples/imagenet/run_kill.sh
+sudo lsof -w /dev/accel0
 
 # python3 -c 'import jax; print(jax.device_count())'
 # python3 -c 'import flax'
@@ -45,6 +43,6 @@ sudo pkill python
 # python3 main.py \
 #     --workdir=$WORKDIR \
 #     --config=configs/$CONFIG.py \
-#     --config.batch_size=32768
+#     --config.batch_size=4096
 "
 
