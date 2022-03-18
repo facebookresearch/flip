@@ -62,4 +62,11 @@ def get_config():
   # model config
   config.model = vit.get_b16_config()  # ViT-B/16
 
+  # optimizer config
+  # config.opt = ml_collections.ConfigDict()
+  # config.opt.name = 'adamw'
+  # config.opt.b1 = 0.9
+  # config.opt.b2 = 0.95
+  # config.opt.weight_decay = 0.3
+
   return config

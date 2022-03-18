@@ -4,7 +4,7 @@ REPO=https://71d519550fe3430ecbf39b70467e9210aed5da69:@github.com/KaimingHe/flax
 BRANCH=main
 
 CONFIG=tpu_vit_base
-WORKDIR=gs://kmh-gcp/checkpoints/flax/examples/imagenet/${CONFIG}_$(date +%Y%m%d_%H%M)
+WORKDIR=gs://kmh-gcp/checkpoints/flax/examples/imagenet/$(date +%Y%m%d_%H%M)_${CONFIG}
 
 ## install conda
 # apt-get install libgl1-mesa-glx libegl1-mesa libxrandr2 libxrandr2 libxss1 libxcursor1 libxcomposite1 libasound2 libxi6 libxtst6
@@ -18,6 +18,14 @@ WORKDIR=gs://kmh-gcp/checkpoints/flax/examples/imagenet/${CONFIG}_$(date +%Y%m%d
 ## clone the repo
 # git config --global credential.helper store &&
 # git clone -b $BRANCH $REPO &&
+
+# kill
+gcloud alpha compute tpus tpu-vm ssh ${VM_NAME} --zone europe-west4-a \
+    --worker=all --command "
+sudo pkill python
+source ~/flax_dev/examples/imagenet/run_kill.sh
+sudo lsof -w /dev/accel0
+"
 
 gcloud alpha compute tpus tpu-vm ssh ${VM_NAME} --zone europe-west4-a \
     --worker=all --command "
@@ -45,6 +53,6 @@ python3 main.py \
     --config=configs/$CONFIG.py \
     --config.batch_size=4096 \
     --config.learning_rate=1e-5 \
-    --config.log_every_steps=5 \
+    --config.log_every_steps=100 \
 "
 
