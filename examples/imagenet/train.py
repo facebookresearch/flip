@@ -41,30 +41,33 @@ import tensorflow as tf
 import tensorflow_datasets as tfds
 
 import input_pipeline
-import models
+import models_vit
 
 
 NUM_CLASSES = 1000
 
 
 def create_model(*, model_cls, half_precision, **kwargs):
-  platform = jax.local_devices()[0].platform
-  if half_precision:
-    if platform == 'tpu':
-      model_dtype = jnp.bfloat16
-    else:
-      model_dtype = jnp.float16
-  else:
-    model_dtype = jnp.float32
-  return model_cls(num_classes=NUM_CLASSES, dtype=model_dtype, **kwargs)
+  assert not half_precision
+  # platform = jax.local_devices()[0].platform
+  # if half_precision:
+  #   if platform == 'tpu':
+  #     model_dtype = jnp.bfloat16
+  #   else:
+  #     model_dtype = jnp.float16
+  # else:
+  #   model_dtype = jnp.float32
+  return model_cls(num_classes=NUM_CLASSES, **kwargs)
 
 
 def initialized(key, image_size, model):
   input_shape = (1, image_size, image_size, 3)
   @jax.jit
   def init(*args):
-    return model.init(*args)
+    return model.init(*args, train=False)
   variables = init({'params': key}, jnp.ones(input_shape, model.dtype))
+  from IPython import embed; embed();
+  if (0 == 0): raise NotImplementedError
   return variables['params'], variables['batch_stats']
 
 
@@ -304,9 +307,10 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   base_learning_rate = config.learning_rate * config.batch_size / 256.
 
-  model_cls = getattr(models, config.model)
+  # model_cls = getattr(models, config.model)
+  model_cls = models_vit.VisionTransformer
   model = create_model(
-      model_cls=model_cls, half_precision=config.half_precision)
+      model_cls=model_cls, half_precision=config.half_precision, **config.model)
 
   learning_rate_fn = create_learning_rate_fn(
       config, base_learning_rate, steps_per_epoch)
@@ -315,6 +319,10 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   state = restore_checkpoint(state, workdir)
   # step_offset > 0 if restarting from checkpoint
   step_offset = int(state.step)
+
+  from IPython import embed; embed();
+  if (0 == 0): raise NotImplementedError
+
 
   # --------------------------------------------------------------------------------
   # up til now, state.params are for one device

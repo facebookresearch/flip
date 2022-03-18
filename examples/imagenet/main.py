@@ -56,7 +56,6 @@ def main(argv):
                                        f'process_count: {jax.process_count()}')
   platform.work_unit().create_artifact(platform.ArtifactType.DIRECTORY,
                                        FLAGS.workdir, 'workdir')
-
   train.train_and_evaluate(FLAGS.config, FLAGS.workdir)
 
 
