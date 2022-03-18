@@ -68,7 +68,7 @@ def initialized(key, image_size, model):
   variables = init({'params': key}, jnp.ones(input_shape, model.dtype))
 
   batch_stats = variables['batch_stats'] if 'batch_stats' in variables else flax.core.frozen_dict.FrozenDict()
-  
+
   return variables['params'], batch_stats
 
 
@@ -107,14 +107,21 @@ def create_learning_rate_fn(
   return schedule_fn
 
 
-def train_step(state, batch, learning_rate_fn):
+def train_step(state, batch, rng, learning_rate_fn):
   """Perform a single training step."""
+  _, new_rng = jax.random.split(rng)
+  # Bind the rng key to the device id (which is unique across hosts)
+  # Note: This is only used for multi-host training (i.e. multiple computers
+  # each with multiple accelerators).
+  dropout_rng = jax.random.fold_in(rng, jax.lax.axis_index('batch'))
   def loss_fn(params):
     """loss function used for training."""
     logits, new_model_state = state.apply_fn(
         {'params': params, 'batch_stats': state.batch_stats},
-        batch['image'],
-        mutable=['batch_stats'])
+        inputs=batch['image'],
+        mutable=['batch_stats'],
+        rngs=dict(dropout=dropout_rng),
+        train=True)
     loss = cross_entropy_loss(logits, batch['label'])
     weight_penalty_params = jax.tree_leaves(params)
     weight_decay = 0.0001
@@ -323,23 +330,17 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   # --------------------------------------------------------------------------------
   # up til now, state.params are for one device
-  image = jnp.ones([2, 224, 224, 3])
-  label = jnp.ones([2,], dtype=jnp.int32)
-
-  # dropout_rng = jax.random.fold_in(rng, jax.lax.axis_index('batch'))
-  _, new_rng = jax.random.split(rng)
-  logits, new_model_state = state.apply_fn(
-      {'params': state.params, 'batch_stats': type(state.params)()},
-      rngs=dict(dropout=rng),
-      inputs=image,
-      mutable=['batch_stats'],
-      train=True)
-  from IPython import embed; embed();
-  if (0 == 0): raise NotImplementedError
-  # train_step = functools.partial(train_step, learning_rate_fn=learning_rate_fn)
-  # new_state, metrics = train_step(state, {'image': image, 'label': label})
+  # image = jnp.ones([2, 224, 224, 3])
+  # label = jnp.ones([2,], dtype=jnp.int32)
+  # logits, new_model_state = state.apply_fn(
+  #     {'params': state.params,
+  #     #  'batch_stats': state.batch_stats,
+  #     },
+  #     rngs=dict(dropout=rng),
+  #     inputs=image,
+  #     # mutable=['batch_stats'],
+  #     train=True)
   # --------------------------------------------------------------------------------
-
   state = jax_utils.replicate(state)
 
   p_train_step = jax.pmap(
@@ -353,8 +354,10 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     hooks += [periodic_actions.Profile(num_profile_steps=5, logdir=workdir)]
   train_metrics_last_t = time.time()
   logging.info('Initial compilation, this might take some minutes...')
+
+  update_rng_repl = flax.jax_utils.replicate(jax.random.PRNGKey(0))
   for step, batch in zip(range(step_offset, num_steps), train_iter):
-    state, metrics = p_train_step(state, batch)
+    state, metrics = p_train_step(state, batch, update_rng_repl)
     for h in hooks:
       h(step)
     if step == step_offset:
