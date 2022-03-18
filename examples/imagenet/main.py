@@ -57,6 +57,8 @@ def main(argv):
   platform.work_unit().create_artifact(platform.ArtifactType.DIRECTORY,
                                        FLAGS.workdir, 'workdir')
 
+  logging.info(FLAGS.config)
+
   if jax.local_devices()[0].platform != 'tpu':
     logging.info('Not using TPU. Exit.')
     exit()

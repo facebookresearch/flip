@@ -27,9 +27,9 @@ gcloud alpha compute tpus tpu-vm ssh ${VM_NAME} --zone europe-west4-a \
 # pip install 'jax[tpu]>=0.2.21' -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
 # pip install --upgrade clu
 
-# cd ~/flax_dev
-# git checkout vit
-# git pull
+cd ~/flax_dev
+git checkout vit
+git pull
 
 sudo pkill python
 source ~/flax_dev/examples/imagenet/run_kill.sh
