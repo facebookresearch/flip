@@ -384,7 +384,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
         train_metrics = []
         train_metrics_last_t = time.time()
 
-    if True: # (step + 1) % steps_per_epoch == 0:
+    if (step + 1) % steps_per_epoch == 0:
       epoch = step // steps_per_epoch
       eval_metrics = []
 
