@@ -38,17 +38,6 @@ config_flags.DEFINE_config_file(
     None,
     'File path to the training hyperparameter configuration.',
     lock_config=True)
-
-
-# from termcolor import colored
-# def _set_time_logging(logger):
-#   import logging as _logging
-
-#   if not (jax.process_index() == 0):  # not first process
-#     logger.set_verbosity(logger.ERROR)  # disable info/warning
-#   prefix = "[%(asctime)s.%(msecs)03d %(levelname)s:%(filename)s:%(lineno)d] "
-#   str = colored(prefix, "green") + '%(message)s'
-#   logger.get_absl_handler().setFormatter(_logging.Formatter(str, datefmt='%m%d %H:%M:%S'))
   
 
 def main(argv):

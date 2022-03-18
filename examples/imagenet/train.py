@@ -43,6 +43,7 @@ import tensorflow_datasets as tfds
 import input_pipeline
 import models_vit
 
+import numpy as np
 
 NUM_CLASSES = 1000
 
@@ -262,6 +263,15 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
   return state
 
 
+# redefine write_scalars
+def write_scalars(step: int, scalars):
+  values = [
+      f"{k}={v:.6f}" if isinstance(v, (float, np.float32)) else f"{k}={v}"
+      for k, v in sorted(scalars.items())
+  ]
+  logging.info("[%d] %s", step, ", ".join(values))
+
+
 def train_and_evaluate(config: ml_collections.ConfigDict,
                        workdir: str) -> TrainState:
   """Execute model training and evaluation loop.
@@ -276,6 +286,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   writer = metric_writers.create_default_writer(
       logdir=workdir, just_logging=jax.process_index() != 0)
+  writer.write_scalars = write_scalars
 
   rng = random.PRNGKey(0)
 
