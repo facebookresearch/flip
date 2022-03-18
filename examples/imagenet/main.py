@@ -39,6 +39,17 @@ config_flags.DEFINE_config_file(
     lock_config=True)
 
 
+from termcolor import colored
+def _set_time_logging():
+  import logging as _logging
+
+  if not (jax.process_index() == 0):  # not first process
+    logging.set_verbosity(logging.ERROR)  # disable info/warning
+  prefix = "[%(asctime)s.%(msecs)03d %(levelname)s:%(filename)s] "
+  # _logging.BASIC_FORMAT
+  logging.get_absl_handler().setFormatter(_logging.Formatter(colored(prefix, "green") + '%(message)s', datefmt='%m%d %H:%M:%S'))
+  
+
 def main(argv):
   if len(argv) > 1:
     raise app.UsageError('Too many command-line arguments.')
@@ -60,11 +71,12 @@ def main(argv):
   logging.info(FLAGS.config)
 
   if jax.local_devices()[0].platform != 'tpu':
-    logging.info('Not using TPU. Exit.')
+    logging.error('Not using TPU. Exit.')
     exit()
   train.train_and_evaluate(FLAGS.config, FLAGS.workdir)
 
 
 if __name__ == '__main__':
+  _set_time_logging()
   flags.mark_flags_as_required(['config', 'workdir'])
   app.run(main)
