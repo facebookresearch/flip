@@ -27,22 +27,24 @@ gcloud alpha compute tpus tpu-vm ssh ${VM_NAME} --zone europe-west4-a \
 # pip install 'jax[tpu]>=0.2.21' -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
 # pip install --upgrade clu
 
-cd ~/flax_dev
-git checkout vit
-git pull
+# cd ~/flax_dev
+# git checkout vit
+# git pull
 
-sudo pkill python
-source ~/flax_dev/examples/imagenet/run_kill.sh
-sudo lsof -w /dev/accel0
+# sudo pkill python
+# source ~/flax_dev/examples/imagenet/run_kill.sh
+# sudo lsof -w /dev/accel0
 
 # python3 -c 'import jax; print(jax.device_count())'
 # python3 -c 'import flax'
 
-# cd ~/flax_dev/examples/imagenet
-# export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets
-# python3 main.py \
-#     --workdir=$WORKDIR \
-#     --config=configs/$CONFIG.py \
-#     --config.batch_size=4096
+cd ~/flax_dev/examples/imagenet
+export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets
+python3 main.py \
+    --workdir=$WORKDIR \
+    --config=configs/$CONFIG.py \
+    --config.batch_size=4096 \
+    --config.learning_rate=1e-5 \
+    --config.log_every_steps=5 \
 "
 
