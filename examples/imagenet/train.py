@@ -227,7 +227,10 @@ def sync_batch_stats(state):
   """Sync the batch statistics across replicas."""
   # Each device has its own version of the running average batch statistics and
   # we sync them before evaluation.
-  return state.replace(batch_stats=cross_replica_mean(state.batch_stats))
+  if len(state.batch_stats) == 0:
+    return state
+  else:
+    return state.replace(batch_stats=cross_replica_mean(state.batch_stats))
 
 
 def create_train_state(rng, config: ml_collections.ConfigDict,
@@ -381,7 +384,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
         train_metrics = []
         train_metrics_last_t = time.time()
 
-    if (step + 1) % steps_per_epoch == 0:
+    if True: # (step + 1) % steps_per_epoch == 0:
       epoch = step // steps_per_epoch
       eval_metrics = []
 
