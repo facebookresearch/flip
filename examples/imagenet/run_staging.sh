@@ -52,7 +52,6 @@ python3 main.py \
     --workdir=$WORKDIR \
     --config=configs/$CONFIG.py \
     --config.batch_size=4096 \
-    --config.learning_rate=1e-5 \
     --config.log_every_steps=100 \
 "
 

@@ -41,9 +41,9 @@ def get_config():
   # `name` argument of tensorflow_datasets.builder()
   config.dataset = 'imagenet2012:5.*.*'
 
-  config.learning_rate = 0.1
-  config.warmup_epochs = 5.0
-  config.momentum = 0.9
+  config.learning_rate = 1.6e-3
+  config.warmup_epochs = 20.0
+  # config.momentum = 0.9
 
   config.num_epochs = 100.0
   config.log_every_steps = 100
@@ -63,10 +63,10 @@ def get_config():
   config.model = vit.get_b16_config()  # ViT-B/16
 
   # optimizer config
-  # config.opt = ml_collections.ConfigDict()
-  # config.opt.name = 'adamw'
-  # config.opt.b1 = 0.9
-  # config.opt.b2 = 0.95
-  # config.opt.weight_decay = 0.3
+  config.opt_type = 'adamw'
+  config.opt = ml_collections.ConfigDict()
+  config.opt.b1 = 0.9
+  config.opt.b2 = 0.95
+  config.opt.weight_decay = 0.3
 
   return config

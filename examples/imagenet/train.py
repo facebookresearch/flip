@@ -124,13 +124,13 @@ def train_step(state, batch, learning_rate_fn):
         rngs=dict(dropout=dropout_rng),
         train=True)
     loss = cross_entropy_loss(logits, batch['label'])
-    weight_penalty_params = jax.tree_leaves(params)
-    weight_decay = 0.0001
-    weight_l2 = sum([jnp.sum(x ** 2)
-                     for x in weight_penalty_params
-                     if x.ndim > 1])
-    weight_penalty = weight_decay * 0.5 * weight_l2
-    loss = loss + weight_penalty
+    # weight_penalty_params = jax.tree_leaves(params)
+    # weight_decay = 0.0001
+    # weight_l2 = sum([jnp.sum(x ** 2)
+    #                  for x in weight_penalty_params
+    #                  if x.ndim > 1])
+    # weight_penalty = weight_decay * 0.5 * weight_l2
+    # loss = loss + weight_penalty
     return loss, (new_model_state, logits)
 
   step = state.step
@@ -248,11 +248,9 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
   rng_init, rng_state = jax.random.split(rng)
 
   params, batch_stats = initialized(rng_init, image_size, model)
-  tx = optax.sgd(
-      learning_rate=learning_rate_fn,
-      momentum=config.momentum,
-      nesterov=True,
-  )
+
+  tx = getattr(optax, config.opt_type)  # optax.adamw
+  tx = tx(learning_rate=learning_rate_fn, **config.opt)
   state = TrainState.create(
       apply_fn=model.apply,
       params=params,
