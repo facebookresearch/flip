@@ -43,6 +43,8 @@ cd ~/flax_dev
 git checkout vit
 git pull
 
+git rev-parse --short HEAD
+
 # sudo pkill python
 # source ~/flax_dev/examples/imagenet/run_kill.sh
 # sudo lsof -w /dev/accel0
