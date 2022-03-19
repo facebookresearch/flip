@@ -43,7 +43,7 @@ import tensorflow_datasets as tfds
 import input_pipeline
 import models_vit
 
-import numpy as np
+from utils import summary_util as summary_util  # must be after 'from clu import metric_writers'
 
 NUM_CLASSES = 1000
 
@@ -261,6 +261,16 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
   return state
 
 
+# from clu.metric_writers.summary_writer import SummaryWriter
+# def summary_writer_write_scalars(self, step: int, scalars):
+#   from IPython import embed; embed();
+#   if (0 == 0): raise NotImplementedError
+#   with self._summary_writer.as_default():
+#     for key, value in scalars.items():
+#       tf.summary.scalar(key, value, step=step)
+# SummaryWriter.write_scalars = summary_writer_write_scalars
+
+
 def train_and_evaluate(config: ml_collections.ConfigDict,
                        workdir: str) -> TrainState:
   """Execute model training and evaluation loop.
@@ -369,6 +379,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     if step == step_offset:
       logging.info('Initial compilation completed.')
 
+    epoch_1000x = int(step * config.batch_size / 1281167 * 1000)  # normalize to IN1K epoch anyway
+
     if config.get('log_every_steps'):
       train_metrics.append(metrics)
       if (step + 1) % config.log_every_steps == 0:
@@ -379,6 +391,13 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
         }
         summary['steps_per_second'] = config.log_every_steps / (
             time.time() - train_metrics_last_t)
+
+        # to make it consistent with PyTorch log
+        summary['loss'] = summary['train_loss']  # add extra name
+        summary['lr'] = summary.pop('train_learning_rate')  # rename
+        summary['class_acc'] = summary.pop('train_accuracy')  # this is [0, 1]
+        summary['step_tensorboard'] = epoch_1000x  # step for tensorboard
+
         writer.write_scalars(step + 1, summary)
         train_metrics = []
         train_metrics_last_t = time.time()
@@ -397,9 +416,13 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
       summary = jax.tree_map(lambda x: x.mean(), eval_metrics)
       logging.info('eval epoch: %d, loss: %.4f, accuracy: %.2f',
                    epoch, summary['loss'], summary['accuracy'] * 100)
-      epoch1000x = int(step * config.batch_size / 1281167 * 1000)  # normalize to IN1K epoch anyway
-      writer.write_scalars(
-          epoch1000x, {f'eval_{key}': val for key, val in summary.items()})
+
+      # to make it consistent with PyTorch log
+      summary['test_acc1'] = summary.pop('accuracy')  # rename
+      summary['test_acc1'] = summary.pop('accuracy')  # rename
+      summary['step_tensorboard'] = epoch  # step for tensorboard
+
+      writer.write_scalars(step + 1, summary)
       writer.flush()
     if (step + 1) % steps_per_checkpoint == 0 or step + 1 == num_steps:
       state = sync_batch_stats(state)
