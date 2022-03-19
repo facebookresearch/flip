@@ -69,4 +69,11 @@ def get_config():
   config.opt.b2 = 0.95
   config.opt.weight_decay = 0.3
 
+  # aug config
+  config.aug = ml_collections.ConfigDict()
+  config.aug.area_range = (0.08, 1)
+  config.aug.aspect_ratio_range = (3. / 4, 4. / 3.)
+
+  config.aug.color_jit = 0.4  # None to disable
+
   return config
