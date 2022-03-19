@@ -19,11 +19,6 @@ import jax
 import tensorflow as tf
 import tensorflow_datasets as tfds
 
-from absl import logging
-from PIL import Image
-import io
-import torchvision
-
 
 IMAGE_SIZE = 224
 CROP_PADDING = 32
@@ -159,32 +154,6 @@ def preprocess_for_train(image_bytes, dtype=tf.float32, image_size=IMAGE_SIZE):
   return image
 
 
-def preprocess_for_train_torchvision(image_bytes, dtype=tf.float32, image_size=IMAGE_SIZE):
-  """Preprocesses the given image for training.
-
-  Args:
-    image_bytes: `Tensor` representing an image binary of arbitrary size.
-    dtype: data type of the image.
-    image_size: image size.
-
-  Returns:
-    A preprocessed image `Tensor`.
-  """
-  image = Image.open(io.BytesIO(image_bytes.numpy()))
-  image = image.convert('RGB')
-
-  from torchvision import transforms
-  transform_train = transforms.Compose([
-          transforms.RandomResizedCrop(image_size, scale=(0.2, 1.0), interpolation=3),  # 3 is bicubic
-          transforms.RandomHorizontalFlip(),
-          transforms.ToTensor(),
-          transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
-  image = transform_train(image)
-  image = tf.constant(image.numpy(), dtype=dtype)  # [3, 224, 224]
-  image = tf.transpose(image, [1, 2, 0])  # [c, h, w] -> [h, w, c]
-  return image
-
-
 def preprocess_for_eval(image_bytes, dtype=tf.float32, image_size=IMAGE_SIZE):
   """Preprocesses the given image for evaluation.
 
@@ -230,7 +199,7 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
 
   def decode_example(example):
     if train:
-      image = preprocess_for_train_torchvision(example['image'], dtype, image_size)
+      image = preprocess_for_train(example['image'], dtype, image_size)
     else:
       image = preprocess_for_eval(example['image'], dtype, image_size)
     return {'image': image, 'label': example['label']}
@@ -256,20 +225,7 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
   # raise NotImplementedError
   # ---------------------------------------
 
-  # ds = ds.map(decode_example, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-
-  logging.info('Using py_func...')
-
-  # kaiming: reference: https://github.com/tensorflow/tensorflow/issues/38212
-  def py_func(image, label):
-    d = decode_example({'image': image, 'label': label})
-    return list(d.values())
-  def ds_map_fn(x):
-    flattened_output = tf.py_function(py_func, [x['image'], x['label']], [tf.float32, tf.int64])
-    return {"image": flattened_output[0], "label": flattened_output[1]}
-
-  ds = ds.map(ds_map_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-  
+  ds = ds.map(decode_example, num_parallel_calls=tf.data.experimental.AUTOTUNE)  
   ds = ds.batch(batch_size, drop_remainder=True)
 
   if not train:
