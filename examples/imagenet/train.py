@@ -73,14 +73,17 @@ def initialized(key, image_size, model):
   return variables['params'], batch_stats
 
 
-def cross_entropy_loss(logits, labels):
-  one_hot_labels = common_utils.onehot(labels, num_classes=NUM_CLASSES)
+def cross_entropy_loss(logits, labels, label_smoothing=0.):
+  num_classes = NUM_CLASSES
+  one_hot_labels = common_utils.onehot(labels, num_classes=num_classes)
+  if label_smoothing > 0:
+      one_hot_labels = one_hot_labels * (1 - label_smoothing) + label_smoothing / num_classes
   xentropy = optax.softmax_cross_entropy(logits=logits, labels=one_hot_labels)
   return jnp.mean(xentropy)
 
 
-def compute_metrics(logits, labels):
-  loss = cross_entropy_loss(logits, labels)
+def compute_metrics(logits, labels, label_smoothing=0.0):
+  loss = cross_entropy_loss(logits, labels, label_smoothing)
   accuracy = jnp.mean(jnp.argmax(logits, -1) == labels)
   metrics = {
       'loss': loss,
@@ -108,7 +111,7 @@ def create_learning_rate_fn(
   return schedule_fn
 
 
-def train_step(state, batch, learning_rate_fn):
+def train_step(state, batch, learning_rate_fn, config):
   """Perform a single training step."""
   _, new_rng = jax.random.split(state.rng)
   # Bind the rng key to the device id (which is unique across hosts)
@@ -123,7 +126,7 @@ def train_step(state, batch, learning_rate_fn):
         mutable=['batch_stats'],
         rngs=dict(dropout=dropout_rng),
         train=True)
-    loss = cross_entropy_loss(logits, batch['label'])
+    loss = cross_entropy_loss(logits, batch['label'], label_smoothing=config.label_smoothing)
     # weight_penalty_params = jax.tree_leaves(params)
     # weight_decay = 0.0001
     # weight_l2 = sum([jnp.sum(x ** 2)
@@ -148,7 +151,7 @@ def train_step(state, batch, learning_rate_fn):
     # Re-use same axis_name as in the call to `pmap(...train_step...)` below.
     grads = lax.pmean(grads, axis_name='batch')
   new_model_state, logits = aux[1]
-  metrics = compute_metrics(logits, batch['label'])
+  metrics = compute_metrics(logits, batch['label'], config.label_smoothing)
   metrics['learning_rate'] = lr
 
   new_state = state.apply_gradients(
@@ -361,7 +364,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   state = jax_utils.replicate(state)
 
   p_train_step = jax.pmap(
-      functools.partial(train_step, learning_rate_fn=learning_rate_fn),
+      functools.partial(train_step, learning_rate_fn=learning_rate_fn, config=config),
       axis_name='batch')
   p_eval_step = jax.pmap(eval_step, axis_name='batch')
 

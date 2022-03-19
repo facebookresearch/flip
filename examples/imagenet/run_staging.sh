@@ -6,7 +6,7 @@ BRANCH=main
 salt=`head /dev/urandom | tr -dc a-z0-9 | head -c8`
 
 CONFIG=tpu_vit_base
-JOBNAME=flax/$(date +%Y%m%d_%H%M)_${salt}_${CONFIG}
+JOBNAME=flax/$(date +%Y%m%d_%H%M)_${salt}_${CONFIG}_cjit0.4_lb0.1
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
 LOGDIR=/home/${USER}/logs/${JOBNAME}
