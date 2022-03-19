@@ -41,7 +41,7 @@ def preprocess_for_train(image_bytes, dtype=tf.float32, image_size=IMAGE_SIZE, a
 
   # advance augs
   if aug.color_jit is not None:
-    image = color_jitter(image, strength=aug.color_jit)
+    image = color_jitter(image / 255., strength=aug.color_jit) * 255.  # color_jitter accept [0, 1] images
 
   image = normalize_image(image)
   image = tf.image.convert_image_dtype(image, dtype=dtype)
