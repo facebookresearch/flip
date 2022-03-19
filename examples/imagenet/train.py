@@ -418,9 +418,9 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
                    epoch, summary['loss'], summary['accuracy'] * 100)
 
       # to make it consistent with PyTorch log
-      summary['test_acc1'] = summary.pop('accuracy')  # rename
+      summary['test_acc1'] = summary.pop('accuracy') * 100  # rename
       summary['test_loss'] = summary.pop('loss')  # rename
-      summary['step_tensorboard'] = epoch  # step for tensorboard
+      summary['step_tensorboard'] = epoch - 1  # step for tensorboard (-1: the end of first epoch is epoch 0)
 
       writer.write_scalars(step + 1, summary)
       writer.flush()
