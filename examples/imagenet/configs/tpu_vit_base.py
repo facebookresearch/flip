@@ -41,7 +41,7 @@ def get_config():
   # `name` argument of tensorflow_datasets.builder()
   config.dataset = 'imagenet2012:5.*.*'
 
-  config.learning_rate = 1.6e-3
+  config.learning_rate = 1e-4  # this is the base lr
   config.warmup_epochs = 20.0
   # config.momentum = 0.9
 

@@ -320,7 +320,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   steps_per_checkpoint = steps_per_epoch * 10
 
-  base_learning_rate = config.learning_rate * config.batch_size / 256.
+  abs_learning_rate = config.learning_rate * config.batch_size / 256.
 
   # model_cls = getattr(models, config.model)
   model_cls = models_vit.VisionTransformer
@@ -328,7 +328,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
       model_cls=model_cls, half_precision=config.half_precision, **config.model)
 
   learning_rate_fn = create_learning_rate_fn(
-      config, base_learning_rate, steps_per_epoch)
+      config, abs_learning_rate, steps_per_epoch)
 
   state = create_train_state(rng, config, model, image_size, learning_rate_fn)
   state = restore_checkpoint(state, workdir)
@@ -397,8 +397,9 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
       summary = jax.tree_map(lambda x: x.mean(), eval_metrics)
       logging.info('eval epoch: %d, loss: %.4f, accuracy: %.2f',
                    epoch, summary['loss'], summary['accuracy'] * 100)
+      epoch1000x = int(step * config.batch_size / 1281167 * 1000)  # normalize to IN1K epoch anyway
       writer.write_scalars(
-          step + 1, {f'eval_{key}': val for key, val in summary.items()})
+          epoch1000x, {f'eval_{key}': val for key, val in summary.items()})
       writer.flush()
     if (step + 1) % steps_per_checkpoint == 0 or step + 1 == num_steps:
       state = sync_batch_stats(state)
