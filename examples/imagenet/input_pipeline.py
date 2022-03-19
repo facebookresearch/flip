@@ -19,6 +19,10 @@ import jax
 import tensorflow as tf
 import tensorflow_datasets as tfds
 
+from PIL import Image
+import io
+import torchvision
+
 
 IMAGE_SIZE = 224
 CROP_PADDING = 32
@@ -154,6 +158,37 @@ def preprocess_for_train(image_bytes, dtype=tf.float32, image_size=IMAGE_SIZE):
   return image
 
 
+def preprocess_for_train_torchvision(image_bytes, dtype=tf.float32, image_size=IMAGE_SIZE):
+  """Preprocesses the given image for training.
+
+  Args:
+    image_bytes: `Tensor` representing an image binary of arbitrary size.
+    dtype: data type of the image.
+    image_size: image size.
+
+  Returns:
+    A preprocessed image `Tensor`.
+  """
+  print(image_bytes)
+  image = Image.open(io.BytesIO(image_bytes.numpy()))
+
+  from torchvision import transforms
+  transform_train = transforms.Compose([
+          transforms.RandomResizedCrop(image_size, scale=(0.2, 1.0), interpolation=3),  # 3 is bicubic
+          transforms.RandomHorizontalFlip(),
+          transforms.ToTensor(),
+          transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+  image = transform_train(image)
+  image = image.numpy()
+
+  # image = _decode_and_random_crop(image_bytes, image_size)
+  # image = tf.reshape(image, [image_size, image_size, 3])
+  # image = tf.image.random_flip_left_right(image)
+  # image = normalize_image(image)
+  # image = tf.image.convert_image_dtype(image, dtype=dtype)
+  return image
+
+
 def preprocess_for_eval(image_bytes, dtype=tf.float32, image_size=IMAGE_SIZE):
   """Preprocesses the given image for evaluation.
 
@@ -218,7 +253,46 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
     ds = ds.repeat()
     ds = ds.shuffle(16 * batch_size, seed=0)
 
-  ds = ds.map(decode_example, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+  # ---------------------------------------
+  # debugging
+  # x = next(iter(ds))
+  # decode_example(x)
+  # raise NotImplementedError
+  # ---------------------------------------
+
+  # d = tf.data.Dataset.from_tensor_slices(['hello', 'world'])
+  # import numpy as np
+  # def upper_case_fn(t: tf.Tensor):
+  #   return t.numpy().decode('utf-8').upper()
+  # d = d.map(lambda x: tf.py_function(func=upper_case_fn,
+  #   inp=[x], Tout=tf.string))
+
+  # ds = ds.map(decode_example, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+
+  # kaiming: reference: https://github.com/tensorflow/tensorflow/issues/38212
+  def py_func(image, label):
+    d = decode_example({'image': image, 'label': label})
+    return list(d.values())
+  def ds_map_fn(x):
+    flattened_output = tf.py_function(py_func, [x['image'], x['label']], [tf.float32, tf.int64])
+    return {"image": flattened_output[0], "label": flattened_output[1]}
+  ds = ds.map(ds_map_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+
+  # def tokenizer():
+  #   return { "input_ids": [ 101, 13366,  2131,  1035,  6819,  2094,  1035,  102 ], "attention_mask": [ 1, 1, 1, 1, 1, 1, 1, 1 ]}
+  # def py_func(x):
+  #   d = tokenizer()
+  #   return list(d.values())
+  # def ds_map_fn(x):
+  #   flattened_output = tf.py_function(py_func, [x['label']], [tf.int32, tf.int32])
+  #   return {"input_ids": flattened_output[0], "attention_mask": flattened_output[1]}
+
+  # ds = ds.map(ds_map_fn)
+
+  from IPython import embed; embed();
+  if (0 == 0): raise NotImplementedError
+  x = next(iter(ds))
+
   ds = ds.batch(batch_size, drop_remainder=True)
 
   if not train:
