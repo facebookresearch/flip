@@ -19,7 +19,9 @@ import jax
 import tensorflow as tf
 import tensorflow_datasets as tfds
 
-from utils.img_transform_util import _decode_and_random_crop, _decode_and_center_crop, normalize_image, color_jitter
+from utils.img_transform_util import \
+  decode_and_random_crop, \
+  _decode_and_center_crop, normalize_image, color_jitter
 
 IMAGE_SIZE = 224
 
@@ -35,7 +37,8 @@ def preprocess_for_train(image_bytes, dtype=tf.float32, image_size=IMAGE_SIZE, a
   Returns:
     A preprocessed image `Tensor`.
   """
-  image = _decode_and_random_crop(image_bytes, image_size, area_range=aug.area_range, aspect_ratio_range=aug.aspect_ratio_range)
+  crop_func = decode_and_random_crop[aug.crop_ver]
+  image = crop_func(image_bytes, image_size, area_range=aug.area_range, aspect_ratio_range=aug.aspect_ratio_range)
   image = tf.reshape(image, [image_size, image_size, 3])
   image = tf.image.random_flip_left_right(image)
 

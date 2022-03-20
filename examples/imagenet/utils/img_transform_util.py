@@ -172,7 +172,7 @@ def _at_least_x_are_equal(a, b, x):
   return tf.greater_equal(tf.reduce_sum(match), x)
 
 
-# Kaiming: This is crop_v1 
+# crop_v1: TF default 
 def _decode_and_random_crop(image_bytes, image_size,
     area_range=(0.08, 1.0), aspect_ratio_range=(3. / 4, 4. / 3.)):
   """Make a random crop of image_size.
@@ -195,6 +195,29 @@ def _decode_and_random_crop(image_bytes, image_size,
 
   return image
 
+
+# crop v3: like SimCLR's original code, but: (i) max_attempts=100, and (ii) remove bad condition
+def _decode_and_random_crop_v3(image_bytes, image_size,
+    area_range=(0.08, 1.0), aspect_ratio_range=(3. / 4, 4. / 3.)):
+  """Make a random crop of image_size."""
+  bbox = tf.constant([0.0, 0.0, 1.0, 1.0], dtype=tf.float32, shape=[1, 1, 4])
+  image = distorted_bounding_box_crop(
+      image_bytes,
+      bbox,
+      min_object_covered=0.1,
+      aspect_ratio_range=aspect_ratio_range,
+      area_range=area_range,
+      max_attempts=100)
+  image = _resize(image, image_size)
+
+  return image
+
+
+decode_and_random_crop ={
+    'v1': _decode_and_random_crop,
+    'v3': _decode_and_random_crop_v3
+  }
+  
 
 def _decode_and_center_crop(image_bytes, image_size):
   """Crops to center of image with padding then scales image_size."""
