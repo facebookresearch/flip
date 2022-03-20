@@ -28,10 +28,9 @@ Dtype = Any
 
 # init hacks
 # v1: JAX ViT; v2: PyTorch ViT
-INIT_VER='v2'
+INIT_VER = 'v2'
+
 fixed_gaussian_init = nn.initializers.normal(stddev=0.02)
-
-
 if INIT_VER == 'v1':
   clstoken_init = nn.initializers.zeros
 
@@ -62,29 +61,6 @@ elif INIT_VER == 'v2':
   head_kernel_init = nn.initializers.normal(stddev=2e-5)
 else:
   raise NotImplementedError
-
-# ---------------------
-
-# clstoken_init = {'v1': nn.initializers.zeros,
-#                  'v2': fixed_gaussian_init}[INIT_VER]
-
-# posemb_init = fixed_gaussian_init
-
-# patch_kernel_init = {'v1': nn.initializers.lecun_uniform(),
-#                      'v2': fixed_gaussian_init}[INIT_VER]
-# patch_bias_init = {'v1': nn.initializers.zeros,
-#                    'v2': fixed_gaussian_init}[INIT_VER]  # bug from PyTorch code?
-
-# msa_kernel_init= {'v1': nn.initializers.xavier_uniform(),
-#                   'v2': fixed_gaussian_init}[INIT_VER]
-
-# mlp_kernel_init= {'v1': nn.initializers.xavier_uniform(),
-#                   'v2': fixed_gaussian_init}[INIT_VER]
-# mlp_bias_init= {'v1': nn.initializers.normal(stddev=1e-6),
-#                 'v2': nn.initializers.zeros}[INIT_VER]
-
-# head_kernel_init={'v1': nn.initializers.zeros,
-#                   'v2': nn.initializers.normal(stddev=2e-5)}[INIT_VER]
 
 
 class IdentityLayer(nn.Module):
