@@ -77,8 +77,8 @@ def get_config():
 
   config.aug.color_jit = 0.4  # None to disable
 
-
   # regularization config
   config.label_smoothing = 0.1
+  config.exclude_wd = True  # exclude some weight decays (bias, norm, cls, posembed)
 
   return config

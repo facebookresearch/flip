@@ -44,6 +44,8 @@ import input_pipeline
 import models_vit
 
 from utils import summary_util as summary_util  # must be after 'from clu import metric_writers'
+from utils import opt_util
+
 
 NUM_CLASSES = 1000
 
@@ -253,7 +255,18 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
   params, batch_stats = initialized(rng_init, image_size, model)
 
   tx = getattr(optax, config.opt_type)  # optax.adamw
-  tx = tx(learning_rate=learning_rate_fn, **config.opt)
+
+  # optional: exclude some wd
+  if config.exclude_wd:  
+    mask = jax.tree_util.tree_multimap(lambda x, y: bool(x and y), 
+      opt_util.filter_parameters(params, opt_util.filter_bias_and_norm),
+      opt_util.filter_parameters(params, opt_util.filter_cls_and_posembed)
+    )
+    logging.info('Apply weight decay: {}'.format(mask))
+  else:
+    mask = None
+
+  tx = tx(learning_rate=learning_rate_fn, **config.opt, mask=mask)
   state = TrainState.create(
       apply_fn=model.apply,
       params=params,
@@ -262,16 +275,6 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
       batch_stats=batch_stats,
       dynamic_scale=dynamic_scale)
   return state
-
-
-# from clu.metric_writers.summary_writer import SummaryWriter
-# def summary_writer_write_scalars(self, step: int, scalars):
-#   from IPython import embed; embed();
-#   if (0 == 0): raise NotImplementedError
-#   with self._summary_writer.as_default():
-#     for key, value in scalars.items():
-#       tf.summary.scalar(key, value, step=step)
-# SummaryWriter.write_scalars = summary_writer_write_scalars
 
 
 def train_and_evaluate(config: ml_collections.ConfigDict,
