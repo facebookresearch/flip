@@ -23,7 +23,31 @@ from utils.img_transform_util import \
   decode_and_random_crop, \
   _decode_and_center_crop, normalize_image, color_jitter
 
+from absl import logging
+from PIL import Image
+import io
+from torchvision import transforms
+
 IMAGE_SIZE = 224
+
+
+def preprocess_for_train_torchvision(image_bytes, dtype=tf.float32, image_size=IMAGE_SIZE, transform_aug=None):
+  """Preprocesses the given image for training.
+
+  Args:
+    image_bytes: `Tensor` representing an image binary of arbitrary size.
+    dtype: data type of the image.
+    image_size: image size.
+
+  Returns:
+    A preprocessed image `Tensor`.
+  """
+  image = Image.open(io.BytesIO(image_bytes.numpy()))
+  image = image.convert('RGB')
+  image = transform_aug(image)
+  image = tf.constant(image.numpy(), dtype=dtype)  # [3, 224, 224]
+  image = tf.transpose(image, [1, 2, 0])  # [c, h, w] -> [h, w, c]
+  return image
 
 
 def preprocess_for_train(image_bytes, dtype=tf.float32, image_size=IMAGE_SIZE, aug=None):
@@ -49,6 +73,17 @@ def preprocess_for_train(image_bytes, dtype=tf.float32, image_size=IMAGE_SIZE, a
   image = normalize_image(image)
   image = tf.image.convert_image_dtype(image, dtype=dtype)
   return image
+
+
+def get_torchvision_aug(image_size, aug):
+  transform_aug = transforms.Compose([
+          transforms.RandomResizedCrop(image_size, scale=aug.area_range, ratio=aug.aspect_ratio_range, interpolation=3),  # 3 is bicubic
+          transforms.RandomHorizontalFlip(),
+          transforms.ColorJitter(aug.color_jit, aug.color_jit, aug.color_jit),
+          transforms.ToTensor(),
+          transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+  return transform_aug
+          
 
 
 def preprocess_for_eval(image_bytes, dtype=tf.float32, image_size=IMAGE_SIZE):
@@ -94,13 +129,6 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
     start = jax.process_index() * split_size
     split = 'validation[{}:{}]'.format(start, start + split_size)
 
-  def decode_example(example):
-    if train:
-      image = preprocess_for_train(example['image'], dtype, image_size, aug=aug)
-    else:
-      image = preprocess_for_eval(example['image'], dtype, image_size)
-    return {'image': image, 'label': example['label']}
-
   ds = dataset_builder.as_dataset(split=split, decoders={
       'image': tfds.decode.SkipDecoding(),
   })
@@ -115,14 +143,43 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
     ds = ds.repeat()
     ds = ds.shuffle(16 * batch_size, seed=0)
 
-  # ---------------------------------------
-  # debugging
-  # x = next(iter(ds))
-  # decode_example(x)
-  # raise NotImplementedError
-  # ---------------------------------------
+  if aug is not None and aug.torchvision:
+    transform_aug = get_torchvision_aug(image_size, aug)
+    logging.info(transform_aug)
 
-  ds = ds.map(decode_example, num_parallel_calls=tf.data.experimental.AUTOTUNE)  
+    def decode_example(example):
+      if train:
+        image = preprocess_for_train_torchvision(example['image'], dtype, image_size, transform_aug=transform_aug)
+      else:
+        raise NotImplementedError
+        image = preprocess_for_eval(example['image'], dtype, image_size)
+      return {'image': image, 'label': example['label']}
+
+    # ---------------------------------------
+    # debugging
+    # x = next(iter(ds))
+    # decode_example(x)
+    # raise NotImplementedError
+    # ---------------------------------------
+
+    # kaiming: reference: https://github.com/tensorflow/tensorflow/issues/38212
+    def py_func(image, label):
+      d = decode_example({'image': image, 'label': label})
+      return list(d.values())
+    def ds_map_fn(x):
+      flattened_output = tf.py_function(py_func, [x['image'], x['label']], [tf.float32, tf.int64])
+      return {"image": flattened_output[0], "label": flattened_output[1]}
+
+    ds = ds.map(ds_map_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+  else:
+    def decode_example(example):
+      if train:
+        image = preprocess_for_train(example['image'], dtype, image_size, aug=aug)
+      else:
+        image = preprocess_for_eval(example['image'], dtype, image_size)
+      return {'image': image, 'label': example['label']}
+    ds = ds.map(decode_example, num_parallel_calls=tf.data.experimental.AUTOTUNE)  
+
   ds = ds.batch(batch_size, drop_remainder=True)
 
   if not train:
