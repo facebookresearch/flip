@@ -26,10 +26,65 @@ PRNGKey = Any
 Shape = Tuple[int]
 Dtype = Any
 
-
+# init hacks
 # v1: JAX ViT; v2: PyTorch ViT
 INIT_VER='v2'
 fixed_gaussian_init = nn.initializers.normal(stddev=0.02)
+
+
+if INIT_VER == 'v1':
+  clstoken_init = nn.initializers.zeros
+
+  posemb_init = fixed_gaussian_init
+
+  patch_kernel_init = nn.initializers.lecun_uniform()
+  patch_bias_init = nn.initializers.zeros
+
+  msa_kernel_init = nn.initializers.xavier_uniform()
+
+  mlp_kernel_init = nn.initializers.xavier_uniform()
+  mlp_bias_init = nn.initializers.normal(stddev=1e-6)
+
+  head_kernel_init=nn.initializers.zeros
+elif INIT_VER == 'v2':
+  clstoken_init = fixed_gaussian_init
+
+  posemb_init = fixed_gaussian_init
+
+  patch_kernel_init = fixed_gaussian_init
+  patch_bias_init = fixed_gaussian_init  # bug from PyTorch code?
+
+  msa_kernel_init = fixed_gaussian_init
+
+  mlp_kernel_init = fixed_gaussian_init
+  mlp_bias_init = nn.initializers.zeros
+
+  head_kernel_init = nn.initializers.normal(stddev=2e-5)
+else:
+  raise NotImplementedError
+
+# ---------------------
+
+# clstoken_init = {'v1': nn.initializers.zeros,
+#                  'v2': fixed_gaussian_init}[INIT_VER]
+
+# posemb_init = fixed_gaussian_init
+
+# patch_kernel_init = {'v1': nn.initializers.lecun_uniform(),
+#                      'v2': fixed_gaussian_init}[INIT_VER]
+# patch_bias_init = {'v1': nn.initializers.zeros,
+#                    'v2': fixed_gaussian_init}[INIT_VER]  # bug from PyTorch code?
+
+# msa_kernel_init= {'v1': nn.initializers.xavier_uniform(),
+#                   'v2': fixed_gaussian_init}[INIT_VER]
+
+# mlp_kernel_init= {'v1': nn.initializers.xavier_uniform(),
+#                   'v2': fixed_gaussian_init}[INIT_VER]
+# mlp_bias_init= {'v1': nn.initializers.normal(stddev=1e-6),
+#                 'v2': nn.initializers.zeros}[INIT_VER]
+
+# head_kernel_init={'v1': nn.initializers.zeros,
+#                   'v2': nn.initializers.normal(stddev=2e-5)}[INIT_VER]
 
 
 class IdentityLayer(nn.Module):
@@ -143,8 +198,7 @@ class Encoder1DBlock(nn.Module):
     x = nn.LayerNorm(dtype=self.dtype)(inputs)
     x = nn.MultiHeadDotProductAttention(
         dtype=self.dtype,
-        kernel_init= {'v1': nn.initializers.xavier_uniform(),
-                      'v2': fixed_gaussian_init}[INIT_VER],
+        kernel_init=msa_kernel_init,
         broadcast_dropout=False,
         deterministic=deterministic,
         dropout_rate=self.attention_dropout_rate,
@@ -157,10 +211,8 @@ class Encoder1DBlock(nn.Module):
     y = nn.LayerNorm(dtype=self.dtype)(x)
     y = MlpBlock(
         mlp_dim=self.mlp_dim, dtype=self.dtype, dropout_rate=self.dropout_rate,
-        kernel_init= {'v1': nn.initializers.xavier_uniform(),
-                      'v2': fixed_gaussian_init}[INIT_VER],
-        bias_init= {'v1': nn.initializers.normal(stddev=1e-6),
-                    'v2': nn.initializers.zeros}[INIT_VER],
+        kernel_init=mlp_kernel_init,
+        bias_init=mlp_bias_init,
         )(y, deterministic=deterministic)
 
     return x + y
@@ -197,7 +249,7 @@ class Encoder(nn.Module):
     assert inputs.ndim == 3  # (batch, len, emb)
 
     x = AddPositionEmbs(
-        posemb_init=nn.initializers.normal(stddev=0.02),  # from BERT.
+        posemb_init=posemb_init,  # from BERT.
         name='posembed_input')(
             inputs)
     x = nn.Dropout(rate=self.dropout_rate)(x, deterministic=not train)
@@ -242,10 +294,8 @@ class VisionTransformer(nn.Module):
         strides=self.patches.size,
         padding='VALID',
         name='embedding',
-        kernel_init = {'v1': nn.initializers.lecun_uniform(),
-                       'v2': fixed_gaussian_init}[INIT_VER],
-        bias_init = {'v1': nn.initializers.zeros,
-                     'v2': fixed_gaussian_init}[INIT_VER],  # bug from PyTorch code?
+        kernel_init=patch_kernel_init,
+        bias_init=patch_bias_init,
         )(x)
 
     # Here, x is a grid of embeddings.
@@ -256,9 +306,7 @@ class VisionTransformer(nn.Module):
 
     # If we want to add a class token, add it here.
     if self.classifier == 'token':
-      cls_init = {'v1': nn.initializers.zeros,
-                  'v2': fixed_gaussian_init}[INIT_VER]
-      cls = self.param('cls', cls_init, (1, 1, c))
+      cls = self.param('cls', clstoken_init, (1, 1, c))
       cls = jnp.tile(cls, [n, 1, 1])
       x = jnp.concatenate([cls, x], axis=1)
 
@@ -281,8 +329,7 @@ class VisionTransformer(nn.Module):
       x = nn.Dense(
         features=self.num_classes,
         name='head',
-        kernel_init={'v1': nn.initializers.zeros,
-                     'v2': nn.initializers.normal(stddev=2e-5)}[INIT_VER]
+        kernel_init=head_kernel_init
       )(x)
     return x
 
