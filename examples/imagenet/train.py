@@ -46,6 +46,7 @@ import models_vit
 from utils import summary_util as summary_util  # must be after 'from clu import metric_writers'
 from utils import opt_util
 
+import numpy as np
 
 NUM_CLASSES = 1000
 
@@ -69,6 +70,9 @@ def initialized(key, image_size, model):
   def init(*args):
     return model.init(*args, train=False)
   variables = init({'params': key}, jnp.ones(input_shape, model.dtype))
+
+  stds = jax.tree_util.tree_map(lambda x: np.array(x).std(), variables['params'])
+  logging.info('std: {}'.format(stds))
 
   batch_stats = variables['batch_stats'] if 'batch_stats' in variables else flax.core.frozen_dict.FrozenDict()
 
