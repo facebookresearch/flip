@@ -71,12 +71,10 @@ def initialized(key, image_size, model):
     return model.init(*args, train=False)
   variables = init({'params': key}, jnp.ones(input_shape, model.dtype))
 
-  stds = jax.tree_util.tree_map(lambda x: np.array(x).std(), variables['params'])
-  logging.info('std: {}'.format(stds))
-
+  params = variables['params']
   batch_stats = variables['batch_stats'] if 'batch_stats' in variables else flax.core.frozen_dict.FrozenDict()
 
-  return variables['params'], batch_stats
+  return params, batch_stats
 
 
 def cross_entropy_loss(logits, labels, label_smoothing=0.):
@@ -258,7 +256,13 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
 
   params, batch_stats = initialized(rng_init, image_size, model)
 
-  tx = getattr(optax, config.opt_type)  # optax.adamw
+  # optional: rescale
+  if config.rescale_init:
+    rescales = opt_util.filter_parameters(params, opt_util.layer_rescale)
+    params = jax.tree_util.tree_multimap(lambda x, y: x * y, rescales, params)
+
+  stds = jax.tree_util.tree_map(lambda x: np.array(x).std(), params)
+  logging.info('std: {}'.format(stds))
 
   # optional: exclude some wd
   if config.exclude_wd:  
@@ -270,6 +274,7 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
   else:
     mask = None
 
+  tx = getattr(optax, config.opt_type)  # optax.adamw
   tx = tx(learning_rate=learning_rate_fn, **config.opt, mask=mask)
   state = TrainState.create(
       apply_fn=model.apply,

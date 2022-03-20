@@ -81,4 +81,6 @@ def get_config():
   config.label_smoothing = 0.1
   config.exclude_wd = True  # exclude some weight decays (bias, norm, cls, posembed)
 
+  config.rescale_init = True  # rescale initialized weights by layer id
+
   return config

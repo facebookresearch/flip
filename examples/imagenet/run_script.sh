@@ -7,4 +7,4 @@ python3 main.py \
     --workdir=./imagenet_tpu \
     --config=configs/tpu_vit_base.py \
     --config.batch_size=1024 \
-    --config.model.transformer.num_layers=1
+    --config.model.transformer.num_layers=12

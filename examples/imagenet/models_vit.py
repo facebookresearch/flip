@@ -27,7 +27,7 @@ Shape = Tuple[int]
 Dtype = Any
 
 # init hacks
-# v1: JAX ViT; v2: PyTorch ViT
+# v1: JAX ViT; v2: PyTorch ViT; v3: v2 with fix
 INIT_VER = 'v2'
 
 fixed_gaussian_init = nn.initializers.normal(stddev=0.02)
@@ -156,6 +156,7 @@ class Encoder1DBlock(nn.Module):
   dtype: Dtype = jnp.float32
   dropout_rate: float = 0.1
   attention_dropout_rate: float = 0.1
+  layer_id: int = None
 
   @nn.compact
   def __call__(self, inputs, *, deterministic):
@@ -236,8 +237,9 @@ class Encoder(nn.Module):
           mlp_dim=self.mlp_dim,
           dropout_rate=self.dropout_rate,
           attention_dropout_rate=self.attention_dropout_rate,
-          name=f'encoderblock_{lyr}',
-          num_heads=self.num_heads)(
+          name='encoderblock_{:02d}'.format(lyr),
+          num_heads=self.num_heads,
+          layer_id=lyr)(
               x, deterministic=not train)
     encoded = nn.LayerNorm(name='encoder_norm')(x)
 
