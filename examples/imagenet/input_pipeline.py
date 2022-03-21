@@ -165,10 +165,10 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
       return {'image': image, 'label': example['label']}
 
     # ---------------------------------------
-    # debugging
-    # x = next(iter(ds))
-    # decode_example(x)
-    # raise NotImplementedError
+    # debugging torchvision's
+    x = next(iter(ds))
+    decode_example(x)
+    raise NotImplementedError
     # ---------------------------------------
 
     # kaiming: reference: https://github.com/tensorflow/tensorflow/issues/38212
@@ -187,6 +187,15 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
       else:
         image = preprocess_for_eval(example['image'], dtype, image_size)
       return {'image': image, 'label': example['label']}
+
+    # ---------------------------------------
+    # debugging tensorflow's
+    x = next(iter(ds))
+    decode_example(x)
+    raise NotImplementedError
+    # ---------------------------------------
+
+
     ds = ds.map(decode_example, num_parallel_calls=tf.data.experimental.AUTOTUNE)  
 
   ds = ds.batch(batch_size, drop_remainder=True)
