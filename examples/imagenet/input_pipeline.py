@@ -166,9 +166,9 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
 
     # ---------------------------------------
     # debugging torchvision's
-    x = next(iter(ds))
-    decode_example(x)
-    raise NotImplementedError
+    # x = next(iter(ds))
+    # decode_example(x)
+    # raise NotImplementedError
     # ---------------------------------------
 
     # kaiming: reference: https://github.com/tensorflow/tensorflow/issues/38212
@@ -190,9 +190,9 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
 
     # ---------------------------------------
     # debugging tensorflow's
-    x = next(iter(ds))
-    decode_example(x)
-    raise NotImplementedError
+    # x = next(iter(ds))
+    # decode_example(x)
+    # raise NotImplementedError
     # ---------------------------------------
 
 
