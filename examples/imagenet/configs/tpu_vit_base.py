@@ -78,7 +78,7 @@ def get_config():
   config.aug.aspect_ratio_range = (3. / 4, 4. / 3.)
   config.aug.crop_ver = 'v3'  # v1, v3
 
-  config.aug.color_jit = 0.4  # None to disable
+  config.aug.color_jit = None  # None to disable
 
   # regularization config
   config.label_smoothing = 0.1

@@ -76,12 +76,19 @@ def preprocess_for_train(image_bytes, dtype=tf.float32, image_size=IMAGE_SIZE, a
 
 
 def get_torchvision_aug(image_size, aug):
-  transform_aug = transforms.Compose([
-          transforms.RandomResizedCrop(image_size, scale=aug.area_range, ratio=aug.aspect_ratio_range, interpolation=3),  # 3 is bicubic
-          transforms.RandomHorizontalFlip(),
-          transforms.ColorJitter(aug.color_jit, aug.color_jit, aug.color_jit),
-          transforms.ToTensor(),
-          transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+
+  transform_aug = [
+    transforms.RandomResizedCrop(image_size, scale=aug.area_range, ratio=aug.aspect_ratio_range, interpolation=transforms.InterpolationMode.BICUBIC),
+    transforms.RandomHorizontalFlip()]
+
+  if aug.color_jit is not None:
+    transform_aug += [transforms.ColorJitter(aug.color_jit, aug.color_jit, aug.color_jit)]
+          
+  transform_aug += [
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])]
+
+  transform_aug = transforms.Compose(transform_aug)
   return transform_aug
           
 

@@ -6,7 +6,7 @@ BRANCH=main
 salt=`head /dev/urandom | tr -dc a-z0-9 | head -c8`
 
 CONFIG=tpu_vit_base
-JOBNAME=flax/$(date +%Y%m%d_%H%M)_${salt}_${CONFIG}_cjit0.4_lb0.1_cropv3_exwd_initv2_rsinit_torchv
+JOBNAME=flax/$(date +%Y%m%d_%H%M)_${salt}_${CONFIG}_cjitNone_lb0.1_cropv3_exwd_initv2_rsinit_torchv
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
 LOGDIR=/home/${USER}/logs/${JOBNAME}
@@ -26,12 +26,12 @@ mkdir -p ${LOGDIR}
 # git clone -b $BRANCH $REPO &&
 
 # kill
-gcloud alpha compute tpus tpu-vm ssh ${VM_NAME} --zone europe-west4-a \
-    --worker=all --command "
-sudo pkill python
-source ~/flax_dev/examples/imagenet/run_kill.sh
-sudo lsof -w /dev/accel0
-"
+# gcloud alpha compute tpus tpu-vm ssh ${VM_NAME} --zone europe-west4-a \
+#     --worker=all --command "
+# sudo pkill python
+# source ~/flax_dev/examples/imagenet/run_kill.sh
+# sudo lsof -w /dev/accel0
+# "
 
 gcloud alpha compute tpus tpu-vm ssh ${VM_NAME} --zone europe-west4-a \
     --worker=all --command "
@@ -64,4 +64,6 @@ python3 main.py \
     --config.batch_size=4096 \
     --config.log_every_steps=100 \
 " 2>&1 | tee $LOGDIR/finetune.log
+
+echo ${VM_NAME}
 
