@@ -39,7 +39,7 @@ def get_torchvision_aug(image_size, aug):
 
   if aug.color_jit is not None:
     # transform_aug += [transforms.ColorJitter(aug.color_jit, aug.color_jit, aug.color_jit)]
-    transform_aug += [transforms.ColorJitter(brightness=aug.color_jit, contrast=aug.color_jit, saturation=0)]
+    transform_aug += [transforms.ColorJitter(*aug.color_jit)]
           
   transform_aug += [
     transforms.ToTensor(),
@@ -103,7 +103,7 @@ def preprocess_for_train(image_bytes, dtype=tf.float32, image_size=IMAGE_SIZE, a
 
   # advance augs
   if aug.color_jit is not None:
-    image = color_jitter(image / 255., strength=aug.color_jit) * 255.  # color_jitter accept [0, 1] images
+    image = color_jitter(image / 255., *aug.color_jit) * 255.  # color_jitter accept [0, 1] images
 
   image = normalize_image(image)
   image = tf.image.convert_image_dtype(image, dtype=dtype)

@@ -6,7 +6,7 @@ STDDEV_RGB = [0.229 * 255, 0.224 * 255, 0.225 * 255]
 
 
 def color_jitter(image,
-                 strength,
+                 brightness=0, contrast=0, saturation=0,
                  random_order=True):
   """Distorts the color of the image.
 
@@ -18,10 +18,6 @@ def color_jitter(image,
   Returns:
     The distorted image tensor.
   """
-  brightness = strength
-  contrast = strength
-  # saturation = strength
-  saturation = 0.0
   hue = 0.0
   if random_order:
     return color_jitter_rand(image, brightness, contrast, saturation, hue)
