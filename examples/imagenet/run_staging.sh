@@ -1,5 +1,5 @@
 # VM_NAME=kmh-tpuvm-v3-128
-VM_NAME=kmh-tpuvm-v3-128-2
+VM_NAME=kmh-tpuvm-v3-128
 # REPO=https://github.com/google/flax
 REPO=https://71d519550fe3430ecbf39b70467e9210aed5da69:@github.com/KaimingHe/flax_dev.git
 BRANCH=main
@@ -7,7 +7,7 @@ BRANCH=main
 salt=`head /dev/urandom | tr -dc a-z0-9 | head -c8`
 
 CONFIG=tpu_vit_base
-JOBNAME=flax/$(date +%Y%m%d_%H%M)_${salt}_${CONFIG}_cjit0.4NOsat_lb0.1_cropv4_exwd_initv2_rsinit_torchv
+JOBNAME=flax/$(date +%Y%m%d_%H%M)_${salt}_${CONFIG}_cjit0.4NOsat_lb0.1_cropv4_exwd_initv2_rsinit_NOtorchv
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
 LOGDIR=/home/${USER}/logs/${JOBNAME}
@@ -60,7 +60,7 @@ python3 main.py \
     --config=configs/$CONFIG.py \
     --config.batch_size=4096 \
     --config.log_every_steps=100 \
-    --config.aug.torchvision=True \
+    --config.aug.torchvision=False \
 " 2>&1 | tee $LOGDIR/finetune.log
 
 echo ${VM_NAME}

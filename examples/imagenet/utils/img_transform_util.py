@@ -20,7 +20,8 @@ def color_jitter(image,
   """
   brightness = strength
   contrast = strength
-  saturation = strength
+  # saturation = strength
+  saturation = 0.0
   hue = 0.0
   if random_order:
     return color_jitter_rand(image, brightness, contrast, saturation, hue)
