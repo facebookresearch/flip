@@ -31,6 +31,24 @@ from torchvision import transforms
 IMAGE_SIZE = 224
 
 
+def get_torchvision_aug(image_size, aug):
+
+  transform_aug = [
+    transforms.RandomResizedCrop(image_size, scale=aug.area_range, ratio=aug.aspect_ratio_range, interpolation=transforms.InterpolationMode.BICUBIC),
+    transforms.RandomHorizontalFlip()]
+
+  if aug.color_jit is not None:
+    # transform_aug += [transforms.ColorJitter(aug.color_jit, aug.color_jit, aug.color_jit)]
+    transform_aug += [transforms.ColorJitter(brightness=aug.color_jit, contrast=aug.color_jit, saturation=0)]
+          
+  transform_aug += [
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])]
+
+  transform_aug = transforms.Compose(transform_aug)
+  return transform_aug
+
+
 def preprocess_for_train_torchvision(image_bytes, dtype=tf.float32, image_size=IMAGE_SIZE, transform_aug=None):
   """Preprocesses the given image for training.
 
@@ -44,6 +62,23 @@ def preprocess_for_train_torchvision(image_bytes, dtype=tf.float32, image_size=I
   """
   image = Image.open(io.BytesIO(image_bytes.numpy()))
   image = image.convert('RGB')
+
+  # ------------------------------------------------------
+  # from IPython import embed; embed();
+  # if (0 == 0): raise NotImplementedError
+  # t_crop = transform_aug.transforms[0]
+  # t_flip = transform_aug.transforms[1]
+  # t_cjit = transform_aug.transforms[2]
+  # t_tten = transform_aug.transforms[3]
+  
+  # im = t_cjit(image)
+  # im = np.asarray(image)
+
+  # import numpy as np
+  # im = np.asarray(image)
+  # transforms.ToTensor()(image)
+  # ------------------------------------------------------
+
   image = transform_aug(image)
   image = tf.constant(image.numpy(), dtype=dtype)  # [3, 224, 224]
   image = tf.transpose(image, [1, 2, 0])  # [c, h, w] -> [h, w, c]
@@ -73,24 +108,6 @@ def preprocess_for_train(image_bytes, dtype=tf.float32, image_size=IMAGE_SIZE, a
   image = normalize_image(image)
   image = tf.image.convert_image_dtype(image, dtype=dtype)
   return image
-
-
-def get_torchvision_aug(image_size, aug):
-
-  transform_aug = [
-    transforms.RandomResizedCrop(image_size, scale=aug.area_range, ratio=aug.aspect_ratio_range, interpolation=transforms.InterpolationMode.BICUBIC),
-    transforms.RandomHorizontalFlip()]
-
-  if aug.color_jit is not None:
-    transform_aug += [transforms.ColorJitter(aug.color_jit, aug.color_jit, aug.color_jit)]
-          
-  transform_aug += [
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])]
-
-  transform_aug = transforms.Compose(transform_aug)
-  return transform_aug
-          
 
 
 def preprocess_for_eval(image_bytes, dtype=tf.float32, image_size=IMAGE_SIZE):

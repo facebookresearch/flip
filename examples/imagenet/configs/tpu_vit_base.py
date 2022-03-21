@@ -72,13 +72,13 @@ def get_config():
   # aug config
   config.aug = ml_collections.ConfigDict()
 
-  config.aug.torchvision = False
+  config.aug.torchvision = True
 
   config.aug.area_range = (0.08, 1)
   config.aug.aspect_ratio_range = (3. / 4, 4. / 3.)
   config.aug.crop_ver = 'v4'  # v1, v3
 
-  config.aug.color_jit = None  # None to disable
+  config.aug.color_jit = 0.4  # None to disable
 
   # regularization config
   config.label_smoothing = 0.1
