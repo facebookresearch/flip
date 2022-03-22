@@ -78,7 +78,9 @@ def preprocess_for_train_torchvision(image_bytes, dtype=tf.float32, image_size=I
   im = t_tten(im)
 
   brightness = t_cjit.brightness
-  im *= torch.empty(1).uniform_(brightness[0], brightness[1]).numpy()
+  factor = torch.empty(1).uniform_(brightness[0], brightness[1]).numpy()
+  im *= factor
+  im = im.clip(min=0., max=1.)
   # im = t_cjit(im)
 
   im = t_norm(im)
