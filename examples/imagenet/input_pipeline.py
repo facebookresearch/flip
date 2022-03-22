@@ -28,6 +28,7 @@ from PIL import Image
 import io
 from torchvision import transforms
 
+from tensorflow.python.ops import random_ops
 import torch
 
 IMAGE_SIZE = 224
@@ -78,7 +79,8 @@ def preprocess_for_train_torchvision(image_bytes, dtype=tf.float32, image_size=I
   im = t_tten(im)
 
   brightness = t_cjit.brightness
-  factor = torch.empty(1).uniform_(brightness[0], brightness[1]).numpy()
+  factor = random_ops.random_uniform([], brightness[0], brightness[1]).numpy()
+  # factor = torch.empty(1).uniform_(brightness[0], brightness[1]).numpy()
   im *= factor
   im = im.clip(min=0., max=1.)
   # im = t_cjit(im)
