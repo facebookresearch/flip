@@ -87,7 +87,7 @@ def color_jitter_rand(image, brightness=0, contrast=0, saturation=0, hue=0):
         if brightness == 0:
           return x
         else:
-          return tf.image.random_brightness(x, max_delta=brightness)
+          # return tf.image.random_brightness(x, max_delta=brightness)
           return random_brightness(x, max_delta=brightness)
       def contrast_foo():
         if contrast == 0:
