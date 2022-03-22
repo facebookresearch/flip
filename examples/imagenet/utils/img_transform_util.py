@@ -59,6 +59,14 @@ def color_jitter_nonrand(image, brightness=0, contrast=0, saturation=0, hue=0):
     return image
 
 
+from tensorflow.python.ops import random_ops
+def random_brightness(x, max_delta):
+  delta = random_ops.random_uniform([], -max_delta, max_delta)
+  x = x * (1. + delta)
+  return x
+  
+
+
 def color_jitter_rand(image, brightness=0, contrast=0, saturation=0, hue=0):
   """Distorts the color of the image (jittering order is random).
 
@@ -80,6 +88,7 @@ def color_jitter_rand(image, brightness=0, contrast=0, saturation=0, hue=0):
           return x
         else:
           return tf.image.random_brightness(x, max_delta=brightness)
+          return random_brightness(x, max_delta=brightness)
       def contrast_foo():
         if contrast == 0:
           return x
