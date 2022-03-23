@@ -26,6 +26,13 @@ def color_jitter(image,
     return color_jitter_nonrand(image, brightness, contrast, saturation, hue)
 
 
+def random_brightness(x, max_delta):
+  """Multiplicative brightness jitter"""
+  delta = random_ops.random_uniform([], -max_delta, max_delta)
+  x = x * (1. + delta)
+  return x
+
+
 def color_jitter_nonrand(image, brightness=0, contrast=0, saturation=0, hue=0):
   """Distorts the color of the image (jittering order is fixed).
 
@@ -43,7 +50,8 @@ def color_jitter_nonrand(image, brightness=0, contrast=0, saturation=0, hue=0):
     def apply_transform(i, x, brightness, contrast, saturation, hue):
       """Apply the i-th transformation."""
       if brightness != 0 and i == 0:
-        x = tf.image.random_brightness(x, max_delta=brightness)
+        # x = tf.image.random_brightness(x, max_delta=brightness)
+        return random_brightness(x, max_delta=brightness)
       elif contrast != 0 and i == 1:
         x = tf.image.random_contrast(
             x, lower=1-contrast, upper=1+contrast)
@@ -58,14 +66,6 @@ def color_jitter_nonrand(image, brightness=0, contrast=0, saturation=0, hue=0):
       image = apply_transform(i, image, brightness, contrast, saturation, hue)
       image = tf.clip_by_value(image, 0., 1.)
     return image
-
-
-def random_brightness(x, max_delta):
-  """Multiplicative brightness jitter"""
-  delta = random_ops.random_uniform([], -max_delta, max_delta)
-  x = x * (1. + delta)
-  return x
-  
 
 
 def color_jitter_rand(image, brightness=0, contrast=0, saturation=0, hue=0):

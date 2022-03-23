@@ -138,6 +138,7 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
     split_size = validate_examples // jax.process_count()
     start = jax.process_index() * split_size
     split = 'validation[{}:{}]'.format(start, start + split_size)
+  num_classes = dataset_builder.info.features['label'].num_classes
 
   ds = dataset_builder.as_dataset(split=split, decoders={
       'image': tfds.decode.SkipDecoding(),
@@ -155,51 +156,45 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
     ds = ds.repeat()
     ds = ds.shuffle(16 * batch_size, seed=0)
 
-  if aug is not None and aug.torchvision:
+  use_torchvision = (aug is not None and aug.torchvision)
+  if use_torchvision:
     transform_aug = get_torchvision_aug(image_size, aug)
     logging.info(transform_aug)
 
-    def decode_example(example):
-      if train:
+  # define the decode function
+  def decode_example(example):
+    label = example['label']
+    label_one_hot = tf.one_hot(label, depth=num_classes, dtype=dtype)
+    if train:
+      if use_torchvision:
         image = preprocess_for_train_torchvision(example['image'], dtype, image_size, transform_aug=transform_aug)
       else:
-        raise NotImplementedError
-        image = preprocess_for_eval(example['image'], dtype, image_size)
-      return {'image': image, 'label': example['label']}
+        image = preprocess_for_train(example['image'], dtype, image_size, aug=aug)
+      label_one_hot = label_one_hot * (1 - aug.label_smoothing) + aug.label_smoothing / num_classes
+    else:
+      assert not use_torchvision
+      image = preprocess_for_eval(example['image'], dtype, image_size)
+    return {'image': image, 'label': label, 'label_one_hot': label_one_hot}
 
-    # ---------------------------------------
-    # debugging torchvision's
-    # x = next(iter(ds))
-    # decode_example(x)
-    # raise NotImplementedError
-    # ---------------------------------------
-
+  if use_torchvision:
     # kaiming: reference: https://github.com/tensorflow/tensorflow/issues/38212
     def py_func(image, label):
       d = decode_example({'image': image, 'label': label})
       return list(d.values())
     def ds_map_fn(x):
-      flattened_output = tf.py_function(py_func, [x['image'], x['label']], [tf.float32, tf.int64])
-      return {"image": flattened_output[0], "label": flattened_output[1]}
-
-    ds = ds.map(ds_map_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+      flattened_output = tf.py_function(py_func, [x['image'], x['label']], [tf.float32, tf.int64, tf.float32])
+      return {"image": flattened_output[0], "label": flattened_output[1], "label_one_hot": flattened_output[2]}
   else:
-    def decode_example(example):
-      if train:
-        image = preprocess_for_train(example['image'], dtype, image_size, aug=aug)
-      else:
-        image = preprocess_for_eval(example['image'], dtype, image_size)
-      return {'image': image, 'label': example['label']}
+    ds_map_fn = decode_example
 
-    # ---------------------------------------
-    # debugging tensorflow's
-    # x = next(iter(ds))
-    # decode_example(x)
-    # raise NotImplementedError
-    # ---------------------------------------
+  # ---------------------------------------
+  # debugging 
+  # x = next(iter(ds))
+  # decode_example(x)
+  # raise NotImplementedError
+  # ---------------------------------------
 
-
-    ds = ds.map(decode_example, num_parallel_calls=tf.data.experimental.AUTOTUNE)  
+  ds = ds.map(ds_map_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
 
   ds = ds.batch(batch_size, drop_remainder=True)
 

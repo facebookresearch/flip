@@ -77,17 +77,13 @@ def initialized(key, image_size, model):
   return params, batch_stats
 
 
-def cross_entropy_loss(logits, labels, label_smoothing=0.):
-  num_classes = NUM_CLASSES
-  one_hot_labels = common_utils.onehot(labels, num_classes=num_classes)
-  if label_smoothing > 0:
-      one_hot_labels = one_hot_labels * (1 - label_smoothing) + label_smoothing / num_classes
-  xentropy = optax.softmax_cross_entropy(logits=logits, labels=one_hot_labels)
+def cross_entropy_loss(logits, labels_one_hot):
+  xentropy = optax.softmax_cross_entropy(logits=logits, labels=labels_one_hot)
   return jnp.mean(xentropy)
 
 
-def compute_metrics(logits, labels, label_smoothing=0.0):
-  loss = cross_entropy_loss(logits, labels, label_smoothing)
+def compute_metrics(logits, labels, labels_one_hot):
+  loss = cross_entropy_loss(logits, labels_one_hot)
   accuracy = jnp.mean(jnp.argmax(logits, -1) == labels)
   metrics = {
       'loss': loss,
@@ -130,7 +126,7 @@ def train_step(state, batch, learning_rate_fn, config):
         mutable=['batch_stats'],
         rngs=dict(dropout=dropout_rng),
         train=True)
-    loss = cross_entropy_loss(logits, batch['label'], label_smoothing=config.label_smoothing)
+    loss = cross_entropy_loss(logits, batch['label_one_hot'])
     # weight_penalty_params = jax.tree_leaves(params)
     # weight_decay = 0.0001
     # weight_l2 = sum([jnp.sum(x ** 2)
@@ -155,7 +151,7 @@ def train_step(state, batch, learning_rate_fn, config):
     # Re-use same axis_name as in the call to `pmap(...train_step...)` below.
     grads = lax.pmean(grads, axis_name='batch')
   new_model_state, logits = aux[1]
-  metrics = compute_metrics(logits, batch['label'], config.label_smoothing)
+  metrics = compute_metrics(logits, batch['label'], batch['label_one_hot'])
   metrics['learning_rate'] = lr
 
   new_state = state.apply_gradients(
@@ -181,7 +177,7 @@ def eval_step(state, batch):
   variables = {'params': state.params, 'batch_stats': state.batch_stats}
   logits = state.apply_fn(
       variables, batch['image'], train=False, mutable=False)
-  return compute_metrics(logits, batch['label'])
+  return compute_metrics(logits, batch['label'], batch['label_one_hot'])
 
 
 def prepare_tf_data(xs):

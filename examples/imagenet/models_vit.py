@@ -33,31 +33,21 @@ INIT_VER = 'v2'
 fixed_gaussian_init = nn.initializers.normal(stddev=0.02)
 if INIT_VER == 'v1':
   clstoken_init = nn.initializers.zeros
-
   posemb_init = fixed_gaussian_init
-
   patch_kernel_init = nn.initializers.lecun_uniform()
   patch_bias_init = nn.initializers.zeros
-
   msa_kernel_init = nn.initializers.xavier_uniform()
-
   mlp_kernel_init = nn.initializers.xavier_uniform()
   mlp_bias_init = nn.initializers.normal(stddev=1e-6)
-
   head_kernel_init=nn.initializers.zeros
 elif INIT_VER == 'v2':
   clstoken_init = fixed_gaussian_init
-
   posemb_init = fixed_gaussian_init
-
   patch_kernel_init = fixed_gaussian_init
   patch_bias_init = fixed_gaussian_init  # bug from PyTorch code?
-
   msa_kernel_init = fixed_gaussian_init
-
   mlp_kernel_init = fixed_gaussian_init
   mlp_bias_init = nn.initializers.zeros
-
   head_kernel_init = nn.initializers.normal(stddev=2e-5)
 else:
   raise NotImplementedError
