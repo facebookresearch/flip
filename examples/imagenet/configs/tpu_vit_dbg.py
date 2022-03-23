@@ -39,5 +39,6 @@ def get_config():
 
   config = tpu_vit_base.get_config()
   config.model = vit.get_testing_config()
+  config.model.transformer.droppath_rate = 0.1
 
   return config

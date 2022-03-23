@@ -156,6 +156,7 @@ class Encoder1DBlock(nn.Module):
   dtype: Dtype = jnp.float32
   dropout_rate: float = 0.1
   attention_dropout_rate: float = 0.1
+  droppath_rate: float = 0.0
   layer_id: int = None
 
   @nn.compact
@@ -182,6 +183,8 @@ class Encoder1DBlock(nn.Module):
         num_heads=self.num_heads)(
             x, x)
     x = nn.Dropout(rate=self.dropout_rate)(x, deterministic=deterministic)
+    # droppath
+    x = nn.Dropout(rate=self.droppath_rate, broadcast_dims=(1, 2), name='droppath_msa')(x, deterministic=deterministic)
     x = x + inputs
 
     # MLP block.
@@ -191,6 +194,8 @@ class Encoder1DBlock(nn.Module):
         kernel_init=mlp_kernel_init,
         bias_init=mlp_bias_init,
         )(y, deterministic=deterministic)
+    # droppath
+    y = nn.Dropout(rate=self.droppath_rate, broadcast_dims=(1, 2), name='droppath_mlp')(y, deterministic=deterministic)
 
     return x + y
 
@@ -211,6 +216,7 @@ class Encoder(nn.Module):
   num_heads: int
   dropout_rate: float = 0.1
   attention_dropout_rate: float = 0.1
+  droppath_rate: float = 0.0
 
   @nn.compact
   def __call__(self, inputs, *, train):
@@ -237,6 +243,7 @@ class Encoder(nn.Module):
           mlp_dim=self.mlp_dim,
           dropout_rate=self.dropout_rate,
           attention_dropout_rate=self.attention_dropout_rate,
+          droppath_rate=self.droppath_rate * lyr / (self.num_layers - 1),
           name='encoderblock_{:02d}'.format(lyr),
           num_heads=self.num_heads,
           layer_id=lyr)(

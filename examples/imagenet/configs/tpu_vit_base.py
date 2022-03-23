@@ -61,6 +61,7 @@ def get_config():
 
   # model config
   config.model = vit.get_b16_config()  # ViT-B/16
+  config.model.transformer.droppath_rate = 0.1
 
   # optimizer config
   config.opt_type = 'adamw'
