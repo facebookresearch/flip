@@ -65,40 +65,7 @@ def preprocess_for_train_torchvision(image_bytes, dtype=tf.float32, image_size=I
   image = Image.open(io.BytesIO(image_bytes.numpy()))
   image = image.convert('RGB')
 
-  # ------------------------------------------------------
-  t_crop = transform_aug.transforms[0]
-  t_flip = transform_aug.transforms[1]
-  t_cjit = transform_aug.transforms[2]
-  t_tten = transform_aug.transforms[3]
-  t_norm = transform_aug.transforms[4]
-
-
-  im = image
-  im = t_crop(im)
-  im = t_flip(im)
-  im = t_tten(im)
-
-  brightness = t_cjit.brightness
-  # factor = random_ops.random_uniform([], brightness[0], brightness[1]).numpy()
-  factor = torch.empty(1).uniform_(brightness[0], brightness[1]).numpy()
-  im *= factor
-  im = im.clip(min=0., max=1.)
-
-  # im = t_cjit(im)
-
-  im = t_norm(im)
-
-  # im = t_cjit(image)
-  # im = np.asarray(image)
-
-  # import numpy as np
-  # im = np.asarray(image)
-  # transforms.ToTensor()(image)
-
-  image = im
-  # ------------------------------------------------------
-
-  # image = transform_aug(image)
+  image = transform_aug(image)
   image = tf.constant(image.numpy(), dtype=dtype)  # [3, 224, 224]
   image = tf.transpose(image, [1, 2, 0])  # [c, h, w] -> [h, w, c]
   return image
