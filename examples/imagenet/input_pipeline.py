@@ -19,17 +19,17 @@ import jax
 import tensorflow as tf
 import tensorflow_datasets as tfds
 
-from utils.img_transform_util import \
+from utils.transform_util import \
   decode_and_random_crop, \
   _decode_and_center_crop, normalize_image, color_jitter
+
+from utils.autoaug_util import distort_image_with_autoaugment
 
 from absl import logging
 from PIL import Image
 import io
 from torchvision import transforms
 
-from tensorflow.python.ops import random_ops
-import torch
 
 IMAGE_SIZE = 224
 
@@ -90,6 +90,12 @@ def preprocess_for_train(image_bytes, dtype=tf.float32, image_size=IMAGE_SIZE, a
   # advance augs
   if aug.color_jit is not None:
     image = color_jitter(image / 255., *aug.color_jit) * 255.  # color_jitter accept [0, 1] images
+
+  if aug.autoaug == 'autoaug':
+    image = tf.clip_by_value(image, 0.0, 255.0)
+    image = tf.cast(image, dtype=tf.uint8)
+    image = distort_image_with_autoaugment(image, 'v0')
+    image = tf.cast(image, dtype=tf.float32)
 
   image = normalize_image(image)
   image = tf.image.convert_image_dtype(image, dtype=dtype)

@@ -44,7 +44,9 @@ def filter_cls_and_posembed(path: Tuple[Any], val: jnp.ndarray):
     return True
 
 
+# ---------------------------------------------------------
 # the entrance function:
+# ---------------------------------------------------------
 def filter_parameters(params, filter_fn):
     """Filter the params based on filter_fn."""
     params_to_filter = nest.map_structure_with_path(filter_fn, params)

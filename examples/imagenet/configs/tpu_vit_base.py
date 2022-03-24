@@ -78,16 +78,19 @@ def get_config():
   config.aug.area_range = (0.08, 1)
   config.aug.aspect_ratio_range = (3. / 4, 4. / 3.)
   config.aug.crop_ver = 'v4'  # v1, v3
-  config.aug.color_jit = [0.4, 0.4, 0.4]  # None to disable; [brightness, contrast, saturation]
 
   config.aug.label_smoothing = 0.1
 
+  config.aug.autoaug = 'autoaug'  # autoaug, randaug, colorjit
+
+  config.aug.color_jit = None  # [0.4, 0.4, 0.4]  # None to disable; [brightness, contrast, saturation]
+
   # mixup config
   config.aug.mix = ml_collections.ConfigDict()
-  config.aug.mix.mixup = True
+  config.aug.mix.mixup = False
   config.aug.mix.mixup_alpha = 0.8
 
-  config.aug.mix.cutmix = True
+  config.aug.mix.cutmix = False
   config.aug.mix.cutmix_alpha = 1.0
 
   config.aug.mix.switch_elementwise = False  # element-wise switch between mixup/cutmix
