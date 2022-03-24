@@ -90,6 +90,8 @@ def get_config():
   config.aug.mix.cutmix = True
   config.aug.mix.cutmix_alpha = 1.0
 
+  config.aug.mix.switch_elementwise = False  # element-wise switch between mixup/cutmix
+
   # regularization config
   config.exclude_wd = True  # exclude some weight decays (bias, norm, cls, posembed)
 
