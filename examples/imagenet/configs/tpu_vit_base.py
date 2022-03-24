@@ -87,10 +87,10 @@ def get_config():
 
   # mixup config
   config.aug.mix = ml_collections.ConfigDict()
-  config.aug.mix.mixup = False
+  config.aug.mix.mixup = True
   config.aug.mix.mixup_alpha = 0.8
 
-  config.aug.mix.cutmix = False
+  config.aug.mix.cutmix = True
   config.aug.mix.cutmix_alpha = 1.0
 
   config.aug.mix.switch_elementwise = False  # element-wise switch between mixup/cutmix
