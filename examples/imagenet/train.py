@@ -201,8 +201,8 @@ def create_input_iter(dataset_builder, batch_size, image_size, dtype, train,
       dataset_builder, batch_size, image_size=image_size, dtype=dtype,
       train=train, cache=cache, aug=aug)
 
-  if aug is not None and aug.mixup:
-    apply_mix = functools.partial(mix_util.apply_mix, aug=aug)
+  if aug is not None and (aug.mix.mixup or aug.mix.cutmix):
+    apply_mix = functools.partial(mix_util.apply_mix, cfg=aug.mix)
     ds = map(apply_mix, ds)
 
   # ------------------------------------------------

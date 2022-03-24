@@ -83,8 +83,12 @@ def get_config():
   config.aug.label_smoothing = 0.1
 
   # mixup config
-  config.aug.mixup = True
-  config.aug.mixup_alpha = 0.8
+  config.aug.mix = ml_collections.ConfigDict()
+  config.aug.mix.mixup = False
+  config.aug.mix.mixup_alpha = 0.8
+
+  config.aug.mix.cutmix = True
+  config.aug.mix.cutmix_alpha = 1.0
 
   # regularization config
   config.exclude_wd = True  # exclude some weight decays (bias, norm, cls, posembed)

@@ -1,5 +1,5 @@
 # VM_NAME=kmh-tpuvm-v3-128
-VM_NAME=kmh-tpuvm-v3-128-2
+VM_NAME=kmh-tpuvm-v3-128
 echo $VM_NAME
 # REPO=https://github.com/google/flax
 REPO=https://71d519550fe3430ecbf39b70467e9210aed5da69:@github.com/KaimingHe/flax_dev.git
@@ -8,7 +8,7 @@ BRANCH=main
 salt=`head /dev/urandom | tr -dc a-z0-9 | head -c8`
 
 CONFIG=tpu_vit_base
-JOBNAME=flax/$(date +%Y%m%d_%H%M)_${salt}_${CONFIG}_cjit0.4dbg_lb0.1_cropv4_exwd_initv2_rsinit_dp0.1_mixup
+JOBNAME=flax/$(date +%Y%m%d_%H%M)_${salt}_${CONFIG}_cjit0.4dbg_lb0.1_cropv4_exwd_initv2_rsinit_dp0.1_cutmix
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
 LOGDIR=/home/${USER}/logs/${JOBNAME}
@@ -46,6 +46,7 @@ gcloud alpha compute tpus tpu-vm ssh ${VM_NAME} --zone europe-west4-a \
 # pip install --upgrade clu
 
 # pip3 install torchvision --upgrade
+# pip3 install tensorflow-probability
 
 cd ~/flax_dev
 git checkout vit
