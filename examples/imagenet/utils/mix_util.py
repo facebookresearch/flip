@@ -16,11 +16,17 @@ def apply_mix(xs, cfg):
   tgts_rev = tf.reverse(tgts, axis=[0])
 
   if cfg.mixup and cfg.cutmix:
-    use_mixup = (tf.random.uniform([], minval=0, maxval=1., dtype=tf.float32) > .5)
-    imgs_mixed, lmb = tf.cond(use_mixup,
-      lambda: apply_mixup(imgs, imgs_rev, cfg.mixup_alpha),
-      lambda: apply_cutmix(imgs, imgs_rev, cfg.cutmix_alpha)
-    )
+    imgs_mixup, lmb_mixup = apply_mixup(imgs, imgs_rev, cfg.mixup_alpha)
+    imgs_cutmix, lmb_cutmix = apply_cutmix(imgs, imgs_rev, cfg.cutmix_alpha)
+
+    # element-wise switch
+    use_mixup = tf.random.uniform([imgs.shape[0]], minval=0, maxval=1., dtype=tf.float32)
+    use_mixup = tf.cast((use_mixup > 0.5), tf.float32)
+
+    lmb = lmb_mixup * use_mixup + lmb_cutmix * (1 - use_mixup)
+
+    use_mixup = tf.reshape(use_mixup, [-1] + [1] * (len(imgs.shape) - 1))
+    imgs_mixed = imgs_mixup * use_mixup + imgs_cutmix * (1 - use_mixup)
   elif cfg.mixup and not cfg.cutmix:
     imgs_mixed, lmb = apply_mixup(imgs, imgs_rev, cfg.mixup_alpha)
   elif cfg.cutmix and not cfg.mixup:
@@ -39,8 +45,8 @@ def apply_mixup(imgs, imgs_rev, mixup_alpha):
   dist = tfp.distributions.Beta(mixup_alpha, mixup_alpha)
   lmb = dist.sample(imgs.shape[0])  # element-wise mix
 
-  lmb = tf.reshape(lmb, [-1] + [1] * (len(imgs.shape) - 1))  # [N, 1, 1, 1]
-  imgs_mixed = imgs * lmb + imgs_rev * (1 - lmb)
+  lmb_ = tf.reshape(lmb, [-1] + [1] * (len(imgs.shape) - 1))  # [N, 1, 1, 1]
+  imgs_mixed = imgs * lmb_ + imgs_rev * (1 - lmb_)
   return imgs_mixed, lmb
 
 
