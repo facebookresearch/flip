@@ -84,7 +84,7 @@ def get_config():
 
   # mixup config
   config.aug.mix = ml_collections.ConfigDict()
-  config.aug.mix.mixup = False
+  config.aug.mix.mixup = True
   config.aug.mix.mixup_alpha = 0.8
 
   config.aug.mix.cutmix = True

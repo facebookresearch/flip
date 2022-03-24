@@ -15,10 +15,18 @@ def apply_mix(xs, cfg):
   imgs_rev = tf.reverse(imgs, axis=[0])
   tgts_rev = tf.reverse(tgts, axis=[0])
 
-  # mixup
-  assert not cfg.mixup
-  # imgs_mixed, lmb = apply_mixup(imgs, imgs_rev, cfg.mixup_alpha)
-  imgs_mixed, lmb = apply_cutmix(imgs, imgs_rev, cfg.cutmix_alpha)
+  if cfg.mixup and cfg.cutmix:
+    use_mixup = (tf.random.uniform([], minval=0, maxval=1., dtype=tf.float32) > .5)
+    imgs_mixed, lmb = tf.cond(use_mixup,
+      lambda: apply_mixup(imgs, imgs_rev, cfg.mixup_alpha),
+      lambda: apply_cutmix(imgs, imgs_rev, cfg.cutmix_alpha)
+    )
+  elif cfg.mixup and not cfg.cutmix:
+    imgs_mixed, lmb = apply_mixup(imgs, imgs_rev, cfg.mixup_alpha)
+  elif cfg.cutmix and not cfg.mixup:
+    imgs_mixed, lmb = apply_cutmix(imgs, imgs_rev, cfg.cutmix_alpha)
+  else:
+    raise NotImplementedError
 
   # mix one-hot labels
   lmb = tf.reshape(lmb, [-1] + [1] * (len(tgts.shape) - 1))  # [N, 1]

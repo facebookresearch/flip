@@ -209,7 +209,6 @@ def create_input_iter(dataset_builder, batch_size, image_size, dtype, train,
   # from IPython import embed; embed();
   # if (0 == 0): raise NotImplementedError
   # x = next(iter(ds))
-  # tgts = x['label_one_hot']
   # ------------------------------------------------
 
   ds = map(prepare_tf_data, ds)
