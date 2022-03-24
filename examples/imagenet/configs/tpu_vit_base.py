@@ -83,8 +83,8 @@ def get_config():
   config.aug.label_smoothing = 0.1
 
   # mixup config
-  # config.aug.mixup = True
-  # config.aug.mixup_alpha = 0.8
+  config.aug.mixup = True
+  config.aug.mixup_alpha = 0.8
 
   # regularization config
   config.exclude_wd = True  # exclude some weight decays (bias, norm, cls, posembed)

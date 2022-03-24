@@ -45,6 +45,7 @@ import models_vit
 
 from utils import summary_util as summary_util  # must be after 'from clu import metric_writers'
 from utils import opt_util
+from utils import mix_util
 
 import numpy as np
 
@@ -199,8 +200,20 @@ def create_input_iter(dataset_builder, batch_size, image_size, dtype, train,
   ds = input_pipeline.create_split(
       dataset_builder, batch_size, image_size=image_size, dtype=dtype,
       train=train, cache=cache, aug=aug)
-  it = map(prepare_tf_data, ds)
-  it = jax_utils.prefetch_to_device(it, 2)
+
+  if aug is not None and aug.mixup:
+    apply_mix = functools.partial(mix_util.apply_mix, aug=aug)
+    ds = map(apply_mix, ds)
+
+  # ------------------------------------------------
+  # from IPython import embed; embed();
+  # if (0 == 0): raise NotImplementedError
+  # x = next(iter(ds))
+  # tgts = x['label_one_hot']
+  # ------------------------------------------------
+
+  ds = map(prepare_tf_data, ds)
+  it = jax_utils.prefetch_to_device(ds, 2)
   return it
 
 
