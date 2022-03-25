@@ -9,7 +9,7 @@ salt=`head /dev/urandom | tr -dc a-z0-9 | head -c8`
 ep=300
 CONFIG=tpu_vit_base
 # JOBNAME=flax/$(date +%Y%m%d_%H%M)_${salt}_${CONFIG}_cjit0.4dbg_lb0.1_cropv4_exwd_initv2_rsinit_dp0.1_cutmixup
-JOBNAME=flax/$(date +%Y%m%d_%H%M)_${salt}_${VM_NAME}_${CONFIG}_${ep}ep_randaug_lb0.1_cropv4_exwd_initv2_rsinit_dp0.1_cutmixup
+JOBNAME=flax/$(date +%Y%m%d_%H%M)_${salt}_${VM_NAME}_${CONFIG}_${ep}ep_autoaug_lb0.1_cropv4_exwd_initv2_rsinit_dp0.1_cutmixup
 
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
