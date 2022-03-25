@@ -105,7 +105,8 @@ def create_learning_rate_fn(
   cosine_epochs = max(config.num_epochs - config.warmup_epochs, 1)
   cosine_fn = optax.cosine_decay_schedule(
       init_value=base_learning_rate,
-      decay_steps=cosine_epochs * steps_per_epoch)
+      decay_steps=cosine_epochs * steps_per_epoch,
+      alpha=config.min_abs_lr / base_learning_rate)
   schedule_fn = optax.join_schedules(
       schedules=[warmup_fn, cosine_fn],
       boundaries=[config.warmup_epochs * steps_per_epoch])

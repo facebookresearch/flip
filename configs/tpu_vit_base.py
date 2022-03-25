@@ -43,7 +43,7 @@ def get_config():
 
   config.learning_rate = 1e-4  # this is the base lr
   config.warmup_epochs = 20.0
-  # config.momentum = 0.9
+  config.min_abs_lr = 1e-6  # this is abs lr
 
   config.num_epochs = 100.0
   config.log_every_steps = 100
