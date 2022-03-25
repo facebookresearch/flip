@@ -302,12 +302,12 @@ class VisionTransformer(nn.Module):
     
     # ------------------------------------------------
     # debugging BN or state
-    # x = nn.BatchNorm(
-    #   use_running_average=not train,
-    #   momentum=0.9,
-    #   epsilon=1e-5,
-    #   name='bn_debug'
-    # )(x)
+    x = nn.BatchNorm(
+      use_running_average=not train,
+      momentum=0.9,
+      epsilon=1e-5,
+      name='bn_debug'
+    )(x)
     # ------------------------------------------------
 
     if self.num_classes:
