@@ -6,10 +6,11 @@ BRANCH=main
 
 # salt=`head /dev/urandom | tr -dc a-z0-9 | head -c8`
 
-ep=300
+ep=100
+ema=0.99
 CONFIG=tpu_vit_base
 # pytorch_recipe: _autoaug_lb0.1_cropv4_exwd_initv2_rsinit_dp0.1_cutmixup_minlr
-JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_pytorch_recipe
+JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_pytorch_recipe_ema${ema}eval
 
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
@@ -43,6 +44,7 @@ python3 main.py \
     --config.batch_size=4096 \
     --config.log_every_steps=100 \
     --config.num_epochs=${ep} \
+    --config.ema=${ema} \
 " 2>&1 | tee $LOGDIR/finetune.log
 
 echo ${VM_NAME}

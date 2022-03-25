@@ -71,6 +71,11 @@ def get_config():
   config.opt.b2 = 0.95
   config.opt.weight_decay = 0.3
 
+  config.exclude_wd = True  # exclude some weight decays (bias, norm, cls, posembed)
+
+  config.ema = 0.9999  # None to disable
+  config.ema_eval = True
+
   # aug config
   config.aug = ml_collections.ConfigDict()
 
@@ -95,9 +100,6 @@ def get_config():
   config.aug.mix.cutmix_alpha = 1.0
 
   config.aug.mix.switch_elementwise = False  # element-wise switch between mixup/cutmix
-
-  # regularization config
-  config.exclude_wd = True  # exclude some weight decays (bias, norm, cls, posembed)
 
   # init config
   config.rescale_init = True  # rescale initialized weights by layer id

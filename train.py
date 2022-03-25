@@ -14,7 +14,7 @@
 
 """ImageNet example.
 
-This script trains a ResNet-50 on the ImageNet dataset.
+This script trains a ViT on the ImageNet dataset.
 The data is loaded using tensorflow_datasets.
 """
 
@@ -46,6 +46,7 @@ import models_vit
 from utils import summary_util as summary_util  # must be after 'from clu import metric_writers'
 from utils import opt_util
 from utils import mix_util
+from utils.ema_util import EmaState
 
 import numpy as np
 
@@ -158,6 +159,11 @@ def train_step(state, batch, learning_rate_fn, config):
 
   new_state = state.apply_gradients(
       grads=grads, batch_stats=new_model_state['batch_stats'], rng=new_rng)
+
+  if new_state.ema is not None:
+    new_ema = new_state.ema.update({'params': new_state.params, **new_model_state})
+    new_state = new_state.replace(ema=new_ema)
+
   if dynamic_scale:
     # if is_fin == False the gradients contain Inf/NaNs and optimizer state and
     # params should be restored (= skip this step).
@@ -175,8 +181,8 @@ def train_step(state, batch, learning_rate_fn, config):
   return new_state, metrics
 
 
-def eval_step(state, batch):
-  variables = {'params': state.params, 'batch_stats': state.batch_stats}
+def eval_step(state, batch, ema_eval=False):
+  variables = {'params': state.params, 'batch_stats': state.batch_stats} if not ema_eval else state.ema.variables
   logits = state.apply_fn(
       variables, batch['image'], train=False, mutable=False)
   return compute_metrics(logits, batch['label'], batch['label_one_hot'])
@@ -221,6 +227,7 @@ class TrainState(train_state.TrainState):
   rng: Any
   batch_stats: Any
   dynamic_scale: flax.optim.DynamicScale
+  ema: EmaState
 
 
 def restore_checkpoint(state, workdir):
@@ -285,13 +292,15 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
 
   tx = getattr(optax, config.opt_type)  # optax.adamw
   tx = tx(learning_rate=learning_rate_fn, **config.opt, mask=mask)
+  ema = EmaState.create(config.ema, variables={'params': params, 'batch_stats': batch_stats}) if config.ema is not None else None
   state = TrainState.create(
       apply_fn=model.apply,
       params=params,
       tx=tx,
       rng=rng_state,
       batch_stats=batch_stats,
-      dynamic_scale=dynamic_scale)
+      dynamic_scale=dynamic_scale,
+      ema=ema)
   return state
 
 
@@ -387,7 +396,9 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   p_train_step = jax.pmap(
       functools.partial(train_step, learning_rate_fn=learning_rate_fn, config=config),
       axis_name='batch')
-  p_eval_step = jax.pmap(eval_step, axis_name='batch')
+  p_eval_step = jax.pmap(
+      functools.partial(eval_step, ema_eval=config.ema_eval),
+      axis_name='batch')
 
   train_metrics = []
   hooks = []
