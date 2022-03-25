@@ -182,10 +182,18 @@ def train_step(state, batch, learning_rate_fn, config):
 
 
 def eval_step(state, batch, ema_eval=False):
-  variables = {'params': state.params, 'batch_stats': state.batch_stats} if not ema_eval else state.ema.variables
-  logits = state.apply_fn(
-      variables, batch['image'], train=False, mutable=False)
-  return compute_metrics(logits, batch['label'], batch['label_one_hot'])
+  variables = {'params': state.params, 'batch_stats': state.batch_stats}
+  logits = state.apply_fn(variables, batch['image'], train=False, mutable=False)
+  metrics = compute_metrics(logits, batch['label'], batch['label_one_hot'])
+  metrics['test_acc1'] = metrics.pop('accuracy') * 100  # rename
+  metrics['test_loss'] = metrics.pop('loss')  # rename
+
+  if ema_eval:
+    logits = state.apply_fn(state.ema.variables, batch['image'], train=False, mutable=False)
+    metrics_ema = compute_metrics(logits, batch['label'], batch['label_one_hot'])
+    metrics['test_acc1_ema'] = metrics_ema.pop('accuracy') * 100  # rename
+
+  return metrics
 
 
 def prepare_tf_data(xs):
@@ -449,16 +457,15 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
         eval_metrics.append(metrics)
       eval_metrics = common_utils.get_metrics(eval_metrics)
       summary = jax.tree_map(lambda x: x.mean(), eval_metrics)
-      logging.info('eval epoch: %d, loss: %.4f, accuracy: %.2f',
-                   epoch, summary['loss'], summary['accuracy'] * 100)
+      values = [f"{k}: {v:.6f}" for k, v in sorted(summary.items())]
+      logging.info('eval epoch: %d, ', epoch, ', '.join(values))
 
       # to make it consistent with PyTorch log
-      summary['test_acc1'] = summary.pop('accuracy') * 100  # rename
-      summary['test_loss'] = summary.pop('loss')  # rename
       summary['step_tensorboard'] = epoch  # step for tensorboard (no need to minus 1)
 
       writer.write_scalars(step + 1, summary)
       writer.flush()
+
     if (step + 1) % steps_per_checkpoint == 0 or step + 1 == num_steps:
       state = sync_batch_stats(state)
       save_checkpoint(state, workdir)
