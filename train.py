@@ -253,7 +253,11 @@ def sync_batch_stats(state):
   if 'batch_stats' not in state.variables:
     return state
   else:
-    new_variables, batch_stats = state.variables.pop('batch_stats')
+    logging.info('type(state.variables): {}'.format(type(state.variables)))
+    outcome = state.variables.pop('batch_stats')
+    new_variables, batch_stats = outcome
+    logging.info('new_variables.keys(): {}'.format(new_variables.keys()))
+    logging.info('batch_stats: {}'.format(batch_stats))
     batch_stats = cross_replica_mean(batch_stats)
     return state.replace(variables={'batch_stats': batch_stats, **new_variables})
 
