@@ -1,199 +1,157 @@
-# Flax: A neural network library and ecosystem for JAX designed for flexibility
+## ImageNet classification
 
-![Build](https://github.com/google/flax/workflows/Build/badge.svg?branch=main) [![coverage](https://badgen.net/codecov/c/github/google/flax)](https://codecov.io/github/google/flax)
+Trains a ResNet50 model ([He *et al.*, 2016]) for the ImageNet classification task
+([Russakovsky *et al.*, 2015]).
+
+This example uses linear learning rate warmup and cosine learning rate schedule.
+
+[He *et al.*, 2016]: https://arxiv.org/abs/1512.03385
+[Russakovsky *et al.*, 2015]: https://arxiv.org/abs/1409.0575
+
+You can run this code and even modify it directly in Google Colab, no
+installation required:
+
+https://colab.research.google.com/github/google/flax/blob/main/examples/imagenet/imagenet.ipynb
+
+The Colab also demonstrates how to load pretrained checkpoints from Cloud
+storage at
+[gs://flax_public/examples/imagenet/](https://console.cloud.google.com/storage/browser/flax_public/examples/imagenet)
+
+Table of contents:
+
+- [Requirements](#requirements)
+- [Example runs](#example-runs)
+- [Running locally](#running-locally)
+  - [Overriding parameters on the command line](#overriding-parameters-on-the-command-line)
+- [Running on Cloud](#running-on-cloud)
+  - [Preparing the dataset](#preparing-the-dataset)
+  - [Google Cloud TPU](#google-cloud-tpu)
+  - [Google Cloud GPU](#google-cloud-gpu)
+
+### Requirements
+
+* TensorFlow dataset `imagenet2012:5.*.*`
+* `≈180GB` of RAM if you want to cache the dataset in memory for faster IO
+
+### Example runs
+
+While the example should run on a variety of hardware,
+we have tested the following GPU and TPU configurations:
+
+|          Name           | Steps  | Walltime | Top-1 accuracy |                                                                       Metrics                                                                        |                                                                               Workdir                                                                                |
+| :---------------------- | -----: | :------- | :------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| TPU v3-32                | 125100 | 2.1h     | 76.54%         | [tfhub.dev](https://tensorboard.dev/experiment/GhPHRoLzTqu7c8vynTk6bg/)                                                                              | [gs://flax_public/examples/imagenet/tpu_v3_32](https://console.cloud.google.com/storage/browser/flax_public/examples/imagenet/tpu_v3_32)                                         |
+| TPU v2-32                | 125100 | 2.5h     | 76.67%         | [tfhub.dev](https://tensorboard.dev/experiment/qBJ7T9VPSgO5yeb0HAKbIA/)                                                                              | [gs://flax_public/examples/imagenet/tpu_v2_32](https://console.cloud.google.com/storage/browser/flax_public/examples/imagenet/tpu_v2_32)                                         |
+| TPU v3-8                | 125100 | 4.4h     | 76.37%         | [tfhub.dev](https://tensorboard.dev/experiment/JwxRMYrsR4O6V6fnkn3dmg/)                                                                              | [gs://flax_public/examples/imagenet/tpu](https://console.cloud.google.com/storage/browser/flax_public/examples/imagenet/tpu)                                         |
+| v100_x8                 | 250200 | 13.2h    | 76.72%         | [tfhub.dev](https://tensorboard.dev/experiment/venzpsNXR421XLkvvzSkqQ/#scalars&_smoothingWeight=0&regexInput=%5Eimagenet/v100_x8%24)                 | [gs://flax_public/examples/imagenet/v100_x8](https://console.cloud.google.com/storage/browser/flax_public/examples/imagenet/v100_x8)                                 |
+| v100_x8_mixed_precision |  62500 | 4.3h     | 76.27%         | [tfhub.dev](https://tensorboard.dev/experiment/venzpsNXR421XLkvvzSkqQ/#scalars&_smoothingWeight=0&regexInput=%5Eimagenet/v100_x8_mixed_precision%24) | [gs://flax_public/examples/imagenet/v100_x8_mixed_precision](https://console.cloud.google.com/storage/browser/flax_public/examples/imagenet/v100_x8_mixed_precision) |
 
 
-[**Overview**](#overview)
-| [**Quick install**](#quick-install)
-| [**What does Flax look like?**](#what-does-flax-look-like)
-| [**Documentation**](https://flax.readthedocs.io/)
+### Running locally
 
-This README is a very short intro. **To learn everything you need to know about Flax, see our [full documentation](https://flax.readthedocs.io/)**
-
-Flax was originally started by engineers and researchers within the Brain Team in Google Research (in close collaboration with the JAX team), and is now developed jointly with the open source community.
-
-Flax is being used by a growing
-community of hundreds of folks in various Alphabet research departments
-for their daily work, as well as a [growing community
-of open source
-projects](https://github.com/google/flax/network/dependents?dependent_type=REPOSITORY).
-
-The Flax team's mission is to serve the growing JAX neural network
-research ecosystem -- both within Alphabet and with the broader community,
-and to explore the use-cases where JAX shines. We use GitHub for almost
-all of our coordination and planning, as well as where we discuss
-upcoming design changes. We welcome feedback on any of our discussion,
-issue and pull request threads. We are in the process of moving some
-remaining internal design docs and conversation threads to GitHub
-discussions, issues and pull requests. We hope to increasingly engage
-with the needs and clarifications of the broader ecosystem. Please let
-us know how we can help!
-
-Please report any feature requests,
-issues, questions or concerns in our [discussion
-forum](https://github.com/google/flax/discussions), or just let us
-know what you're working on!
-
-We expect to improve Flax, but we don't anticipate significant
-breaking changes to the core API. We use [Changelog](https://github.com/google/flax/tree/main/CHANGELOG.md)
-entries and deprecation warnings when possible.
-
-In case you want to reach us directly, we're at flax-dev@google.com.
-
-## Overview
-
-Flax is a high-performance neural network library and ecosystem for
-JAX that is **designed for flexibility**:
-Try new forms of training by forking an example and by modifying the training
-loop, not by adding features to a framework.
-
-Flax is being developed in close collaboration with the JAX team and
-comes with everything you need to start your research, including:
-
-* **Neural network API** (`flax.linen`): Dense, Conv, {Batch|Layer|Group} Norm, Attention, Pooling, {LSTM|GRU} Cell, Dropout
-
-* **Utilities and patterns**: replicated training, serialization and checkpointing, metrics, prefetching on device
-
-* **Educational examples** that work out of the box: MNIST, LSTM seq2seq, Graph Neural Networks, Sequence Tagging
-
-* **Fast, tuned large-scale end-to-end examples**: CIFAR10, ResNet on ImageNet, Transformer LM1b
-
-## Quick install
-
-You will need Python 3.6 or later and a working [JAX](https://github.com/google/jax/blob/main/README.md)
-installation (with or without GPU support, see instructions there). For a
-CPU-only version:
-
-```
-> pip install --upgrade pip # To support manylinux2010 wheels.
-> pip install --upgrade jax jaxlib # CPU-only
+```shell
+python main.py --workdir=./imagenet --config=configs/default.py
 ```
 
-Then install Flax from PyPi:
+#### Overriding parameters on the command line
 
-```
-> pip install flax
-```
+Specify a hyperparameter configuration by the means of setting `--config` flag.
+Configuration flag is defined using
+[config_flags](https://github.com/google/ml_collections/tree/master#config-flags).
+`config_flags` allows overriding configuration fields. This can be done as
+follows:
 
-To upgrade to the latest version of Flax, you can use:
-
-```
-> pip install --upgrade git+https://github.com/google/flax.git
-```
-
-## What does Flax look like?
-
-We provide three examples using the Flax API: a simple multi-layer perceptron, a CNN and an auto-encoder. 
-
-To learn more about the `Module` abstraction, see our [docs](https://flax.readthedocs.io/), our [broad intro to the Module abstraction](https://github.com/google/flax/blob/main/docs/notebooks/linen_intro.ipynb). For additional concrete demonstrations of best practices, see our
-[HOWTO guides](https://flax.readthedocs.io/en/latest/howtos.html).
-
-```py
-from typing import Sequence
-
-import numpy as np
-import jax
-import jax.numpy as jnp
-import flax.linen as nn
-
-class MLP(nn.Module):
-  features: Sequence[int]
-
-  @nn.compact
-  def __call__(self, x):
-    for feat in self.features[:-1]:
-      x = nn.relu(nn.Dense(feat)(x))
-    x = nn.Dense(self.features[-1])(x)
-    return x
-
-model = MLP([12, 8, 4])
-batch = jnp.ones((32, 10))
-variables = model.init(jax.random.PRNGKey(0), batch)
-output = model.apply(variables, batch)
+```shell
+python main.py --workdir=./imagenet_default --config=configs/default.py \
+--config.num_epochs=100
 ```
 
-```py
-class CNN(nn.Module):
-  @nn.compact
-  def __call__(self, x):
-    x = nn.Conv(features=32, kernel_size=(3, 3))(x)
-    x = nn.relu(x)
-    x = nn.avg_pool(x, window_shape=(2, 2), strides=(2, 2))
-    x = nn.Conv(features=64, kernel_size=(3, 3))(x)
-    x = nn.relu(x)
-    x = nn.avg_pool(x, window_shape=(2, 2), strides=(2, 2))
-    x = x.reshape((x.shape[0], -1))  # flatten
-    x = nn.Dense(features=256)(x)
-    x = nn.relu(x)
-    x = nn.Dense(features=10)(x)
-    x = nn.log_softmax(x)
-    return x
+### Running on Cloud
 
-model = CNN()
-batch = jnp.ones((32, 64, 64, 10))  # (N, H, W, C) format
-variables = model.init(jax.random.PRNGKey(0), batch)
-output = model.apply(variables, batch)
+#### Preparing the dataset
+
+For running the ResNet50 model on imagenet dataset,
+you first need to prepare the `imagenet2012` dataset.
+Download the data from http://image-net.org/ as described in the
+[tensorflow_datasets catalog](https://www.tensorflow.org/datasets/catalog/imagenet2012).
+Then point the environment variable `$IMAGENET_DOWNLOAD_PATH`
+to the directory where the downloads are stored and prepare the dataset
+by running
+
+```shell
+python -c "
+import tensorflow_datasets as tfds
+tfds.builder('imagenet2012').download_and_prepare(
+    download_config=tfds.download.DownloadConfig(
+        manual_dir='$IMAGENET_DOWNLOAD_PATH'))
+"
 ```
 
-```py
-class AutoEncoder(nn.Module):
-  encoder_widths: Sequence[int]
-  decoder_widths: Sequence[int]
-  input_shape: Sequence[int]
+The contents of the directory `~/tensorflow_datasets` should be copied to your
+gcs bucket. Point the environment variable `GCS_TFDS_BUCKET` to your bucket and
+run the following command:
 
-  def setup(self):
-    input_dim = np.prod(self.input_shape)
-    self.encoder = MLP(self.encoder_widths)
-    self.decoder = MLP(self.decoder_widths + (input_dim,))
-
-  def __call__(self, x):
-    return self.decode(self.encode(x))
-
-  def encode(self, x):
-    assert x.shape[1:] == self.input_shape
-    return self.encoder(jnp.reshape(x, (x.shape[0], -1)))
-
-  def decode(self, z):
-    z = self.decoder(z)
-    x = nn.sigmoid(z)
-    x = jnp.reshape(x, (x.shape[0],) + self.input_shape)
-    return x
-
-model = AutoEncoder(encoder_widths=[20, 10, 5],
-                    decoder_widths=[5, 10, 20],
-                    input_shape=(12,))
-batch = jnp.ones((16, 12))
-variables = model.init(jax.random.PRNGKey(0), batch)
-encoded = model.apply(variables, batch, method=model.encode)
-decoded = model.apply(variables, encoded, method=model.decode)
+```shell
+gsutil cp -r ~/tensorflow_datasets gs://$GCS_TFDS_BUCKET/datasets
 ```
 
-## 🤗 Hugging Face
+#### Google Cloud TPU
 
-In-detail examples to train and evaluate a variety of Flax models for 
-Natural Language Processing, Computer Vision, and Speech Recognition are 
-actively maintained in the [🤗 Transformers repository](https://github.com/huggingface/transformers/tree/master/examples/flax).
+Setup the TPU VM and install the Flax dependencies on it as described
+[here](https://cloud.google.com/tpu/docs/jax-pods) for creating pod slices, or
+[here](https://cloud.google.com/tpu/docs/jax-quickstart-tpu-vm) for a single
+v3-8 TPU.
 
-As of October 2021, the [19 most-used Transformer architectures](https://huggingface.co/transformers/#supported-frameworks) are supported in Flax 
-and over 5000 pretrained checkpoints in Flax have been uploaded to the [🤗 Hub](https://huggingface.co/models?library=jax&sort=downloads).
+If running on the single v3-8 TPU (i.e. 8 accelerators connected to a single
+host), simply connect to the machine with
+`gcloud alpha compute tpus tpu-vm ssh $VM_NAME --zone $ZONE` and then start the
+training with below command:
 
-## Citing Flax
-
-To cite this repository:
-
-```
-@software{flax2020github,
-  author = {Jonathan Heek and Anselm Levskaya and Avital Oliver and Marvin Ritter and Bertrand Rondepierre and Andreas Steiner and Marc van {Z}ee},
-  title = {{F}lax: A neural network library and ecosystem for {JAX}},
-  url = {http://github.com/google/flax},
-  version = {0.4.0},
-  year = {2020},
-}
+```shell
+export TFDS_DATA_DIR=gs://$GCS_TFDS_BUCKET/datasets
+python3 main.py --workdir=./imagenet_tpu --config=configs/tpu.py
 ```
 
-In the above bibtex entry, names are in alphabetical order, the version number
-is intended to be that from [flax/version.py](https://github.com/google/flax/blob/main/flax/version.py), and the year corresponds to the project's open-source release.
+When running on pod slices, after creating the TPU VM, there are different ways
+of running the training in SPMD fashion on the hosts connected to the TPUs that
+make up the slice. We simply send the same installation/execution shell commands
+to all hosts in parallel with the command below. If anything fails it's
+usually a good idea to connect to a single host and execute the commands
+interactively.
 
-## Note
+For convenience, the TPU creation commands are inlined below.
 
-Flax is an open source project maintained by a dedicated team in Google Research, but is not an official Google product.
+```shell
+VM_NAME=imagenet
+REPO=https://github.com/google/flax
+BRANCH=main
+WORKDIR=gs://$YOUR_BUCKET/flax/examples/imagenet/$(date +%Y%m%d_%H%M)
+
+gcloud alpha compute tpus tpu-vm create $VM_NAME \
+    --zone=$ZONE \
+    --version v2-alpha --accelerator-type v3-32
+FLAGS="--config.batch_size=$((32*256))"
+
+gcloud alpha compute tpus tpu-vm ssh $VM_NAME --zone $ZONE \
+--worker=all --command "
+pip install 'jax[tpu]>=0.2.21' -f https://storage.googleapis.com/jax-releases/libtpu_releases.html &&
+pip install --user git+$REPO.git &&
+git clone --depth=1 -b $BRANCH $REPO &&
+cd flax/examples/imagenet &&
+pip install -r requirements.txt &&
+export TFDS_DATA_DIR=gs://$GCS_TFDS_BUCKET/datasets &&
+python3 main.py --workdir=$WORKDIR --config=configs/tpu.py $FLAGS
+"
+```
+
+#### Google Cloud GPU
+
+Can be launched with utility script described in
+[../cloud/README.md](../cloud/README.md)
+
+There are two configuratoins available:
+
+- `configs/v100_x8.py` : Full precision GPU training
+- `configs/v100_x8_mixed_precision.py` : Mixed precision GPU training. Note that
+  mixed precision handling is implemented manually with
+  [`optim.dynamic_scale`](https://github.com/google/flax/blob/main/flax/optim/dynamic_scale.py)
