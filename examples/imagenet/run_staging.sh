@@ -16,28 +16,18 @@ WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
 LOGDIR=/home/${USER}/logs/${JOBNAME}
 mkdir -p ${LOGDIR}
 
-source run_init_remote.sh
+# source run_init_remote.sh
 
 gcloud alpha compute tpus tpu-vm ssh ${VM_NAME} --zone europe-west4-a \
     --worker=all --command "
-# git config --global credential.helper store
-# git clone -b $BRANCH $REPO
-
-# pip install 'jax[tpu]>=0.2.21' -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
-# pip install --upgrade clu
-
-# pip3 install torchvision --upgrade
-# pip3 install tensorflow-probability
-# pip3 install tensorflow_addons
-
 cd ~/flax_dev
 git checkout vit
 git pull
-
 git rev-parse --short HEAD
 
-# python3 -c 'import jax; print(jax.device_count())'
-# python3 -c 'import flax'
+pip3 list | grep jax
+pip3 list | grep flax
+pip3 list | grep tensorflow
 
 cd ~/flax_dev/examples/imagenet
 export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets
