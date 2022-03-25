@@ -72,11 +72,7 @@ def initialized(key, image_size, model):
   def init(*args):
     return model.init(*args, train=False)
   variables = init({'params': key}, jnp.ones(input_shape, model.dtype))
-
-  params = variables['params']
-  batch_stats = variables['batch_stats'] if 'batch_stats' in variables else flax.core.frozen_dict.FrozenDict()
-
-  return params, batch_stats
+  return variables
 
 
 def cross_entropy_loss(logits, labels_one_hot):
@@ -123,12 +119,15 @@ def train_step(state, batch, learning_rate_fn, config):
   dropout_rng = jax.random.fold_in(state.rng, jax.lax.axis_index('batch'))
   def loss_fn(params):
     """loss function used for training."""
-    logits, new_model_state = state.apply_fn(
-        {'params': params, 'batch_stats': state.batch_stats},
+    mutable = [k for k in state.variables]
+    outcome = state.apply_fn(
+        {'params': params, **state.variables},
         inputs=batch['image'],
-        mutable=['batch_stats'],
+        mutable=mutable,
         rngs=dict(dropout=dropout_rng),
         train=True)
+    logits, new_variables = outcome
+
     loss = cross_entropy_loss(logits, batch['label_one_hot'])
     # weight_penalty_params = jax.tree_leaves(params)
     # weight_decay = 0.0001
@@ -137,7 +136,7 @@ def train_step(state, batch, learning_rate_fn, config):
     #                  if x.ndim > 1])
     # weight_penalty = weight_decay * 0.5 * weight_l2
     # loss = loss + weight_penalty
-    return loss, (new_model_state, logits)
+    return loss, (new_variables, logits)
 
   step = state.step
   dynamic_scale = state.dynamic_scale
@@ -153,15 +152,13 @@ def train_step(state, batch, learning_rate_fn, config):
     aux, grads = grad_fn(state.params)
     # Re-use same axis_name as in the call to `pmap(...train_step...)` below.
     grads = lax.pmean(grads, axis_name='batch')
-  new_model_state, logits = aux[1]
+  new_variables, logits = aux[1]
   metrics = compute_metrics(logits, batch['label'], batch['label_one_hot'])
   metrics['learning_rate'] = lr
-
-  new_state = state.apply_gradients(
-      grads=grads, batch_stats=new_model_state['batch_stats'], rng=new_rng)
+  new_state = state.apply_gradients(grads=grads, variables=new_variables, rng=new_rng)
 
   if new_state.ema is not None:
-    new_ema = new_state.ema.update({'params': new_state.params, **new_model_state})
+    new_ema = new_state.ema.update(flax.core.FrozenDict({'params': new_state.params, **new_variables}))
     new_state = new_state.replace(ema=new_ema)
 
   if dynamic_scale:
@@ -182,7 +179,7 @@ def train_step(state, batch, learning_rate_fn, config):
 
 
 def eval_step(state, batch, ema_eval=False):
-  variables = {'params': state.params, 'batch_stats': state.batch_stats}
+  variables = {'params': state.params, **state.variables}
   logits = state.apply_fn(variables, batch['image'], train=False, mutable=False)
   metrics = compute_metrics(logits, batch['label'], batch['label_one_hot'])
   metrics['test_acc1'] = metrics.pop('accuracy') * 100  # rename
@@ -233,7 +230,7 @@ def create_input_iter(dataset_builder, batch_size, image_size, dtype, train,
 
 class TrainState(train_state.TrainState):
   rng: Any
-  batch_stats: Any
+  variables: flax.core.FrozenDict[str, Any]
   dynamic_scale: flax.optim.DynamicScale
   ema: EmaState
 
@@ -259,10 +256,12 @@ def sync_batch_stats(state):
   """Sync the batch statistics across replicas."""
   # Each device has its own version of the running average batch statistics and
   # we sync them before evaluation.
-  if len(state.batch_stats) == 0:
+  if 'batch_stats' not in state.variables:
     return state
   else:
-    return state.replace(batch_stats=cross_replica_mean(state.batch_stats))
+    new_variables, batch_stats = state.variables.pop('batch_stats')
+    batch_stats = cross_replica_mean(batch_stats)
+    return state.replace(variables={'batch_stats': batch_stats, **new_variables})
 
 
 def create_train_state(rng, config: ml_collections.ConfigDict,
@@ -278,7 +277,8 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
   # split rng for init and for state
   rng_init, rng_state = jax.random.split(rng)
 
-  params, batch_stats = initialized(rng_init, image_size, model)
+  variables = initialized(rng_init, image_size, model)
+  variables_states, params = variables.pop('params')
 
   # optional: rescale
   if config.rescale_init:
@@ -289,24 +289,24 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
   logging.info('std: {}'.format(stds))
 
   # optional: exclude some wd
-  if config.exclude_wd:  
+  if config.exclude_wd:
     mask = jax.tree_util.tree_multimap(lambda x, y: bool(x and y), 
       opt_util.filter_parameters(params, opt_util.filter_bias_and_norm),
       opt_util.filter_parameters(params, opt_util.filter_cls_and_posembed)
     )
-    logging.info('Apply weight decay: {}'.format(mask))
   else:
     mask = None
+  logging.info('Apply weight decay: {}'.format(mask))
 
   tx = getattr(optax, config.opt_type)  # optax.adamw
   tx = tx(learning_rate=learning_rate_fn, **config.opt, mask=mask)
-  ema = EmaState.create(config.ema_decay, variables={'params': params, 'batch_stats': batch_stats}) if config.ema else None
+  ema = EmaState.create(config.ema_decay, variables=variables) if config.ema else None
   state = TrainState.create(
       apply_fn=model.apply,
       params=params,
       tx=tx,
       rng=rng_state,
-      batch_stats=batch_stats,
+      variables=variables_states,
       dynamic_scale=dynamic_scale,
       ema=ema)
   return state
@@ -390,14 +390,16 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   # up til now, state.params are for one device
   # image = jnp.ones([2, 224, 224, 3])
   # label = jnp.ones([2,], dtype=jnp.int32)
-  # logits, new_model_state = state.apply_fn(
+  # mutable_keys = [k for k in state.variables]
+  # outcome = state.apply_fn(
   #     {'params': state.params,
-  #      'batch_stats': state.batch_stats,
+  #      **state.variables,
   #     },
   #     rngs=dict(dropout=state.rng),
   #     inputs=image,
-  #     mutable=['batch_stats'],
+  #     mutable=mutable_keys,
   #     train=True)
+  # logits, new_variables = outcome
   # --------------------------------------------------------------------------------
   state = jax_utils.replicate(state)
 
