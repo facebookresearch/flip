@@ -81,7 +81,7 @@ def get_config():
 
   config.aug.label_smoothing = 0.1
 
-  config.aug.autoaug = 'randaug'  # autoaug, randaug, or None
+  config.aug.autoaug = 'autoaug'  # autoaug, randaug, or None
 
   config.aug.color_jit = None  # [0.4, 0.4, 0.4]  # None to disable; [brightness, contrast, saturation]
 
