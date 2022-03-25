@@ -46,7 +46,7 @@ python3 main.py \
     --config.num_epochs=${ep} \
     --config.ema_decay=${ema} \
     --config.ema=True \
-    --save_every_epochs=1 \
+    --config.save_every_epochs=1 \
 " 2>&1 | tee $LOGDIR/finetune.log
 
 echo ${VM_NAME}
