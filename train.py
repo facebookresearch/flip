@@ -249,17 +249,12 @@ def sync_batch_stats(state):
   """Sync the batch statistics across replicas."""
   # Each device has its own version of the running average batch statistics and
   # we sync them before evaluation.
-  logging.info('state.variables.keys(): {}'.format(state.variables.keys()))
   if 'batch_stats' not in state.variables:
     return state
   else:
-    logging.info('type(state.variables): {}'.format(type(state.variables)))
-    outcome = state.variables.pop('batch_stats')
-    new_variables, batch_stats = outcome
-    logging.info('new_variables.keys(): {}'.format(new_variables.keys()))
-    logging.info('batch_stats: {}'.format(batch_stats))
+    new_variables, batch_stats = state.variables.pop('batch_stats')
     batch_stats = cross_replica_mean(batch_stats)
-    return state.replace(variables={'batch_stats': batch_stats, **new_variables})
+    return state.replace(variables=flax.core.FrozenDict({'batch_stats': batch_stats, **new_variables}))
 
 
 def create_train_state(rng, config: ml_collections.ConfigDict,
@@ -445,7 +440,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
         train_metrics = []
         train_metrics_last_t = time.time()
 
-    if (step + 1) % steps_per_epoch == 0 or step == 15:
+    if (step + 1) % steps_per_epoch == 0:
       epoch = step // steps_per_epoch
       eval_metrics = []
 
