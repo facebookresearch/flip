@@ -1,6 +1,6 @@
 # source run_env.sh
 
-rm -rf imagenet_tpu
+rm -rf tmp
 export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets
 
 python3 main.py \

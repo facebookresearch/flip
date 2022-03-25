@@ -249,7 +249,7 @@ def sync_batch_stats(state):
   """Sync the batch statistics across replicas."""
   # Each device has its own version of the running average batch statistics and
   # we sync them before evaluation.
-  logging.info('state.variables.keys(): {}'.format(state.variables))
+  logging.info('state.variables.keys(): {}'.format(state.variables.keys()))
   if 'batch_stats' not in state.variables:
     return state
   else:
