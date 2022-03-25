@@ -204,9 +204,9 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
 
   # ---------------------------------------
   # debugging 
-  x = next(iter(ds))
-  decode_example(x)
-  raise NotImplementedError
+  # x = next(iter(ds))
+  # decode_example(x)
+  # raise NotImplementedError
   # ---------------------------------------
 
   ds = ds.map(ds_map_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)

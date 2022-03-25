@@ -50,7 +50,7 @@ gcloud alpha compute tpus tpu-vm ssh ${VM_NAME} --zone europe-west4-a \
 
 # pip3 install torchvision --upgrade
 # pip3 install tensorflow-probability
-pip3 install tensorflow_addons
+# pip3 install tensorflow_addons
 
 cd ~/flax_dev
 git checkout vit
