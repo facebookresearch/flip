@@ -32,9 +32,7 @@ git checkout vit
 git pull
 git rev-parse --short HEAD
 
-pip3 list | grep jax
-pip3 list | grep flax
-pip3 list | grep tensorflow
+pip3 list | grep 'jax\|flax\|tensorflow '
 
 cd ~/flax_dev
 export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets
