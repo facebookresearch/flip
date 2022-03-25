@@ -7,9 +7,10 @@ BRANCH=main
 
 salt=`head /dev/urandom | tr -dc a-z0-9 | head -c8`
 
+ep=300
 CONFIG=tpu_vit_base
 # JOBNAME=flax/$(date +%Y%m%d_%H%M)_${salt}_${CONFIG}_cjit0.4dbg_lb0.1_cropv4_exwd_initv2_rsinit_dp0.1_cutmixup
-JOBNAME=flax/$(date +%Y%m%d_%H%M)_${salt}_${CONFIG}_autoaug_lb0.1_cropv4_exwd_initv2_rsinit_dp0.1_cutmixup
+JOBNAME=flax/$(date +%Y%m%d_%H%M)_${salt}_${CONFIG}_${ep}ep_autoaug_lb0.1_cropv4_exwd_initv2_rsinit_dp0.1_cutmixup
 
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
@@ -49,7 +50,7 @@ gcloud alpha compute tpus tpu-vm ssh ${VM_NAME} --zone europe-west4-a \
 
 # pip3 install torchvision --upgrade
 # pip3 install tensorflow-probability
-# pip3 install tensorflow_addons
+pip3 install tensorflow_addons
 
 cd ~/flax_dev
 git checkout vit
@@ -67,6 +68,7 @@ python3 main.py \
     --config=configs/$CONFIG.py \
     --config.batch_size=4096 \
     --config.log_every_steps=100 \
+    --config.num_epochs=${ep} \
 " 2>&1 | tee $LOGDIR/finetune.log
 
 echo ${VM_NAME}

@@ -666,7 +666,7 @@ def distort_image_with_autoaugment(image, augmentation_name):
   Returns:
     A tuple containing the augmented versions of `image`.
   """
-  tf.logging.info('Using AutoAug.')
+  # tf.logging.info('Using AutoAug.')
 
   # disable warnings; will enable afterwards
   tf.logging.set_verbosity(tf.logging.ERROR)
@@ -706,7 +706,7 @@ def distort_image_with_randaugment(image, num_layers, magnitude):
     The augmented version of `image`.
   """
   replace_value = [128] * 3
-  tf.logging.info('Using RandAug.')
+  # tf.logging.info('Using RandAug.')
 
   # disable warnings; will enable afterwards
   tf.logging.set_verbosity(tf.logging.ERROR)
