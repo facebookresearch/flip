@@ -292,7 +292,7 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
 
   tx = getattr(optax, config.opt_type)  # optax.adamw
   tx = tx(learning_rate=learning_rate_fn, **config.opt, mask=mask)
-  ema = EmaState.create(config.ema, variables={'params': params, 'batch_stats': batch_stats}) if config.ema is not None else None
+  ema = EmaState.create(config.ema_decay, variables={'params': params, 'batch_stats': batch_stats}) if config.ema else None
   state = TrainState.create(
       apply_fn=model.apply,
       params=params,
@@ -397,7 +397,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
       functools.partial(train_step, learning_rate_fn=learning_rate_fn, config=config),
       axis_name='batch')
   p_eval_step = jax.pmap(
-      functools.partial(eval_step, ema_eval=config.ema_eval),
+      functools.partial(eval_step, ema_eval=(config.ema and config.ema_eval)),
       axis_name='batch')
 
   train_metrics = []
@@ -437,7 +437,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
         train_metrics = []
         train_metrics_last_t = time.time()
 
-    if (step + 1) % steps_per_epoch == 0:
+    if (step + 1) % steps_per_epoch == 0 or step == 15:
       epoch = step // steps_per_epoch
       eval_metrics = []
 

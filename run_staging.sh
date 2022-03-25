@@ -1,5 +1,5 @@
 # VM_NAME=kmh-tpuvm-v3-128
-VM_NAME=kmh-tpuvm-v3-256-4
+VM_NAME=kmh-tpuvm-v3-128-2
 echo $VM_NAME
 REPO=https://71d519550fe3430ecbf39b70467e9210aed5da69:@github.com/KaimingHe/flax_dev.git
 BRANCH=main
@@ -44,7 +44,7 @@ python3 main.py \
     --config.batch_size=4096 \
     --config.log_every_steps=100 \
     --config.num_epochs=${ep} \
-    --config.ema=${ema} \
+    --config.ema_decay=${ema} \
 " 2>&1 | tee $LOGDIR/finetune.log
 
 echo ${VM_NAME}

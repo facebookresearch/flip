@@ -73,7 +73,8 @@ def get_config():
 
   config.exclude_wd = True  # exclude some weight decays (bias, norm, cls, posembed)
 
-  config.ema = 0.9999  # None to disable
+  config.ema = False
+  config.ema_decay = 0.9999
   config.ema_eval = True
 
   # aug config
