@@ -18,16 +18,20 @@ mkdir -p ${LOGDIR}
 
 # source run_init_remote.sh
 
+# check libraries
+gcloud alpha compute tpus tpu-vm ssh ${VM_NAME} --zone europe-west4-a \
+    --worker=0 --command "
+pip3 list | grep jax
+pip3 list | grep flax
+pip3 list | grep tensorflow
+"
+
 gcloud alpha compute tpus tpu-vm ssh ${VM_NAME} --zone europe-west4-a \
     --worker=all --command "
 cd ~/flax_dev
 git checkout vit
 git pull
 git rev-parse --short HEAD
-
-pip3 list | grep jax
-pip3 list | grep flax
-pip3 list | grep tensorflow
 
 cd ~/flax_dev/examples/imagenet
 export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets
