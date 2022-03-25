@@ -458,7 +458,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
       eval_metrics = common_utils.get_metrics(eval_metrics)
       summary = jax.tree_map(lambda x: x.mean(), eval_metrics)
       values = [f"{k}: {v:.6f}" for k, v in sorted(summary.items())]
-      logging.info('eval epoch: %d, ', epoch, ', '.join(values))
+      logging.info('eval epoch: %d, %s', epoch, ', '.join(values))
 
       # to make it consistent with PyTorch log
       summary['step_tensorboard'] = epoch  # step for tensorboard (no need to minus 1)
