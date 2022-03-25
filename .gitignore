@@ -13,4 +13,4 @@ build/
 .vscode/*
 /.devcontainer
 
-examples/imagenet/imagenet_tpu
+./imagenet_tpu
