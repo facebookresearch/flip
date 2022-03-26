@@ -30,15 +30,16 @@
 import ml_collections
 
 import configs.vit as vit
-import configs.tpu_vit_base as tpu_vit_base
+import configs.cfg_common as cfg_common
 
 
 def get_config():
   """Get the hyperparameter configuration to train on TPUs."""
-  config = ml_collections.ConfigDict()
+  config = cfg_common.get_config()
 
-  config = tpu_vit_base.get_config()
-  config.model = vit.get_testing_config()
-  config.model.transformer.droppath_rate = 0.1
+  # model config
+  config.model = vit.get_l16_config()  # ViT-L/16
+  config.model.transformer.dropout_rate = 0.0
+  config.model.transformer.droppath_rate = 0.2
 
   return config
