@@ -48,6 +48,9 @@ from utils import opt_util
 from utils import mix_util
 from utils.ema_util import EmaState
 
+
+import jax.profiler
+
 import numpy as np
 
 NUM_CLASSES = 1000
@@ -405,11 +408,12 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   train_metrics = []
   hooks = []
-  if jax.process_index() == 0:
-    hooks += [periodic_actions.Profile(num_profile_steps=5, logdir=workdir)]
+  # if jax.process_index() == 0:
+  #   hooks += [periodic_actions.Profile(num_profile_steps=5, logdir=workdir)]
   train_metrics_last_t = time.time()
   logging.info('Initial compilation, this might take some minutes...')
 
+  jax.profiler.start_trace(workdir)
   for step, batch in zip(range(step_offset, num_steps), train_iter):
     state, metrics = p_train_step(state, batch)
     for h in hooks:
@@ -467,5 +471,6 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   # Wait until computations are done before exiting
   jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
+  jax.profiler.stop_trace()
 
   return state
