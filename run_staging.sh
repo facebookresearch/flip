@@ -6,7 +6,7 @@ BRANCH=main
 
 # salt=`head /dev/urandom | tr -dc a-z0-9 | head -c8`
 
-ep=100
+ep=200
 ema=0.9999
 CONFIG=cfg_vit_large
 # pytorch_recipe: _autoaug_lb0.1_cropv4_exwd_initv2_rsinit_dp0.1_cutmixup_minlr
