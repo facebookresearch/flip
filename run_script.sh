@@ -11,7 +11,8 @@ python3 main.py \
     --config.log_every_steps=10 \
     --config.num_epochs=0.01 \
     --config.profile_memory=True \
-    --config.model.patches.size=\(16,16\)
+    --config.model.patches.size=\(16,16\) \
+    --config.ema=False
 
     # --config.model.transformer.num_layers=2 \
 
@@ -19,3 +20,7 @@ python3 main.py \
 # python3 test_profile.py
 
 # pprof -http=localhost:6062 tmp/memory.prof
+
+# PROF_DIR='gs://foo/bar'
+# salt=`head /dev/urandom | tr -dc a-z0-9 | head -c8` && TGT_DIR='/tmp/'`basename $PROF_DIR`'_memory_'${salt}'.prof' && gsu cp $PROF_DIR/memory.prof $TGT_DIR && echo $TGT_DIR
+# pprof -http=localhost:6062 $TGT_DIR

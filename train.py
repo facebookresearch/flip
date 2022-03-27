@@ -245,6 +245,12 @@ def save_checkpoint(state, workdir):
     checkpoints.save_checkpoint(workdir, state, step, keep=3)
 
 
+def profile_memory(workdir):
+  jax.profiler.save_device_memory_profile("/tmp/memory.prof")
+  if jax.process_index() == 0:
+    os.system('gsutil cp /tmp/memory.prof {}'.format(workdir))
+
+
 # pmean only works inside pmap because it needs an axis name.
 # This function will average the inputs across all devices.
 cross_replica_mean = jax.pmap(lambda x: lax.pmean(x, 'x'), 'x')
@@ -429,9 +435,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
       if (step + 1) % config.log_every_steps == 0:
 
         if (step + 1) == config.log_every_steps and config.profile_memory:
-          jax.profiler.save_device_memory_profile("/tmp/memory.prof")
-          if jax.process_index() == 0:
-            os.system('gsutil cp /tmp/memory.prof {}'.format(workdir))
+          profile_memory(workdir)
 
         train_metrics = common_utils.get_metrics(train_metrics)
         summary = {
