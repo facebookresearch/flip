@@ -6,11 +6,13 @@ BRANCH=main
 
 # salt=`head /dev/urandom | tr -dc a-z0-9 | head -c8`
 
-ep=1
+ep=100
 ema=0.9999
+batch=4096
+
 CONFIG=cfg_vit_base
 # pytorch_recipe: _autoaug_lb0.1_cropv4_exwd_initv2_rsinit_dp0.1_cutmixup_minlr
-JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_pytorch_recipe_NOema${ema}ev2_batch4096_profmem
+JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_pytorch_recipe_NOema${ema}ev2_batch${batch}_profmem_donate_accuracy
 
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
@@ -41,7 +43,7 @@ export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets
 python3 main.py \
     --workdir=$WORKDIR \
     --config=configs/$CONFIG.py \
-    --config.batch_size=4096 \
+    --config.batch_size=${batch} \
     --config.log_every_steps=100 \
     --config.num_epochs=${ep} \
     --config.ema_decay=${ema} \

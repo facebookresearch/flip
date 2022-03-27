@@ -407,15 +407,19 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   #     train=True)
   # logits, new_variables = outcome
   # --------------------------------------------------------------------------------  
-  # num_params = np.sum([np.prod(p.shape) for p in jax.tree_leaves(state.opt_state[0].nu)])
-  # num_params = np.sum([np.prod(p.shape) for p in jax.tree_leaves(state.params)])
+  num_params = np.sum([np.prod(p.shape) for p in jax.tree_leaves(state.opt_state[0].nu)])
+  num_params = np.sum([np.prod(p.shape) for p in jax.tree_leaves(state.params)])
   # num_params_mem = num_params * 4 / 1024 / 1024
 
   state = jax_utils.replicate(state)
 
+  # jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
+  # profile_memory('./tmp')
+  # from IPython import embed; embed();
+
   p_train_step = jax.pmap(
       functools.partial(train_step, learning_rate_fn=learning_rate_fn, config=config),
-      axis_name='batch')
+      axis_name='batch', donate_argnums=(0,))
   p_eval_step = jax.pmap(
       functools.partial(eval_step, ema_eval=(config.ema and config.ema_eval)),
       axis_name='batch')
@@ -442,6 +446,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
         # if (step + 1) == config.log_every_steps and config.profile_memory:
         #   profile_memory(workdir)
+        # jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
+        # profile_memory('./tmp')
 
         train_metrics = common_utils.get_metrics(train_metrics)
         summary = {
