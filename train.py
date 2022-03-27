@@ -52,6 +52,8 @@ from utils.ema_util import EmaState
 import jax.profiler
 
 import numpy as np
+import os
+
 
 NUM_CLASSES = 1000
 
@@ -427,8 +429,9 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
       if (step + 1) % config.log_every_steps == 0:
 
         if (step + 1) == config.log_every_steps and config.profile_memory:
-          import os
-          jax.profiler.save_device_memory_profile(os.path.join(workdir, "memory.prof"))
+          jax.profiler.save_device_memory_profile("./tmp/memory.prof")
+          if jax.process_index() == 0:
+            os.system('gsutil cp ./tmp/memory.prof {}'.format(workdir))
 
         train_metrics = common_utils.get_metrics(train_metrics)
         summary = {

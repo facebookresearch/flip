@@ -47,7 +47,7 @@ python3 main.py \
     --config.ema_decay=${ema} \
     --config.ema=False \
     --config.save_every_epochs=10 \
-    --config.profile_memory \
+    --config.profile_memory=True \
 " 2>&1 | tee $LOGDIR/finetune.log
 
 echo ${VM_NAME}
