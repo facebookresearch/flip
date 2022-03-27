@@ -413,7 +413,6 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   train_metrics_last_t = time.time()
   logging.info('Initial compilation, this might take some minutes...')
 
-  jax.profiler.start_trace(workdir)
   for step, batch in zip(range(step_offset, num_steps), train_iter):
     state, metrics = p_train_step(state, batch)
     for h in hooks:
@@ -426,6 +425,11 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     if config.get('log_every_steps'):
       train_metrics.append(metrics)
       if (step + 1) % config.log_every_steps == 0:
+
+        if (step + 1) == config.log_every_steps and config.profile_memory:
+          import os
+          jax.profiler.save_device_memory_profile(os.path.join(workdir, "memory.prof"))
+
         train_metrics = common_utils.get_metrics(train_metrics)
         summary = {
             f'train_{k}': float(v)
@@ -471,6 +475,5 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   # Wait until computations are done before exiting
   jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
-  jax.profiler.stop_trace()
 
   return state

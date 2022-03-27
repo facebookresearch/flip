@@ -14,4 +14,4 @@ y, z = func2(x)
 
 z.block_until_ready()
 
-jax.profiler.save_device_memory_profile("memory.prof")
+jax.profiler.save_device_memory_profile("./dbg/memory.prof")
