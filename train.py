@@ -30,7 +30,8 @@ from flax import jax_utils
 from flax import optim
 from flax.training import checkpoints
 from flax.training import common_utils
-from flax.training import train_state
+# from flax.training import train_state
+import utils.train_state as train_state
 import jax
 from jax import lax
 import jax.numpy as jnp
@@ -73,9 +74,9 @@ def create_model(*, model_cls, half_precision, **kwargs):
 
 def initialized(key, image_size, model):
   input_shape = (1, image_size, image_size, 3)
-  @jax.jit
   def init(*args):
     return model.init(*args, train=False)
+  init = jax.jit(init, backend='cpu')
   variables = init({'params': key}, jnp.ones(input_shape, model.dtype))
   return variables
 
@@ -304,6 +305,7 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
 
   tx = getattr(optax, config.opt_type)  # optax.adamw
   tx = tx(learning_rate=learning_rate_fn, **config.opt, mask=mask)
+  tx = optax.GradientTransformation(init=jax.jit(tx.init, backend='cpu'), update=tx.update)  # put to cpu
   ema = EmaState.create(config.ema_decay, variables=variables) if config.ema else None
   state = TrainState.create(
       apply_fn=model.apply,
@@ -404,7 +406,11 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   #     mutable=mutable_keys,
   #     train=True)
   # logits, new_variables = outcome
-  # --------------------------------------------------------------------------------
+  # --------------------------------------------------------------------------------  
+  # num_params = np.sum([np.prod(p.shape) for p in jax.tree_leaves(state.opt_state[0].nu)])
+  # num_params = np.sum([np.prod(p.shape) for p in jax.tree_leaves(state.params)])
+  # num_params_mem = num_params * 4 / 1024 / 1024
+
   state = jax_utils.replicate(state)
 
   p_train_step = jax.pmap(
@@ -416,8 +422,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   train_metrics = []
   hooks = []
-  # if jax.process_index() == 0:
-  #   hooks += [periodic_actions.Profile(num_profile_steps=5, logdir=workdir)]
+  if jax.process_index() == 0:
+    hooks += [periodic_actions.Profile(num_profile_steps=5, logdir=workdir)]
   train_metrics_last_t = time.time()
   logging.info('Initial compilation, this might take some minutes...')
 
@@ -434,8 +440,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
       train_metrics.append(metrics)
       if (step + 1) % config.log_every_steps == 0:
 
-        if (step + 1) == config.log_every_steps and config.profile_memory:
-          profile_memory(workdir)
+        # if (step + 1) == config.log_every_steps and config.profile_memory:
+        #   profile_memory(workdir)
 
         train_metrics = common_utils.get_metrics(train_metrics)
         summary = {
@@ -482,5 +488,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   # Wait until computations are done before exiting
   jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
+
+  if config.profile_memory:
+    profile_memory(workdir)
 
   return state
