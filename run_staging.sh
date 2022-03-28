@@ -14,7 +14,7 @@ mutype=float32
 
 CONFIG=cfg_vit_large
 # pytorch_recipe: _autoaug_lb0.1_cropv4_exwd_initv2_rsinit_dp0.1_cutmixup_minlr
-JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_pytorch_recipe_YESema${ema}ev2_batch${batch}_profmem_mu${mutype}_adamwutil
+JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_pytorch_recipe_YESema${ema}ev2_batch${batch}_profmem_NOmu${mutype}_NOadamwutil_donate
 
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
@@ -53,6 +53,7 @@ python3 main.py \
     --config.save_every_epochs=10 \
     --config.profile_memory=True \
     --config.opt_mu_dtype=${mutype} \
+    --config.donate=True \
 " 2>&1 | tee $LOGDIR/finetune.log
 
 echo ${VM_NAME}

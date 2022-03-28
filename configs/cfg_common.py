@@ -108,7 +108,8 @@ def get_config():
   # init config
   config.rescale_init = True  # rescale initialized weights by layer id
 
-  # debugging
+  # memory
   config.profile_memory = False
+  config.donate = False
 
   return config

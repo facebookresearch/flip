@@ -154,11 +154,29 @@ def train_step(state, batch, learning_rate_fn, config):
   new_variables, logits = aux[1]
   metrics = compute_metrics(logits, batch['label'], batch['label_one_hot'])
   metrics['learning_rate'] = lr
-  new_state = state.apply_gradients(grads=grads, variables=new_variables, rng=new_rng)
 
-  if new_state.ema is not None:
-    new_ema = new_state.ema.update(flax.core.FrozenDict({'params': new_state.params, **new_variables}))
-    new_state = new_state.replace(ema=new_ema)
+  # ----------------------------------------------------------------------------
+  # original
+  # new_state = state.apply_gradients(grads=grads, variables=new_variables, rng=new_rng)
+  # if new_state.ema is not None:
+  #   new_ema = new_state.ema.update(flax.core.FrozenDict({'params': new_state.params, **new_variables}))
+  #   new_state = new_state.replace(ema=new_ema)
+  # ----------------------------------------------------------------------------
+
+  # ----------------------------------------------------------------------------
+  # modified impl.
+  updates, new_opt_state = state.tx.update(grads, state.opt_state, state.params)
+  new_params = optax.apply_updates(state.params, updates)
+  new_ema = state.ema.update(flax.core.FrozenDict({'params': new_params, **new_variables})) if state.ema is not None else None
+  new_state = state.replace(
+    step=state.step + 1,
+    params=new_params,
+    opt_state=new_opt_state,
+    variables=new_variables,
+    rng=new_rng,
+    ema=new_ema
+  )
+  # ----------------------------------------------------------------------------
 
   if dynamic_scale:
     # if is_fin == False the gradients contain Inf/NaNs and optimizer state and
@@ -406,16 +424,16 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   #     mutable=mutable_keys,
   #     train=True)
   # logits, new_variables = outcome
-  # --------------------------------------------------------------------------------  
   # num_params = np.sum([np.prod(p.shape) for p in jax.tree_leaves(state.opt_state[0].nu)])
   # num_params = np.sum([np.prod(p.shape) for p in jax.tree_leaves(state.params)])
   # num_params_mem = num_params * 4 / 1024 / 1024
+  # --------------------------------------------------------------------------------  
   state = jax_utils.replicate(state)
 
   p_train_step = jax.pmap(
       functools.partial(train_step, learning_rate_fn=learning_rate_fn, config=config),
       axis_name='batch',
-      # donate_argnums=(0,)
+      donate_argnums=(0,) if config.donate else ()
       )
   p_eval_step = jax.pmap(
       functools.partial(eval_step, ema_eval=(config.ema and config.ema_eval)),
@@ -423,8 +441,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   train_metrics = []
   hooks = []
-  if jax.process_index() == 0:
-    hooks += [periodic_actions.Profile(num_profile_steps=5, logdir=workdir)]
+  # if jax.process_index() == 0:
+  #   hooks += [periodic_actions.Profile(num_profile_steps=5, logdir=workdir)]
   train_metrics_last_t = time.time()
   logging.info('Initial compilation, this might take some minutes...')
 
