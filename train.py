@@ -440,6 +440,16 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   train_metrics_last_t = time.time()
   logging.info('Initial compilation, this might take some minutes...')
 
+  # --------------------------------------------------------------------------------
+  # num_images_dryrun = 2
+  # batch = next(train_iter)
+  # batch['image'] = batch['image'][:, :num_images_dryrun, :, :, :]
+  # batch['label'] = batch['label'][:, :num_images_dryrun]
+  # batch['label_one_hot'] = batch['label_one_hot'][:, :num_images_dryrun, :]
+  # state, _ = p_train_step(state, batch)
+  # logging.info('Dry run: Initial compilation completed.')
+  # --------------------------------------------------------------------------------  
+
   for step, batch in zip(range(step_offset, num_steps), train_iter):
     state, metrics = p_train_step(state, batch)
     for h in hooks:
