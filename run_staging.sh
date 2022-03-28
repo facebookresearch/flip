@@ -10,7 +10,7 @@ ep=200
 ema=0.9999
 batch=4096
 
-CONFIG=cfg_vit_huge
+CONFIG=cfg_vit_large
 # pytorch_recipe: _autoaug_lb0.1_cropv4_exwd_initv2_rsinit_dp0.1_cutmixup_minlr
 JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_pytorch_recipe_YESema${ema}ev2_batch${batch}_profmem_mubf16_myadam
 

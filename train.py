@@ -38,7 +38,7 @@ import jax.numpy as jnp
 from jax import random
 import ml_collections
 import optax
-from utils import opt_alias as opt_alias
+from utils import adamw_util
 import tensorflow as tf
 import tensorflow_datasets as tfds
 
@@ -317,7 +317,7 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
     mask = None
   # logging.info('Apply weight decay: {}'.format(mask))
 
-  tx = getattr(opt_alias, config.opt_type)  # optax.adamw
+  tx = getattr(adamw_util, config.opt_type)  # optax.adamw
   # tx = getattr(optax, config.opt_type)  # optax.adamw
   tx = tx(learning_rate=learning_rate_fn, **config.opt, mask=mask, mu_dtype=getattr(jnp, config.opt_mu_dtype))
   tx = optax.GradientTransformation(init=jax.jit(tx.init, backend='cpu'), update=tx.update)  # put to cpu
