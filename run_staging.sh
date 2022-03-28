@@ -9,7 +9,7 @@ BRANCH=main
 ep=200
 ema=0.9999
 batch=4096
-mutype=bfloat16
+mutype=float32
 
 
 CONFIG=cfg_vit_large
