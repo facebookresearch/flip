@@ -172,7 +172,7 @@ def train_step(state, batch, learning_rate_fn, config):
 
   if config.ema:
     _, new_ema_state = state.ema_tx.update(
-      updates=flax.core.frozen_dict.FrozenDict({'params': new_params, 'variables': new_variables}),
+      updates=flax.core.frozen_dict.FrozenDict({'params': new_params, **new_variables}),
       state=state.ema_state)
   else:
     new_ema_state = None
@@ -213,7 +213,7 @@ def eval_step(state, batch, ema_eval=False):
   metrics['test_loss'] = metrics.pop('loss')  # rename
 
   if ema_eval:
-    logits = state.apply_fn(state.ema.variables, batch['image'], train=False, mutable=False)
+    logits = state.apply_fn(state.ema_state.ema, batch['image'], train=False, mutable=False)
     metrics_ema = compute_metrics(logits, batch['label'], batch['label_one_hot'])
     metrics['test_acc1_ema'] = metrics_ema.pop('accuracy') * 100  # rename
 
@@ -339,7 +339,7 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
   # ema = EmaState.create(config.ema_decay, variables=variables) if config.ema else None
   if config.ema:
     ema_tx = optax.ema(decay=config.ema_decay, debias=False)
-    ema_state = ema_tx.init(flax.core.frozen_dict.FrozenDict({'params': params, 'variables': variables_states}))
+    ema_state = ema_tx.init(flax.core.frozen_dict.FrozenDict({'params': params, **variables_states}))
   else:
     ema_tx = None
     ema_state = None
@@ -499,7 +499,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
         train_metrics = []
         train_metrics_last_t = time.time()
 
-    if (step + 1) % steps_per_epoch == 0:
+    if (step + 1) % steps_per_epoch == 0 or step == 15:
       epoch = step // steps_per_epoch
       eval_metrics = []
 
