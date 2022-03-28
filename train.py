@@ -414,7 +414,9 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   p_train_step = jax.pmap(
       functools.partial(train_step, learning_rate_fn=learning_rate_fn, config=config),
-      axis_name='batch', donate_argnums=(0,))
+      axis_name='batch',
+      # donate_argnums=(0,)
+      )
   p_eval_step = jax.pmap(
       functools.partial(eval_step, ema_eval=(config.ema and config.ema_eval)),
       axis_name='batch')
