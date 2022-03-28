@@ -111,5 +111,6 @@ def get_config():
   # memory
   config.profile_memory = False
   config.donate = False
+  config.init_backend = 'tpu'
 
   return config

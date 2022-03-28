@@ -54,6 +54,7 @@ python3 main.py \
     --config.profile_memory=True \
     --config.opt_mu_dtype=${mutype} \
     --config.donate=True \
+    --config.init_backend=tpu \
 " 2>&1 | tee $LOGDIR/finetune.log
 
 echo ${VM_NAME}

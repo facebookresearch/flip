@@ -72,11 +72,11 @@ def create_model(*, model_cls, half_precision, **kwargs):
   return model_cls(num_classes=NUM_CLASSES, **kwargs)
 
 
-def initialized(key, image_size, model):
+def initialized(key, image_size, model, init_backend='tpu'):
   input_shape = (1, image_size, image_size, 3)
   def init(*args):
     return model.init(*args, train=False)
-  init = jax.jit(init, backend='cpu')
+  init = jax.jit(init, backend=init_backend)
   variables = init({'params': key}, jnp.ones(input_shape, model.dtype))
   return variables
 
@@ -300,7 +300,7 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
   # split rng for init and for state
   rng_init, rng_state = jax.random.split(rng)
 
-  variables = initialized(rng_init, image_size, model)
+  variables = initialized(rng_init, image_size, model, config.init_backend)
   variables_states, params = variables.pop('params')
 
   # optional: rescale
@@ -323,7 +323,7 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
 
   tx = getattr(optax, config.opt_type)  # optax.adamw
   tx = tx(learning_rate=learning_rate_fn, **config.opt, mask=mask)
-  tx = optax.GradientTransformation(init=jax.jit(tx.init, backend='cpu'), update=tx.update)  # put to cpu
+  tx = optax.GradientTransformation(init=jax.jit(tx.init, backend=config.init_backend), update=tx.update)  # put to cpu
   ema = EmaState.create(config.ema_decay, variables=variables) if config.ema else None
   state = TrainState.create(
       apply_fn=model.apply,
