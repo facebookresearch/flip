@@ -38,6 +38,7 @@ import jax.numpy as jnp
 from jax import random
 import ml_collections
 import optax
+from utils import opt_alias as opt_alias
 import tensorflow as tf
 import tensorflow_datasets as tfds
 
@@ -154,11 +155,25 @@ def train_step(state, batch, learning_rate_fn, config):
   new_variables, logits = aux[1]
   metrics = compute_metrics(logits, batch['label'], batch['label_one_hot'])
   metrics['learning_rate'] = lr
-  new_state = state.apply_gradients(grads=grads, variables=new_variables, rng=new_rng)
 
-  if new_state.ema is not None:
-    new_ema = new_state.ema.update(flax.core.FrozenDict({'params': new_state.params, **new_variables}))
-    new_state = new_state.replace(ema=new_ema)
+  # original
+  # new_state = state.apply_gradients(grads=grads, variables=new_variables, rng=new_rng)
+
+  # modified impl.
+  updates, new_opt_state = state.tx.update(grads, state.opt_state, state.params)
+  new_params = optax.apply_updates(state.params, updates)
+
+  if state.ema is not None:
+    new_ema = state.ema.update(flax.core.FrozenDict({'params': new_params, **new_variables}))
+
+  new_state = state.replace(
+    step=state.step + 1,
+    params=new_params,
+    opt_state=new_opt_state,
+    variables=new_variables,
+    rng=new_rng,
+    ema=new_ema
+  )
 
   if dynamic_scale:
     # if is_fin == False the gradients contain Inf/NaNs and optimizer state and
@@ -303,7 +318,7 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
     mask = None
   logging.info('Apply weight decay: {}'.format(mask))
 
-  tx = getattr(optax, config.opt_type)  # optax.adamw
+  tx = getattr(opt_alias, config.opt_type)  # optax.adamw
   tx = tx(learning_rate=learning_rate_fn, **config.opt, mask=mask, mu_dtype=getattr(jnp, config.opt_mu_dtype))
   tx = optax.GradientTransformation(init=jax.jit(tx.init, backend='cpu'), update=tx.update)  # put to cpu
   ema = EmaState.create(config.ema_decay, variables=variables) if config.ema else None

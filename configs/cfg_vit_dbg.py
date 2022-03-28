@@ -41,5 +41,9 @@ def get_config():
   config.model = vit.get_testing_config()
   config.model.transformer.dropout_rate = 0.0
   config.model.transformer.droppath_rate = 0.1
+  config.model.transformer.num_layers = 2
+
+  # opt config
+  config.opt_mu_dtype = 'bfloat16'
 
   return config
