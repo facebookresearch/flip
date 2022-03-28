@@ -1,5 +1,5 @@
-echo 'To kill jobs in: '${VM_NAME}' after 10s...'
-sleep 10s
+echo 'To kill jobs in: '${VM_NAME}' after 5s...'
+sleep 5s
 
 gcloud alpha compute tpus tpu-vm ssh ${VM_NAME} --zone europe-west4-a \
     --worker=all --command "

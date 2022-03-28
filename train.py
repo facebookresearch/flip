@@ -317,7 +317,8 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
     mask = None
   # logging.info('Apply weight decay: {}'.format(mask))
 
-  tx = getattr(opt_alias, config.opt_type)  # optax.adamw
+  # tx = getattr(opt_alias, config.opt_type)  # optax.adamw
+  tx = getattr(optax, config.opt_type)  # optax.adamw
   tx = tx(learning_rate=learning_rate_fn, **config.opt, mask=mask, mu_dtype=getattr(jnp, config.opt_mu_dtype))
   tx = optax.GradientTransformation(init=jax.jit(tx.init, backend='cpu'), update=tx.update)  # put to cpu
   ema = EmaState.create(config.ema_decay, variables=variables) if config.ema else None
