@@ -46,7 +46,7 @@ python3 main.py \
     --workdir=$WORKDIR \
     --config=configs/$CONFIG.py \
     --config.batch_size=${batch} \
-    --config.log_every_steps=100 \
+    --config.log_every_steps=1 \
     --config.num_epochs=${ep} \
     --config.ema_decay=${ema} \
     --config.ema=True \

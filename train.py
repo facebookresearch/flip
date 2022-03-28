@@ -49,7 +49,6 @@ import models_vit
 from utils import summary_util as summary_util  # must be after 'from clu import metric_writers'
 from utils import opt_util
 from utils import mix_util
-# from utils.ema_util import EmaState
 
 
 import jax.profiler
@@ -335,8 +334,7 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
   # tx = getattr(optax, config.opt_type)  # optax.adamw
   tx = getattr(adamw_util, config.opt_type)  # optax.adamw
   tx = tx(learning_rate=learning_rate_fn, **config.opt, mask=mask, mu_dtype=getattr(jnp, config.opt_mu_dtype))
-  # tx = optax.GradientTransformation(init=jax.jit(tx.init, backend=config.init_backend), update=tx.update)  # put to cpu
-  # ema = EmaState.create(config.ema_decay, variables=variables) if config.ema else None
+  tx = optax.GradientTransformation(init=jax.jit(tx.init, backend=config.init_backend), update=tx.update)  # put to cpu
   if config.ema:
     ema_tx = optax.ema(decay=config.ema_decay, debias=False)
     ema_state = ema_tx.init(flax.core.frozen_dict.FrozenDict({'params': params, **variables_states}))
@@ -480,7 +478,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
         # if (step + 1) == config.log_every_steps and config.profile_memory:
         #   profile_memory(workdir)
-
+        # Wait until computations are done before exiting
+        jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
         train_metrics = common_utils.get_metrics(train_metrics)
         summary = {
             f'train_{k}': float(v)
