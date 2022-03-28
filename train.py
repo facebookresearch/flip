@@ -156,23 +156,28 @@ def train_step(state, batch, learning_rate_fn, config):
   metrics = compute_metrics(logits, batch['label'], batch['label_one_hot'])
   metrics['learning_rate'] = lr
 
+  # ----------------------------------------------------------------------------
   # original
-  # new_state = state.apply_gradients(grads=grads, variables=new_variables, rng=new_rng)
+  new_state = state.apply_gradients(grads=grads, variables=new_variables, rng=new_rng)
+  if new_state.ema is not None:
+    new_ema = new_state.ema.update(flax.core.FrozenDict({'params': new_state.params, **new_variables}))
+    new_state = new_state.replace(ema=new_ema)
+  # ----------------------------------------------------------------------------
 
+  # ----------------------------------------------------------------------------
   # modified impl.
-  updates, new_opt_state = state.tx.update(grads, state.opt_state, state.params)
-  new_params = optax.apply_updates(state.params, updates)
-
-  new_ema = state.ema.update(flax.core.FrozenDict({'params': new_params, **new_variables})) if state.ema is not None else None
-
-  new_state = state.replace(
-    step=state.step + 1,
-    params=new_params,
-    opt_state=new_opt_state,
-    variables=new_variables,
-    rng=new_rng,
-    ema=new_ema
-  )
+  # updates, new_opt_state = state.tx.update(grads, state.opt_state, state.params)
+  # new_params = optax.apply_updates(state.params, updates)
+  # new_ema = state.ema.update(flax.core.FrozenDict({'params': new_params, **new_variables})) if state.ema is not None else None
+  # new_state = state.replace(
+  #   step=state.step + 1,
+  #   params=new_params,
+  #   opt_state=new_opt_state,
+  #   variables=new_variables,
+  #   rng=new_rng,
+  #   ema=new_ema
+  # )
+  # ----------------------------------------------------------------------------
 
   if dynamic_scale:
     # if is_fin == False the gradients contain Inf/NaNs and optimizer state and

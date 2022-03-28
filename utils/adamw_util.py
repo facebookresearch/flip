@@ -68,7 +68,7 @@ def adamw(
     the corresponding `GradientTransformation`.
   """
   return combine.chain(
-      transform.scale_by_adam(
+      _scale_by_adam(
           b1=b1, b2=b2, eps=eps, eps_root=eps_root, mu_dtype=mu_dtype),
       transform.add_decayed_weights(weight_decay, mask),
       _scale_by_learning_rate(learning_rate),
@@ -79,7 +79,7 @@ def adamw(
 # ------------------------------------------
 # from optax.tran
 # ------------------------------------------
-def scale_by_adam(
+def _scale_by_adam(
     b1: float = 0.9,
     b2: float = 0.999,
     eps: float = 1e-8,
