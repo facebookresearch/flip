@@ -163,8 +163,7 @@ def train_step(state, batch, learning_rate_fn, config):
   updates, new_opt_state = state.tx.update(grads, state.opt_state, state.params)
   new_params = optax.apply_updates(state.params, updates)
 
-  if state.ema is not None:
-    new_ema = state.ema.update(flax.core.FrozenDict({'params': new_params, **new_variables}))
+  new_ema = state.ema.update(flax.core.FrozenDict({'params': new_params, **new_variables})) if state.ema is not None else None
 
   new_state = state.replace(
     step=state.step + 1,
