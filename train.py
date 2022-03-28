@@ -305,7 +305,7 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
     params = jax.tree_util.tree_multimap(lambda x, y: x * y, rescales, params)
 
   stds = jax.tree_util.tree_map(lambda x: np.array(x).std(), params)
-  logging.info('std: {}'.format(stds))
+  # logging.info('std: {}'.format(stds))
 
   # optional: exclude some wd
   if config.exclude_wd:
@@ -315,7 +315,7 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
     )
   else:
     mask = None
-  logging.info('Apply weight decay: {}'.format(mask))
+  # logging.info('Apply weight decay: {}'.format(mask))
 
   tx = getattr(opt_alias, config.opt_type)  # optax.adamw
   tx = tx(learning_rate=learning_rate_fn, **config.opt, mask=mask, mu_dtype=getattr(jnp, config.opt_mu_dtype))
