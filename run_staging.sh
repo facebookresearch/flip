@@ -1,5 +1,5 @@
-VM_NAME=kmh-tpuvm-v3-128-2
-# VM_NAME=kmh-tpuvm-v3-256-4
+# VM_NAME=kmh-tpuvm-v3-128-2
+VM_NAME=kmh-tpuvm-v3-256-4
 echo $VM_NAME
 REPO=https://71d519550fe3430ecbf39b70467e9210aed5da69:@github.com/KaimingHe/flax_dev.git
 BRANCH=main
@@ -12,7 +12,7 @@ batch=4096
 mutype=bfloat16
 
 
-CONFIG=cfg_vit_base
+CONFIG=cfg_vit_large
 # pytorch_recipe: _autoaug_lb0.1_cropv4_exwd_initv2_rsinit_dp0.1_cutmixup_minlr
 JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_pytorch_recipe_YESema${ema}ev2_batch${batch}_profmem_mu${mutype}_adamwutil_donate_inittpu_optema_sanity
 
@@ -34,11 +34,11 @@ mkdir -p ${LOGDIR}
 gcloud alpha compute tpus tpu-vm ssh ${VM_NAME} --zone europe-west4-a \
     --worker=all --command "
 cd ~/flax_dev
-git checkout vit
 git pull
+git checkout vit.ema
 git rev-parse --short HEAD
 
-pip3 list | grep 'jax\|flax\|tensorflow '
+# pip3 list | grep 'jax\|flax\|tensorflow '
 
 cd ~/flax_dev
 export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets
@@ -58,6 +58,3 @@ python3 main.py \
 " 2>&1 | tee $LOGDIR/finetune.log
 
 echo ${VM_NAME}
-    # --config.model.patches.size=\(16,16\) \
-    # --config.model.transformer.num_layers=24 \
-
