@@ -257,7 +257,8 @@ def create_input_iter(dataset_builder, batch_size, image_size, dtype, train,
 class TrainState(train_state.TrainState):
   rng: Any
   variables: flax.core.FrozenDict[str, Any]
-  dynamic_scale: flax.optim.DynamicScale
+  # dynamic_scale: flax.optim.DynamicScale
+  dynamic_scale: Any
   ema_tx: optax.GradientTransformation = struct.field(pytree_node=False)
   ema_state: optax.EmaState
 
