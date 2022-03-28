@@ -9,12 +9,12 @@ BRANCH=main
 ep=200
 ema=0.9999
 batch=4096
-mutype=float32
+mutype=bfloat16
 
 
 CONFIG=cfg_vit_large
 # pytorch_recipe: _autoaug_lb0.1_cropv4_exwd_initv2_rsinit_dp0.1_cutmixup_minlr
-JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_pytorch_recipe_YESema${ema}ev2_batch${batch}_profmem_NOmu${mutype}_NOadamwutil_donate
+JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_pytorch_recipe_YESema${ema}ev2_batch${batch}_profmem_mu${mutype}_adamwutil_donate_inittpu
 
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}

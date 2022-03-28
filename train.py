@@ -32,6 +32,7 @@ from flax.training import checkpoints
 from flax.training import common_utils
 # from flax.training import train_state
 import utils.train_state as train_state
+import utils.adamw_util as adamw_util
 import jax
 from jax import lax
 import jax.numpy as jnp
@@ -321,8 +322,9 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
     mask = None
   # logging.info('Apply weight decay: {}'.format(mask))
 
-  tx = getattr(optax, config.opt_type)  # optax.adamw
-  tx = tx(learning_rate=learning_rate_fn, **config.opt, mask=mask)
+  # tx = getattr(optax, config.opt_type)  # optax.adamw
+  tx = getattr(adamw_util, config.opt_type)  # optax.adamw
+  tx = tx(learning_rate=learning_rate_fn, **config.opt, mask=mask, mu_dtype=getattr(jnp, config.opt_mu_dtype))
   tx = optax.GradientTransformation(init=jax.jit(tx.init, backend=config.init_backend), update=tx.update)  # put to cpu
   ema = EmaState.create(config.ema_decay, variables=variables) if config.ema else None
   state = TrainState.create(
