@@ -77,7 +77,7 @@ def adamw(
 
 
 # ------------------------------------------
-# from optax.tran
+# from optax.transform
 # ------------------------------------------
 def _scale_by_adam(
     b1: float = 0.9,

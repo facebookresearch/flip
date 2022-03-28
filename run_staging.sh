@@ -1,20 +1,20 @@
-# VM_NAME=kmh-tpuvm-v3-128-1
-VM_NAME=kmh-tpuvm-v3-256-4
+VM_NAME=kmh-tpuvm-v3-128-1
+# VM_NAME=kmh-tpuvm-v3-256-4
 echo $VM_NAME
 REPO=https://71d519550fe3430ecbf39b70467e9210aed5da69:@github.com/KaimingHe/flax_dev.git
 BRANCH=main
 
 # salt=`head /dev/urandom | tr -dc a-z0-9 | head -c8`
 
-ep=200
-ema=0.9999
+ep=100
+ema=0.99
 batch=4096
 mutype=bfloat16
 
 
-CONFIG=cfg_vit_large
+CONFIG=cfg_vit_base
 # pytorch_recipe: _autoaug_lb0.1_cropv4_exwd_initv2_rsinit_dp0.1_cutmixup_minlr
-JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_pytorch_recipe_YESema${ema}ev2_batch${batch}_profmem_mu${mutype}_adamwutil_donate_inittpu
+JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_pytorch_recipe_YESema${ema}ev2_batch${batch}_profmem_mu${mutype}_adamwutil_donate_inittpu_sanity
 
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}

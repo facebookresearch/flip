@@ -28,6 +28,7 @@ from clu import periodic_actions
 import flax
 from flax import jax_utils
 from flax import optim
+from flax import struct
 from flax.training import checkpoints
 from flax.training import common_utils
 # from flax.training import train_state
@@ -48,7 +49,7 @@ import models_vit
 from utils import summary_util as summary_util  # must be after 'from clu import metric_writers'
 from utils import opt_util
 from utils import mix_util
-from utils.ema_util import EmaState
+# from utils.ema_util import EmaState
 
 
 import jax.profiler
@@ -168,14 +169,19 @@ def train_step(state, batch, learning_rate_fn, config):
   # modified impl.
   updates, new_opt_state = state.tx.update(grads, state.opt_state, state.params)
   new_params = optax.apply_updates(state.params, updates)
-  new_ema = state.ema.update(flax.core.FrozenDict({'params': new_params, **new_variables})) if state.ema is not None else None
+
+  _, new_ema_state = state.ema_tx.update(
+    updates=flax.core.frozen_dict.FrozenDict({'params': new_params, 'variables': new_variables}),
+    state=state.ema_state)
+  
+  # new_ema = state.ema.update(flax.core.FrozenDict({'params': new_params, **new_variables})) if state.ema is not None else None
   new_state = state.replace(
     step=state.step + 1,
     params=new_params,
     opt_state=new_opt_state,
     variables=new_variables,
     rng=new_rng,
-    ema=new_ema
+    ema_state=new_ema_state
   )
   # ----------------------------------------------------------------------------
 
@@ -250,7 +256,8 @@ class TrainState(train_state.TrainState):
   rng: Any
   variables: flax.core.FrozenDict[str, Any]
   dynamic_scale: flax.optim.DynamicScale
-  ema: EmaState
+  ema_tx: optax.GradientTransformation = struct.field(pytree_node=False)
+  ema_state: optax.EmaState
 
 
 def restore_checkpoint(state, workdir):
@@ -325,8 +332,14 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
   # tx = getattr(optax, config.opt_type)  # optax.adamw
   tx = getattr(adamw_util, config.opt_type)  # optax.adamw
   tx = tx(learning_rate=learning_rate_fn, **config.opt, mask=mask, mu_dtype=getattr(jnp, config.opt_mu_dtype))
-  tx = optax.GradientTransformation(init=jax.jit(tx.init, backend=config.init_backend), update=tx.update)  # put to cpu
-  ema = EmaState.create(config.ema_decay, variables=variables) if config.ema else None
+  # tx = optax.GradientTransformation(init=jax.jit(tx.init, backend=config.init_backend), update=tx.update)  # put to cpu
+  # ema = EmaState.create(config.ema_decay, variables=variables) if config.ema else None
+  if config.ema:
+    ema_tx = optax.ema(decay=config.ema_decay, debias=False)
+    ema_state = ema_tx.init(flax.core.frozen_dict.FrozenDict({'params': params, 'variables': variables_states}))
+  else:
+    ema_tx = None
+    ema_state = None
   state = TrainState.create(
       apply_fn=model.apply,
       params=params,
@@ -334,7 +347,8 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
       rng=rng_state,
       variables=variables_states,
       dynamic_scale=dynamic_scale,
-      ema=ema)
+      ema_tx=ema_tx,
+      ema_state=ema_state)
   return state
 
 
