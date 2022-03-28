@@ -42,4 +42,7 @@ def get_config():
   config.model.transformer.dropout_rate = 0.0
   config.model.transformer.droppath_rate = 0.1
 
+  # opt config
+  config.opt_mu_dtype = 'float32'
+
   return config

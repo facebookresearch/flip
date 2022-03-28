@@ -304,7 +304,7 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
   logging.info('Apply weight decay: {}'.format(mask))
 
   tx = getattr(optax, config.opt_type)  # optax.adamw
-  tx = tx(learning_rate=learning_rate_fn, **config.opt, mask=mask)
+  tx = tx(learning_rate=learning_rate_fn, **config.opt, mask=mask, mu_dtype=getattr(jnp, config.opt_mu_dtype))
   tx = optax.GradientTransformation(init=jax.jit(tx.init, backend='cpu'), update=tx.update)  # put to cpu
   ema = EmaState.create(config.ema_decay, variables=variables) if config.ema else None
   state = TrainState.create(
@@ -407,15 +407,10 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   #     train=True)
   # logits, new_variables = outcome
   # --------------------------------------------------------------------------------  
-  num_params = np.sum([np.prod(p.shape) for p in jax.tree_leaves(state.opt_state[0].nu)])
-  num_params = np.sum([np.prod(p.shape) for p in jax.tree_leaves(state.params)])
+  # num_params = np.sum([np.prod(p.shape) for p in jax.tree_leaves(state.opt_state[0].nu)])
+  # num_params = np.sum([np.prod(p.shape) for p in jax.tree_leaves(state.params)])
   # num_params_mem = num_params * 4 / 1024 / 1024
-
   state = jax_utils.replicate(state)
-
-  # jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
-  # profile_memory('./tmp')
-  # from IPython import embed; embed();
 
   p_train_step = jax.pmap(
       functools.partial(train_step, learning_rate_fn=learning_rate_fn, config=config),
@@ -446,8 +441,6 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
         # if (step + 1) == config.log_every_steps and config.profile_memory:
         #   profile_memory(workdir)
-        # jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
-        # profile_memory('./tmp')
 
         train_metrics = common_utils.get_metrics(train_metrics)
         summary = {
