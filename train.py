@@ -38,7 +38,6 @@ import jax.numpy as jnp
 from jax import random
 import ml_collections
 import optax
-from utils import adamw_util
 import tensorflow as tf
 import tensorflow_datasets as tfds
 
@@ -155,29 +154,11 @@ def train_step(state, batch, learning_rate_fn, config):
   new_variables, logits = aux[1]
   metrics = compute_metrics(logits, batch['label'], batch['label_one_hot'])
   metrics['learning_rate'] = lr
-
-  # ----------------------------------------------------------------------------
-  # original
   new_state = state.apply_gradients(grads=grads, variables=new_variables, rng=new_rng)
+
   if new_state.ema is not None:
     new_ema = new_state.ema.update(flax.core.FrozenDict({'params': new_state.params, **new_variables}))
     new_state = new_state.replace(ema=new_ema)
-  # ----------------------------------------------------------------------------
-
-  # ----------------------------------------------------------------------------
-  # modified impl.
-  # updates, new_opt_state = state.tx.update(grads, state.opt_state, state.params)
-  # new_params = optax.apply_updates(state.params, updates)
-  # new_ema = state.ema.update(flax.core.FrozenDict({'params': new_params, **new_variables})) if state.ema is not None else None
-  # new_state = state.replace(
-  #   step=state.step + 1,
-  #   params=new_params,
-  #   opt_state=new_opt_state,
-  #   variables=new_variables,
-  #   rng=new_rng,
-  #   ema=new_ema
-  # )
-  # ----------------------------------------------------------------------------
 
   if dynamic_scale:
     # if is_fin == False the gradients contain Inf/NaNs and optimizer state and
@@ -322,7 +303,6 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
     mask = None
   # logging.info('Apply weight decay: {}'.format(mask))
 
-  # tx = getattr(adamw_util, config.opt_type)  # optax.adamw
   tx = getattr(optax, config.opt_type)  # optax.adamw
   tx = tx(learning_rate=learning_rate_fn, **config.opt, mask=mask)
   tx = optax.GradientTransformation(init=jax.jit(tx.init, backend='cpu'), update=tx.update)  # put to cpu
@@ -441,20 +421,10 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   train_metrics = []
   hooks = []
-  # if jax.process_index() == 0:
-  #   hooks += [periodic_actions.Profile(num_profile_steps=5, logdir=workdir)]
+  if jax.process_index() == 0:
+    hooks += [periodic_actions.Profile(num_profile_steps=5, logdir=workdir)]
   train_metrics_last_t = time.time()
   logging.info('Initial compilation, this might take some minutes...')
-
-  # --------------------------------------------------------------------------------
-  # num_images_dryrun = 2
-  # batch = next(train_iter)
-  # batch['image'] = batch['image'][:, :num_images_dryrun, :, :, :]
-  # batch['label'] = batch['label'][:, :num_images_dryrun]
-  # batch['label_one_hot'] = batch['label_one_hot'][:, :num_images_dryrun, :]
-  # state, _ = p_train_step(state, batch)
-  # logging.info('Dry run: Initial compilation completed.')
-  # --------------------------------------------------------------------------------  
 
   for step, batch in zip(range(step_offset, num_steps), train_iter):
     state, metrics = p_train_step(state, batch)
