@@ -12,7 +12,8 @@ batch=4096
 
 CONFIG=cfg_vit_base
 
-PRETRAIN_DIR='gs://kmh-gcp/checkpoints/flax/20220331_014514_kmh-tpuvm-v3-128-2_cfg_mae_base_100ep_maeDBG_batch4096_vmap_normpix_sincos_initmaev1'
+source scripts/select_chkpt_base.sh
+
 name=`basename ${PRETRAIN_DIR}`
 
 # pytorch_recipe: _autoaug_lb0.1_cropv4_exwd_initv2_rsinit_dp0.1_cutmixup_minlr
