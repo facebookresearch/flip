@@ -211,6 +211,7 @@ def eval_step(state, batch, ema_eval=False):
   logits = state.apply_fn(variables, batch['image'], train=False, mutable=False)
   metrics = compute_metrics(logits, batch['label'], batch['label_one_hot'])
   metrics['test_acc1'] = metrics.pop('accuracy') * 100  # rename
+  metrics['perf/test_acc1'] = metrics['test_acc1']  # for comparing with pytorch
   metrics['test_loss'] = metrics.pop('loss')  # rename
 
   if ema_eval:
@@ -341,7 +342,7 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
   if config.learning_rate_decay < 1.:
     lrd_func = lrd_util.lrd_func(config.model.transformer.num_layers, config.learning_rate_decay)
     lrd = lrd_util.filter_parameters(params, lrd_func)
-    logging.info('Apply lrd: {}'.format(lrd))  
+    logging.info('Apply lrd: {}'.format(lrd))
     tx = optax._src.combine.chain(tx, lrd_util.scale_by_lrd(lrd))
 
   tx = optax.GradientTransformation(init=jax.jit(tx.init, backend=config.init_backend), update=tx.update)  # put to cpu
