@@ -1,5 +1,5 @@
-# VM_NAME=kmh-tpuvm-v3-128-2
-VM_NAME=kmh-tpuvm-v3-256-4
+VM_NAME=kmh-tpuvm-v3-128-1
+# VM_NAME=kmh-tpuvm-v3-256-4
 echo $VM_NAME
 REPO=https://71d519550fe3430ecbf39b70467e9210aed5da69:@github.com/KaimingHe/flax_dev.git
 BRANCH=main
@@ -7,8 +7,8 @@ BRANCH=main
 # salt=`head /dev/urandom | tr -dc a-z0-9 | head -c8`
 
 ep=100
-batch=4096
-
+batch=1024
+lr=1e-3
 
 CONFIG=cfg_vit_base
 
@@ -16,8 +16,8 @@ source scripts/select_chkpt_base.sh
 
 name=`basename ${PRETRAIN_DIR}`
 
-# pytorch_recipe: _autoaug_lb0.1_cropv4_exwd_initv2_rsinit_dp0.1_cutmixup_minlr
-JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_pytorch_recipe_b${batch}
+# pytorch_recipe (pyre): _autoaug_lb0.1_cropv4_exwd_initv2_rsinit_dp0.1_cutmixup_minlr
+JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_pyre_b${batch}_lr${lr}
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
 LOGDIR=/home/${USER}/logs/${JOBNAME}
@@ -49,6 +49,7 @@ python3 main.py \
     --workdir=$WORKDIR \
     --config=configs/$CONFIG.py \
     --config.batch_size=${batch} \
+    --config.learning_rate=${lr} \
     --config.log_every_steps=100 \
     --config.num_epochs=${ep} \
     --config.ema=True \
