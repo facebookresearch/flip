@@ -281,7 +281,7 @@ class VisionTransformer(nn.Module):
     x = jnp.reshape(x, [n, h * w, c])
 
     # If we want to add a class token, add it here.
-    if self.classifier == 'token':
+    if self.classifier in {'token', 'token_gap'}:
       cls = self.param('cls', clstoken_init, (1, 1, c))
       cls = jnp.tile(cls, [n, 1, 1])
       x = jnp.concatenate([cls, x], axis=1)
@@ -293,7 +293,8 @@ class VisionTransformer(nn.Module):
 
     if self.classifier == 'token':
       x = x[:, 0]
-    elif self.classifier == 'gap':
+    elif self.classifier == 'token_gap':
+      x = x[:, 1:]
       x = jnp.mean(x, axis=list(range(1, x.ndim - 1)))  # (1,) or (1,2)
       x = nn.LayerNorm(name='fc_norm')(x)
     else:

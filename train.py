@@ -76,7 +76,7 @@ def create_model(*, model_cls, half_precision, **kwargs):
 
 
 def initialized(key, image_size, model, init_backend='tpu'):
-  input_shape = (1, image_size, image_size, 3)
+  input_shape = (2, image_size, image_size, 3)
   def init(*args):
     return model.init(*args, train=False)
   init = jax.jit(init, backend=init_backend)

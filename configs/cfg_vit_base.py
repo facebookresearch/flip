@@ -48,6 +48,6 @@ def get_config():
   # finetune
   config.num_epochs = 100.0
   config.learning_rate_decay = 0.65
-  config.classifier = 'gap'  # 'token'
+  config.classifier = 'token_gap'  # 'token', 'token_gap'
 
   return config
