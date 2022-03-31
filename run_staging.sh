@@ -9,6 +9,7 @@ BRANCH=main
 ep=100
 batch=1024
 lr=1e-3
+lrd=0.65
 
 CONFIG=cfg_vit_base
 
@@ -17,7 +18,7 @@ source scripts/select_chkpt_base.sh
 name=`basename ${PRETRAIN_DIR}`
 
 # pytorch_recipe (pyre): _autoaug_lb0.1_cropv4_exwd_initv2_rsinit_dp0.1_cutmixup_minlr
-JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_pyre_b${batch}_lr${lr}
+JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_pyre_b${batch}_lr${lr}_lrd${lrd}
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
 LOGDIR=/home/${USER}/logs/${JOBNAME}
@@ -50,6 +51,7 @@ python3 main.py \
     --config=configs/$CONFIG.py \
     --config.batch_size=${batch} \
     --config.learning_rate=${lr} \
+    --config.learning_rate_decay=${lrd} \
     --config.log_every_steps=100 \
     --config.num_epochs=${ep} \
     --config.ema=True \

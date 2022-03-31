@@ -334,17 +334,18 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
     mask = None
   # logging.info('Apply weight decay: {}'.format(mask))
 
-  if config.learning_rate_decay < 1.:
-    from IPython import embed; embed();
-    if (0 == 0): raise NotImplementedError
-    from utils import lrd_util
-    lrd_func = lrd_util.layerwise_lr_decay(config.model.transformer.num_layers, config.learning_rate_decay)
-    lrd_util.filter_parameters(params, lrd_func)
-
   # tx = getattr(optax, config.opt_type)  # optax.adamw
   tx = getattr(adamw_util, config.opt_type)  # optax.adamw
   tx = tx(learning_rate=learning_rate_fn, **config.opt, mask=mask, mu_dtype=getattr(jnp, config.opt_mu_dtype))
+
+  if config.learning_rate_decay < 1.:
+    lrd_func = lrd_util.lrd_func(config.model.transformer.num_layers, config.learning_rate_decay)
+    lrd = lrd_util.filter_parameters(params, lrd_func)
+    logging.info('Apply lrd: {}'.format(lrd))  
+    tx = optax._src.combine.chain(tx, lrd_util.scale_by_lrd(lrd))
+
   tx = optax.GradientTransformation(init=jax.jit(tx.init, backend=config.init_backend), update=tx.update)  # put to cpu
+
   if config.ema:
     ema_tx = optax.ema(decay=config.ema_decay, debias=False)
     ema_state = ema_tx.init(flax.core.frozen_dict.FrozenDict({'params': params, **variables_states}))

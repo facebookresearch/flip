@@ -3,18 +3,22 @@ from typing import Tuple, Any
 import functools
 import tree as nest
 
+import jax
 import jax.numpy as jnp
 
+from optax._src import base
+from optax._src import transform
+
 
 # ---------------------------------------------------------
-# rescale layers
+# rescale lr
 # ---------------------------------------------------------
-def layerwise_lr_decay(num_layers: int, lr_decay: float):
+def lrd_func(num_layers: int, lr_decay: float):
     """Get the lrd function."""
-    return functools.partial(_compute_layerwise_lr_decay, num_layers=num_layers, lr_decay=lr_decay)
+    return functools.partial(_layerwise_lr_decay, num_layers=num_layers, lr_decay=lr_decay)
 
 
-def _compute_layerwise_lr_decay(
+def _layerwise_lr_decay(
         path: Tuple[Any], val: jnp.ndarray,
         num_layers: int, lr_decay: float):
     """Get the layerwise lr decay rate based on name."""
@@ -29,7 +33,7 @@ def _compute_layerwise_lr_decay(
         layer_idx = 0
     elif layer_name.startswith('posembed_'):  # position embedding
         layer_idx = 0
-    elif layer_name.startswith('cls.'):  # cls token
+    elif layer_name.startswith('cls'):  # cls token
         layer_idx = 0
     elif layer_name.startswith('Transformer.encoder_norm.'):  # last norm
         layer_idx = num_layers  # the last layer
@@ -37,6 +41,7 @@ def _compute_layerwise_lr_decay(
         layer_idx = num_layers  # the last layer
     else:
         raise NotImplementedError('lrd not defined: {}'.format(layer_name))
+
     layer_lrd = lr_decay ** (num_layers - layer_idx)
     return layer_lrd
 
@@ -48,3 +53,21 @@ def filter_parameters(params, filter_fn):
     """Filter the params based on filter_fn."""
     params_to_filter = nest.map_structure_with_path(filter_fn, params)
     return params_to_filter
+
+
+# ---------------------------------------------------------
+# the entrance function:
+# ---------------------------------------------------------
+def scale_by_lrd(
+    lrd: Any
+) -> base.GradientTransformation:
+
+  def init_fn(_):
+    return transform.ScaleState()
+
+  def update_fn(updates, state, params=None):
+    del params
+    updates = jax.tree_multimap(lambda s, g: s * g, lrd, updates)
+    return updates, state
+
+  return base.GradientTransformation(init_fn, update_fn)
