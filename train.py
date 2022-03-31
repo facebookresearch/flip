@@ -50,6 +50,7 @@ from utils import summary_util as summary_util  # must be after 'from clu import
 from utils import opt_util
 from utils import mix_util
 from utils import checkpoint_util
+from utils import lrd_util
 
 
 import jax.profiler
@@ -332,6 +333,13 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
   else:
     mask = None
   # logging.info('Apply weight decay: {}'.format(mask))
+
+  if config.learning_rate_decay < 1.:
+    from IPython import embed; embed();
+    if (0 == 0): raise NotImplementedError
+    from utils import lrd_util
+    lrd_func = lrd_util.layerwise_lr_decay(config.model.transformer.num_layers, config.learning_rate_decay)
+    lrd_util.filter_parameters(params, lrd_func)
 
   # tx = getattr(optax, config.opt_type)  # optax.adamw
   tx = getattr(adamw_util, config.opt_type)  # optax.adamw

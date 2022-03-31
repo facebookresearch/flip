@@ -45,6 +45,8 @@ def get_config():
   config.warmup_epochs = 5.0
   config.min_abs_lr = 1e-6  # this is abs lr
 
+  config.learning_rate_decay = 0.75  # lrd
+
   config.num_epochs = 100.0
   config.log_every_steps = 100
   config.save_every_epochs = 10
