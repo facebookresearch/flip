@@ -41,8 +41,8 @@ def get_config():
   # `name` argument of tensorflow_datasets.builder()
   config.dataset = 'imagenet2012:5.*.*'
 
-  config.learning_rate = 1e-4  # this is the base lr
-  config.warmup_epochs = 20.0
+  config.learning_rate = 1e-3  # this is the base lr
+  config.warmup_epochs = 5.0
   config.min_abs_lr = 1e-6  # this is abs lr
 
   config.num_epochs = 100.0
@@ -56,7 +56,7 @@ def get_config():
 
   # Consider setting the batch size to max(tpu_chips * 256, 8 * 1024) if you
   # train on a larger pod slice.
-  config.batch_size = 1024
+  config.batch_size = 4096
   config.cache = True
   config.half_precision = False  # kaiming: TODO, support it
 
@@ -70,15 +70,15 @@ def get_config():
   config.opt = ml_collections.ConfigDict()
   config.opt.b1 = 0.9
   config.opt.b2 = 0.95
-  config.opt.weight_decay = 0.3
+  config.opt.weight_decay = 0.05
   
   config.opt_mu_dtype = 'float32'
 
   config.exclude_wd = True  # exclude some weight decays (bias, norm, cls, posembed)
 
-  config.ema = True
+  config.ema = False
   config.ema_decay = 0.9999
-  config.ema_eval = True
+  config.ema_eval = False
 
   # aug config
   config.aug = ml_collections.ConfigDict()
@@ -106,7 +106,7 @@ def get_config():
   config.aug.mix.switch_elementwise = False  # element-wise switch between mixup/cutmix
 
   # init config
-  config.rescale_init = True  # rescale initialized weights by layer id
+  config.rescale_init = False  # rescale initialized weights by layer id
 
   # memory
   config.profile_memory = False

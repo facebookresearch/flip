@@ -30,12 +30,12 @@
 import ml_collections
 
 import configs.vit as vit
-import configs.cfg_common as cfg_common
+import configs.cfg_common_ft as cfg_common_ft
 
 
 def get_config():
   """Get the hyperparameter configuration to train on TPUs."""
-  config = cfg_common.get_config()
+  config = cfg_common_ft.get_config()
 
   # model config
   config.model = vit.get_h14_config()  # ViT-H/14
