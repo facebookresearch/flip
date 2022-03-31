@@ -221,11 +221,12 @@ class Encoder(nn.Module):
     """
     assert inputs.ndim == 3  # (batch, len, emb)
 
-    x = AddPositionEmbs(
-        posemb_init=posemb_init,  # from BERT.
-        name='posembed_input')(
-            inputs)
-    x = nn.Dropout(rate=self.dropout_rate)(x, deterministic=not train)
+    x = inputs
+    # x = AddPositionEmbs(
+    #     posemb_init=posemb_init,  # from BERT.
+    #     name='posembed_input')(
+    #         inputs)
+    # x = nn.Dropout(rate=self.dropout_rate)(x, deterministic=not train)
 
     # Input Encoder
     for lyr in range(self.num_layers):
@@ -284,6 +285,9 @@ class VisionTransformer(nn.Module):
       cls = self.param('cls', clstoken_init, (1, 1, c))
       cls = jnp.tile(cls, [n, 1, 1])
       x = jnp.concatenate([cls, x], axis=1)
+
+    # we add posemb here
+    x = AddPositionEmbs(posemb_init=posemb_init, name='posembed_encoder')(x)
 
     x = Encoder(name='Transformer', **self.transformer)(x, train=train)
 

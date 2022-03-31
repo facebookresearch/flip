@@ -113,4 +113,7 @@ def get_config():
   config.donate = False
   config.init_backend = 'tpu'
 
+  # utils
+  config.pretrain_dir = ''
+
   return config
