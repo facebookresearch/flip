@@ -19,7 +19,7 @@ The data is loaded using tensorflow_datasets.
 """
 
 import functools
-import time
+import time, datetime
 from typing import Any
 
 from absl import logging
@@ -487,6 +487,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
       h(step)
     if step == step_offset:
       logging.info('Initial compilation completed.')
+      start_time = time.time()  # log the time after compilation
 
     epoch_1000x = int(step * config.batch_size / 1281167 * 1000)  # normalize to IN1K epoch anyway
 
@@ -543,6 +544,10 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   # Wait until computations are done before exiting
   jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
+
+  total_time = time.time() - start_time
+  total_time_str = str(datetime.timedelta(seconds=int(total_time)))
+  logging.info('Elapsed time: {}'.format(total_time_str))
 
   if config.profile_memory:
     profile_memory(workdir)
