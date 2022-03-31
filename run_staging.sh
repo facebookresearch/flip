@@ -10,6 +10,7 @@ ep=100
 batch=1024
 lr=0.5e-3
 lrd=0.65
+cls='tgap'
 
 CONFIG=cfg_vit_base
 
@@ -18,7 +19,7 @@ source scripts/select_chkpt_base.sh
 name=`basename ${PRETRAIN_DIR}`
 
 # pytorch_recipe (pyre): _autoaug_lb0.1_cropv4_exwd_initv2_rsinit_dp0.1_cutmixup_minlr
-JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_pyre_b${batch}_lr${lr}_lrd${lrd}_perf
+JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_pyre_b${batch}_lr${lr}_lrd${lrd}_${cls}
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
 LOGDIR=/home/${USER}/logs/${JOBNAME}
@@ -59,6 +60,7 @@ python3 main.py \
     --config.profile_memory=True \
     --config.donate=True \
     --config.init_backend=tpu \
+    --config.model.classifier=${cls} \
     --config.pretrain_dir=${PRETRAIN_DIR} \
 " 2>&1 | tee $LOGDIR/finetune.log
 
