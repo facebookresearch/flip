@@ -16,6 +16,8 @@ python3 main.py \
     --config.donate=True \
     --config.pretrain_dir='gs://kmh-gcp/checkpoints/flax/20220331_030004_kmh-tpuvm-v3-128-2_cfg_mae_base_800ep_maeDBG_batch4096_vmap_normpix_sincos_initmaev1'
 
+    # --config.model.classifier='gap' \
+
     # --config.model.transformer.num_layers=12 \
     # --config.model.hidden_size=768 \
 

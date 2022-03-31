@@ -30,15 +30,17 @@ def _layerwise_lr_decay(
         layer_idx = path[1][len('encoderblock_'):]  # e.g., '01'
         layer_idx = int(layer_idx)
     elif layer_name.startswith('embedding.'):  # patch embedding
-        layer_idx = 0
+        layer_idx = -1  # -1: layer before the zero-th block
     elif layer_name.startswith('posembed_'):  # position embedding
-        layer_idx = 0
+        layer_idx = -1
     elif layer_name.startswith('cls'):  # cls token
-        layer_idx = 0
+        layer_idx = -1
     elif layer_name.startswith('Transformer.encoder_norm.'):  # last norm
-        layer_idx = num_layers  # the last layer
-    elif layer_name.startswith('head.'):  # head
-        layer_idx = num_layers  # the last layer
+        layer_idx = num_layers
+    elif layer_name.startswith('fc_norm.'):
+        layer_idx = num_layers
+    elif layer_name.startswith('head.'):
+        layer_idx = num_layers
     else:
         raise NotImplementedError('lrd not defined: {}'.format(layer_name))
 
