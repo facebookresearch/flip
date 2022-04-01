@@ -43,6 +43,11 @@ def get_config():
   config.model.transformer.droppath_rate = 0.2
 
   # opt config
-  config.opt_mu_dtype = 'bfloat16'  # bfloat16, float32
+  config.opt_mu_dtype = 'float32'  # bfloat16, float32
+
+  # finetune
+  config.num_epochs = 50.0
+  config.learning_rate_decay = 0.75
+  config.classifier = 'token'  # 'token', 'tgap' (token + gap)
 
   return config
