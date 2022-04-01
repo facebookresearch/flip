@@ -1,18 +1,18 @@
-VM_NAME=kmh-tpuvm-v3-128-1
-# VM_NAME=kmh-tpuvm-v3-256-3
+# VM_NAME=kmh-tpuvm-v3-128-1
+VM_NAME=kmh-tpuvm-v3-256-3
 echo $VM_NAME
 REPO=https://71d519550fe3430ecbf39b70467e9210aed5da69:@github.com/KaimingHe/flax_dev.git
 BRANCH=main
 
 # salt=`head /dev/urandom | tr -dc a-z0-9 | head -c8`
 
-ep=100
 batch=1024
 lr=1e-3
-lrd=0.65
+lrd=0.75
+ep=50
 cls='tgap'
 
-vitsize=base
+vitsize=large
 CONFIG=cfg_vit_${vitsize}
 source scripts/select_chkpt_${vitsize}.sh
 
