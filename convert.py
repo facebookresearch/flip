@@ -94,9 +94,9 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   state = convert_util.convert_from_pytorch(state, config.pretrain_dir)
 
   output_dir = os.path.dirname(config.pretrain_dir)
-  output_dir = output_dir + '_converted'
+  output_dir = output_dir + '_convert_pt2jax'
   
-  checkpoints.save_checkpoint(output_dir, state, step=0, prefix='convert_pt2jax_', overwrite=True)
+  checkpoints.save_checkpoint(output_dir, state, step=0, overwrite=False)
 
   # Wait until computations are done before exiting
   jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()

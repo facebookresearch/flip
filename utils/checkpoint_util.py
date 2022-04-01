@@ -11,8 +11,9 @@ def load_from_pretrain(state, pretrain_dir):
   state_load = checkpoints.restore_checkpoint(pretrain_dir, target=None)
   params_load = flax.core.freeze(state_load.pop('params'))  # match the type of state.params
 
-  variables_load = state_load.pop('variables')
-  assert variables_load == {}  # no state variables in ViT (no BatchNorm)
+  if 'variables' in state_load.keys():
+    variables_load = state_load.pop('variables')
+    assert variables_load == {}  # no state variables in ViT (no BatchNorm)
 
   del state_load
 
