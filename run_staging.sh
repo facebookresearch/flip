@@ -1,25 +1,25 @@
-# VM_NAME=kmh-tpuvm-v3-128-1
-VM_NAME=kmh-tpuvm-v3-256-3
+VM_NAME=kmh-tpuvm-v3-128-1
+# VM_NAME=kmh-tpuvm-v3-256-3
 echo $VM_NAME
 REPO=https://71d519550fe3430ecbf39b70467e9210aed5da69:@github.com/KaimingHe/flax_dev.git
 BRANCH=main
 
 # salt=`head /dev/urandom | tr -dc a-z0-9 | head -c8`
 
-ep=50
+ep=100
 batch=1024
 lr=1e-3
-lrd=0.75
+lrd=0.65
 cls='tgap'
 
-vitsize=large
+vitsize=base
 CONFIG=cfg_vit_${vitsize}
 source scripts/select_chkpt_${vitsize}.sh
 
 name=`basename ${PRETRAIN_DIR}`
 
 # pytorch_recipe (pyre): _autoaug_lb0.1_cropv4_exwd_initv2_rsinit_dp0.1_cutmixup_minlr
-JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_pyre_b${batch}_lr${lr}_lrd${lrd}_${cls}_headinit
+JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_pyre_b${batch}_lr${lr}_lrd${lrd}_${cls}_headinit_b0.999
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
 LOGDIR=/home/${USER}/logs/${JOBNAME}

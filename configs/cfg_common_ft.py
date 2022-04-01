@@ -71,7 +71,7 @@ def get_config():
   config.opt_type = 'adamw'
   config.opt = ml_collections.ConfigDict()
   config.opt.b1 = 0.9
-  config.opt.b2 = 0.95
+  config.opt.b2 = 0.999
   config.opt.weight_decay = 0.05
   
   config.opt_mu_dtype = 'float32'
