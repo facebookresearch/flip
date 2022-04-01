@@ -48,7 +48,8 @@ elif INIT_VER == 'v2':
   msa_kernel_init = fixed_gaussian_init
   mlp_kernel_init = fixed_gaussian_init
   mlp_bias_init = nn.initializers.zeros
-  head_kernel_init = nn.initializers.normal(stddev=2e-5)
+  # head_kernel_init = nn.initializers.normal(stddev=2e-5)
+  head_kernel_init = fixed_gaussian_init
 else:
   raise NotImplementedError
 
