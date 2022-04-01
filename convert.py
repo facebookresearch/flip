@@ -75,7 +75,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     Final TrainState.
   """
   start_time = time.time()
-  assert config.pretrain_dir is not ''
+  assert config.pretrain_dir != ''
 
   writer = metric_writers.create_default_writer(
       logdir=workdir, just_logging=jax.process_index() != 0)
@@ -94,7 +94,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   state = convert_util.convert_from_pytorch(state, config.pretrain_dir)
 
   output_dir = os.path.dirname(config.pretrain_dir)
-  output_dir = os.path.join(output_dir, 'convert')
+  output_dir = output_dir + '_converted'
   
   checkpoints.save_checkpoint(output_dir, state, step=0, prefix='convert_pt2jax_', overwrite=True)
 

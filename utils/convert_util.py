@@ -38,7 +38,7 @@ def convert_from_pytorch(state, pretrain_dir):
 
   converted_params_list = []
   for name in names_list:
-    converted_params_list.append(converted_named_params[name])
+    converted_params_list.append(jnp.asarray(converted_named_params[name]))
 
   converted_params = tu.tree_unflatten(params_tree, converted_params_list)
   converted_params = flax.core.frozen_dict.freeze(converted_params)
