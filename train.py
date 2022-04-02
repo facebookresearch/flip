@@ -342,7 +342,7 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
   if config.learning_rate_decay < 1.:
     lrd_func = lrd_util.lrd_func(config.model.transformer.num_layers, config.learning_rate_decay)
     lrd = lrd_util.filter_parameters(params, lrd_func)
-    logging.info('Apply lrd: {}'.format(lrd))
+    # logging.info('Apply lrd: {}'.format(lrd))
     tx = optax._src.combine.chain(tx, lrd_util.scale_by_lrd(lrd))
 
   tx = optax.GradientTransformation(init=jax.jit(tx.init, backend=config.init_backend), update=tx.update)  # put to cpu
