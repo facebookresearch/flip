@@ -1,5 +1,5 @@
-VM_NAME=kmh-tpuvm-v3-128-2
-# VM_NAME=kmh-tpuvm-v3-256-4
+# VM_NAME=kmh-tpuvm-v3-128-2
+VM_NAME=kmh-tpuvm-v3-256-4
 echo $VM_NAME
 REPO=https://71d519550fe3430ecbf39b70467e9210aed5da69:@github.com/KaimingHe/flax_dev.git
 BRANCH=main
@@ -44,8 +44,6 @@ git pull
 git rev-parse --short HEAD
 
 # pip3 list | grep 'jax\|flax\|tensorflow '
-
-sleep 20m
 
 cd ~/flax_dev
 export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets
