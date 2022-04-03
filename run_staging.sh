@@ -45,6 +45,8 @@ git rev-parse --short HEAD
 
 # pip3 list | grep 'jax\|flax\|tensorflow '
 
+sleep 20m
+
 cd ~/flax_dev
 export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets
 python3 main.py \
