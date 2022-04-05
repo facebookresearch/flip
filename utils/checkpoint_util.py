@@ -13,7 +13,8 @@ def load_from_pretrain(state, pretrain_dir):
 
   if 'variables' in state_load.keys():
     variables_load = state_load.pop('variables')
-    assert variables_load == {}  # no state variables in ViT (no BatchNorm)
+    logging.info('Variables (not used): {}'.format(variables_load.keys()))
+    # assert variables_load == {}  # no state variables in ViT (no BatchNorm)
 
   del state_load
 
