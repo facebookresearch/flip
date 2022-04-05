@@ -37,7 +37,7 @@ def create_model(*, model_cls, half_precision, **kwargs):
 
 
 def initialized(key, image_size, model, init_backend='tpu'):
-  input_shape = (2, image_size, image_size, 3)
+  input_shape = (1, image_size, image_size, 3)
   def init(*args):
     return model.init(*args, train=False)
   init = jax.jit(init, backend=init_backend)
@@ -63,8 +63,7 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
   return state
 
 
-def train_and_evaluate(config: ml_collections.ConfigDict,
-                       workdir: str) -> TrainState:
+def convert_model(config: ml_collections.ConfigDict, workdir: str, mode: str) -> TrainState:
   """Execute model training and evaluation loop.
 
   Args:
@@ -90,13 +89,12 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   logging.info('Creating TrainState:')
   state = create_train_state(rng, config, model, image_size)
 
-  logging.info('Converting from PyTorch checkpoints:')
-  state = convert_util.convert_from_pytorch(state, config.pretrain_dir)
-
-  output_dir = os.path.dirname(config.pretrain_dir)
-  output_dir = output_dir + '_convert_pt2jax'
-  
-  checkpoints.save_checkpoint(output_dir, state, step=0, overwrite=False)
+  if mode == 'p2j':
+    logging.info('Converting from PyTorch checkpoints to JAX:')
+    convert_util.convert_from_pytorch(state, config.pretrain_dir)
+  elif mode == 'j2p':
+    logging.info('Converting from JAX checkpoints to PyTorch:')
+    convert_util.convert_to_pytorch(state, config.pretrain_dir)
 
   # Wait until computations are done before exiting
   jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()

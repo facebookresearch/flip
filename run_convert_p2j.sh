@@ -13,8 +13,8 @@ GCP_CHKPT_DIR=gs://kmh-gcp/from_pytorch$CHKPT_DIR
 rm -rf tmp
 
 # 4096 / 256 tpus = 128 / 8 tpus  
-export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets
 python3 main_convert.py \
+    --mode='p2j' \
     --workdir=./tmp \
     --config=configs/${CONFIG}.py \
     --config.batch_size=128 \

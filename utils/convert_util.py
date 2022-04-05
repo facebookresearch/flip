@@ -9,11 +9,53 @@ import jax
 import flax
 from flax.training import checkpoints
 import jax.numpy as jnp
+import numpy as np
 
 import jax.tree_util as tu
 
 import torch
 import os
+
+from utils import checkpoint_util
+
+
+def convert_to_pytorch(state, pretrain_dir):
+  state = checkpoint_util.load_from_pretrain(state, pretrain_dir)  # restore from JAX checkpoint
+  state_params = flax.core.frozen_dict.unfreeze(state.params)
+  state_params.pop('head')  # remove head
+  state_params = flax.core.frozen_dict.freeze(state_params)
+
+  # create a list of named params
+  names = filter_parameters(state_params, get_name)
+  params_list, params_tree = tu.tree_flatten(state_params)
+  names_list, names_tree = tu.tree_flatten(names)
+  named_params = dict((x, y) for x, y in zip(names_list, params_list))
+
+  pytorch_model_dir='gs://kmh-gcp/from_pytorch/template_pretrained_lastnorm_tf2pt.large.pth'  # this is a template
+  os.system('gsutil cp {} ./tmp/.'.format(pytorch_model_dir))
+
+  checkpoint = torch.load(os.path.join('./tmp', os.path.basename(pytorch_model_dir)), map_location='cpu')
+  checkpoint = checkpoint['model']
+  checkpoint_revised = revise_split_qkv(checkpoint)  # split qkv to match the JAX format
+
+  converted_checkpoint = convert_names_and_shapes_j2p(checkpoint_revised, named_params)
+  converted_checkpoint = revise_merge_qkv(converted_checkpoint)
+
+  new_keys = set(converted_checkpoint.keys()) - set(checkpoint.keys())
+  logging.info('New keys: {}'.format(str(new_keys)))
+  missing_keys = set(checkpoint.keys()) - set(converted_checkpoint.keys())
+  logging.info('Missing keys: {}'.format(str(missing_keys)))
+
+  # save file
+  basename = os.path.basename(pretrain_dir)
+  torch.save(converted_checkpoint, './tmp/converted_jax2pt.pth')
+  output_dir = os.path.join('gs://kmh-gcp/to_pytorch', basename, 'converted_jax2pt.pth')
+  cmd = 'gsutil cp ./tmp/converted_jax2pt.pth {}'.format(output_dir)
+  os.system(cmd)
+
+  final_dir = os.path.join('/checkpoint/kaiminghe/converted', basename, 'converted_jax2pt.pth')
+  logging.info('Copy this and run in devfair:')
+  print('gsutil cp {} {}'.format(output_dir, final_dir))
 
 
 def convert_from_pytorch(state, pretrain_dir):
@@ -21,20 +63,19 @@ def convert_from_pytorch(state, pretrain_dir):
   state_params.pop('head')  # remove head
   state_params = flax.core.frozen_dict.freeze(state_params)
 
+  # create a list of named params
   names = filter_parameters(state_params, get_name)
-
   params_list, params_tree = tu.tree_flatten(state_params)
   names_list, names_tree = tu.tree_flatten(names)
   named_params = dict((x, y) for x, y in zip(names_list, params_list))
 
   os.system('gsutil cp {} ./tmp/.'.format(pretrain_dir))
-  os.path.join('./tmp', os.path.basename(pretrain_dir))
 
   checkpoint = torch.load(os.path.join('./tmp', os.path.basename(pretrain_dir)), map_location='cpu')
   checkpoint = checkpoint['model']
-  checkpoint = revise_qkv(checkpoint)
+  checkpoint = revise_split_qkv(checkpoint)  # split qkv to match the JAX format
 
-  converted_named_params = convert_names_and_shapes(checkpoint, named_params)
+  converted_named_params = convert_names_and_shapes_p2j(checkpoint, named_params)
 
   converted_params_list = []
   for name in names_list:
@@ -49,10 +90,17 @@ def convert_from_pytorch(state, pretrain_dir):
   verify = tu.tree_leaves(verify)
   assert jnp.all(jnp.array(verify)).item()
 
-  return state.replace(params=converted_params)
+  state = state.replace(params=converted_params)
+
+  # save file
+  output_dir = os.path.dirname(pretrain_dir)
+  output_dir = output_dir + '_convert_pt2jax'
+  checkpoints.save_checkpoint(output_dir, state, step=0, overwrite=False)
+
+  return
   
 
-def convert_names_and_shapes(checkpoint, named_params):
+def convert_names_and_shapes_p2j(checkpoint, named_params):
   converted_named_params = {}
   for name_pt in checkpoint:
     p_pt = checkpoint[name_pt].clone()
@@ -92,7 +140,68 @@ def convert_names_and_shapes(checkpoint, named_params):
   return converted_named_params
 
 
-def revise_qkv(checkpoint):
+def convert_names_and_shapes_j2p(checkpoint, named_params):
+  converted_checkpoint = {}
+  for name_pt in checkpoint:
+    p_pt = checkpoint[name_pt].clone()
+    shape_pt = tuple(p_pt.shape)
+
+    name_jx = convert_name(name_pt)
+    if name_jx in named_params:
+      p_jx = named_params[name_jx]
+      shape_jx = tuple(p_jx.shape)
+      if len(shape_pt) == 1 and len(shape_jx) == 1:  # 1-d tensors
+          assert shape_pt == shape_jx
+      elif len(shape_pt) == 4 and len(shape_jx) == 4:  # patch_embed
+          p_jx = jnp.einsum('hwcn->nchw', p_jx)
+          assert tuple(p_jx.shape) == shape_pt
+      elif len(shape_pt) == 3 and len(shape_jx) == 3:  # pos_embed
+          assert shape_pt == shape_jx
+      elif len(shape_pt) == 2 and len(shape_jx) == 2:  # mlp
+          p_jx = jnp.einsum('cn->nc', p_jx)
+          assert tuple(p_jx.shape) == shape_pt
+      elif len(shape_pt) == 2 and len(shape_jx) == 3 and '.out.kernel' in name_jx:  # msa, out.kernel
+          assert shape_jx[-1] == p_pt.shape[0]
+          p_jx = jnp.reshape(p_jx, [-1, p_jx.shape[-1]])
+          p_jx = jnp.einsum('cn->nc', p_jx)
+      elif len(shape_pt) == 2 and len(shape_jx) == 3 and '.out.kernel' not in name_jx:  # msa, q, k, v
+          assert shape_jx[0] == p_pt.shape[-1]
+          p_jx = jnp.reshape(p_jx, [p_jx.shape[0], -1,])
+          p_jx = jnp.einsum('cn->nc', p_jx)
+      elif len(shape_pt) == 1 and len(shape_jx) == 2:  # q, k, v bias
+          p_jx = jnp.reshape(p_jx, shape_pt)
+
+      # now, p_pt is the expected tensor
+      assert tuple(shape_pt) == p_jx.shape
+      print('{:32s}:{:20s} <= {:80s}:{:20s}'.format(name_pt, str(shape_pt), name_jx, str(shape_jx)))
+      converted_checkpoint[name_pt] = torch.tensor(np.array(p_jx))
+    else:
+      print(colored('Not converted: {} => {}'.format(name_pt, name_jx), 'red'))
+
+  return converted_checkpoint
+
+
+def revise_merge_qkv(checkpoint):
+  # handle q, k, v
+  checkpoint_revised = {}
+  for name_pt in checkpoint:
+    p = checkpoint[name_pt]
+    if 'attn.q.weight' in name_pt:
+      q = checkpoint[name_pt]
+      k = checkpoint[name_pt.replace('.q.weight', '.k.weight')]
+      v = checkpoint[name_pt.replace('.q.weight', '.v.weight')]
+      qkv = torch.concat([q, k, v], dim=0)
+      checkpoint_revised[name_pt.replace('.q.weight', '.qkv.weight')] = qkv
+    elif 'attn.k.weight' in name_pt or 'attn.v.weight' in name_pt:
+      pass      
+    else:
+      checkpoint_revised[name_pt] = p
+
+  del checkpoint
+  return checkpoint_revised
+
+
+def revise_split_qkv(checkpoint):
   # handle q, k, v
   checkpoint_revised = {}
   for name_pt in checkpoint:
@@ -106,6 +215,7 @@ def revise_qkv(checkpoint):
       checkpoint_revised[name_pt] = p
 
     if 'attn.q_bias' in name_pt:  # add k_bias
+      assert name_pt.replace('.q_bias', '.k_bias') not in checkpoint
       checkpoint_revised[name_pt.replace('.q_bias', '.k_bias')] = torch.zeros_like(p)
 
   del checkpoint

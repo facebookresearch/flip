@@ -28,10 +28,12 @@ import tensorflow as tf
 
 import convert
 
+
 from utils import logging_util
 
 FLAGS = flags.FLAGS
 
+flags.DEFINE_enum('mode', 'p2j', ['p2j', 'j2p'], help='Conversion mode.')
 flags.DEFINE_string('workdir', None, 'Directory to store model data.')
 config_flags.DEFINE_config_file(
     'config',
@@ -63,12 +65,12 @@ def main(argv):
   if jax.local_devices()[0].platform != 'tpu':
     logging.error('Not using TPU. Exit.')
     exit()
-  convert.train_and_evaluate(FLAGS.config, FLAGS.workdir)
+  convert.convert_model(FLAGS.config, FLAGS.workdir, FLAGS.mode)
 
 
 if __name__ == '__main__':
   if not (jax.process_index() == 0):  # not first process
     logging.set_verbosity(logging.ERROR)  # disable info/warning
   logging_util.set_time_logging(logging)
-  flags.mark_flags_as_required(['config', 'workdir'])
+  flags.mark_flags_as_required(['config', 'workdir', 'mode'])
   app.run(main)

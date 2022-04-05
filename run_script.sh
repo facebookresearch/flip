@@ -20,4 +20,4 @@ rm -rf tmp
     # --config.model.transformer.num_layers=2 \
 
 
-source run_convert.sh
+source run_convert_j2p.sh
