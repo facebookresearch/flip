@@ -322,8 +322,13 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
     rescales = opt_util.filter_parameters(params, opt_util.layer_rescale)
     params = jax.tree_util.tree_multimap(lambda x, y: x * y, rescales, params)
 
+  if config.rescale_head_init != 1.:
+    params = flax.core.frozen_dict.unfreeze(params)
+    params['head']['kernel'] *= config.rescale_head_init
+    params = flax.core.frozen_dict.freeze(params)
+
   stds = jax.tree_util.tree_map(lambda x: np.array(x).std(), params)
-  # logging.info('std: {}'.format(stds))
+  logging.info('std: {}'.format(stds))
 
   # optional: exclude some wd
   if config.exclude_wd:
