@@ -50,7 +50,6 @@ def _apply_random_erase(image):
 
   # generate the noise
   noise = tf.random.normal([H, W, C], dtype=tf.float32)
-  noise = noise * 100000
 
   # mix with the mask
   image = image * (1 - mask) + noise * mask
