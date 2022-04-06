@@ -94,7 +94,7 @@ def _get_random_region(img_shape, area_range, aspect_ratio_range):
 
 def _get_mask(img_size, region):
   H, W = img_size 
-  offset_h, offset_w, h, w = region
+  offset_h, offset_w, h, w = region[0], region[1], region[2], region[3]
   mask_h = tf.range(H)
   mask_w = tf.range(W)
   mask_h = tf.math.logical_and((mask_h >= offset_h), (mask_h < offset_h + h))
