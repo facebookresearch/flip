@@ -24,6 +24,7 @@ from utils.transform_util import \
   _decode_and_center_crop, normalize_image, color_jitter
 
 from utils.autoaug_util import distort_image_with_autoaugment, distort_image_with_randaugment
+from utils.randerase_util import random_erase
 
 from absl import logging
 from PIL import Image
@@ -107,6 +108,11 @@ def preprocess_for_train(image_bytes, dtype=tf.float32, image_size=IMAGE_SIZE, a
     raise NotImplementedError
 
   image = normalize_image(image)
+
+  # rand erase is after normalize
+  if aug.randerase.on:
+    image = random_erase(image, erase_prob=aug.randerase.prob)
+
   image = tf.image.convert_image_dtype(image, dtype=dtype)
   return image
 

@@ -107,6 +107,11 @@ def get_config():
 
   config.aug.mix.switch_elementwise = False  # element-wise switch between mixup/cutmix
 
+  # rand erase config
+  config.aug.randerase = ml_collections.ConfigDict()
+  config.aug.randerase.on = False
+  config.aug.randerase.prob = 0.25
+
   # init config
   config.rescale_init = False  # rescale initialized weights by layer id
 
