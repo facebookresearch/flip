@@ -64,7 +64,6 @@ python3 main.py \
     --config.init_backend=tpu \
     --config.model.classifier=${cls} \
     --config.pretrain_dir=${PRETRAIN_DIR} \
-    --config.aug.randerase.on=False \
     --config.rescale_head_init=${head_init} \
     --config.aug.mix.mixup=False \
     --config.aug.mix.cutmix=False \
