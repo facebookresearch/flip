@@ -63,7 +63,7 @@ def get_config():
   config.cache = True
   config.half_precision = False  # kaiming: TODO, support it
 
-  config.local_eval_batch_size = 16  # a local batch size for eval (divisible val dataset size)
+  config.local_eval_batch_size = 1024  # a local batch size for eval (divisible val dataset size)
 
   # model config
   config.model = vit.get_b16_config()  # ViT-B/16
