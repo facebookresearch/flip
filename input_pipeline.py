@@ -161,6 +161,11 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
     split = 'validation[{}:{}]'.format(start, start + split_size)
   num_classes = dataset_builder.info.features['label'].num_classes
 
+  logging.set_verbosity(logging.INFO)  # show all processes
+  logging.info('split: {}'.format(split))
+  if not (jax.process_index() == 0):  # not first process
+    logging.set_verbosity(logging.ERROR)  # disable info/warning
+
   ds = dataset_builder.as_dataset(split=split, decoders={
       'image': tfds.decode.SkipDecoding(),
   })

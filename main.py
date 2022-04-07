@@ -68,7 +68,7 @@ def main(argv):
 
 if __name__ == '__main__':
   if not (jax.process_index() == 0):  # not first process
-    logging.set_verbosity(logging.ERROR)  # disable info/warning
+    logging.set_verbosity(logging.WARNING)  # disable info/warning
   logging_util.set_time_logging(logging)
   flags.mark_flags_as_required(['config', 'workdir'])
   app.run(main)
