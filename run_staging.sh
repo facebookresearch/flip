@@ -21,13 +21,13 @@ source scripts/select_chkpt_${vitsize}.sh
 name=`basename ${PRETRAIN_DIR}`
 
 # pytorch_recipe (pyre): _autoaug_lb0.1_cropv4_exwd_initv2_rsinit_dp0.1_cutmixup_minlr
-JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_FT_b${batch}_lr${lr}_lrd${lrd}_${cls}_hinit${head_init}_b0.999_YESmixup_YEScutmix_YESaa_NOerase_warmlr_NOencnorm
+JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_FT_b${batch}_lr${lr}_lrd${lrd}_${cls}_hinit${head_init}_b0.999_NOmixup_NOcutmix_NOaa_NOerase_warmlr_NOencnorm_shf256b
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
 LOGDIR=/home/${USER}/logs/${JOBNAME}
 mkdir -p ${LOGDIR}
 
-# source run_init_remote.sh
+source run_init_remote.sh
 
 # check libraries
 # gcloud alpha compute tpus tpu-vm ssh ${VM_NAME} --zone europe-west4-a \
@@ -65,9 +65,9 @@ python3 main.py \
     --config.model.classifier=${cls} \
     --config.pretrain_dir=${PRETRAIN_DIR} \
     --config.rescale_head_init=${head_init} \
-    --config.aug.mix.mixup=True \
-    --config.aug.mix.cutmix=True \
-    --config.aug.autoaug=autoaug \
+    --config.aug.mix.mixup=False \
+    --config.aug.mix.cutmix=False \
+    --config.aug.autoaug=None \
     --config.aug.randerase.on=False \
     --config.warmup_abs_lr=1e-6 \
 " 2>&1 | tee $LOGDIR/finetune.log

@@ -338,7 +338,7 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
     )
   else:
     mask = None
-  logging.info('Apply weight decay: {}'.format(mask))
+  # logging.info('Apply weight decay: {}'.format(mask))
 
   # tx = getattr(optax, config.opt_type)  # optax.adamw
   tx = getattr(adamw_util, config.opt_type)  # optax.adamw
@@ -347,7 +347,7 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
   if config.learning_rate_decay < 1.:
     lrd_func = lrd_util.lrd_func(config.model.transformer.num_layers, config.learning_rate_decay)
     lrd = lrd_util.filter_parameters(params, lrd_func)
-    logging.info('Apply lrd: {}'.format(lrd))
+    # logging.info('Apply lrd: {}'.format(lrd))
     tx = optax._src.combine.chain(tx, lrd_util.scale_by_lrd(lrd))
 
   tx = optax.GradientTransformation(init=jax.jit(tx.init, backend=config.init_backend), update=tx.update)  # put to cpu
@@ -447,8 +447,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     logging.info('Loading from pre-training:')
     state = checkpoint_util.load_from_pretrain(state, config.pretrain_dir)
 
-    stds = jax.tree_util.tree_map(lambda x: np.array(x).std(), state.params)
-    logging.info('std: {}'.format(stds))
+    # stds = jax.tree_util.tree_map(lambda x: np.array(x).std(), state.params)
+    # logging.info('std: {}'.format(stds))
 
 
   # step_offset > 0 if restarting from checkpoint
