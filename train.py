@@ -483,6 +483,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   hooks = []
   # if jax.process_index() == 0:
   #   hooks += [periodic_actions.Profile(num_profile_steps=5, logdir=workdir)]
+
+  logging.info('Work dir: {}'.format(workdir))
   train_metrics_last_t = time.time()
   logging.info('Initial compilation, this might take some minutes...')
 
