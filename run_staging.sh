@@ -69,7 +69,7 @@ python3 main.py \
     --config.aug.mix.mixup=False \
     --config.aug.mix.cutmix=False \
     --config.aug.autoaug=None \
-    --config.randerase.on=False \
+    --config.aug.randerase.on=False \
 " 2>&1 | tee $LOGDIR/finetune.log
 
 echo ${VM_NAME}
