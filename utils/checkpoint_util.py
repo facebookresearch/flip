@@ -32,7 +32,7 @@ def load_from_pretrain(state, pretrain_dir):
   load_keys = set(named_state_params.keys()) - missing_keys
   ignored_keys = set(named_load_params.keys()) - load_keys - missing_keys
 
-  logging.info('Loaded keys: {}'.format(load_keys))
+  # logging.info('Loaded keys: {}'.format(load_keys))
   logging.info('Missing keys: {}'.format(missing_keys))
   logging.info('Ignored keys: {}'.format(ignored_keys))
 
