@@ -210,7 +210,7 @@ class Encoder(nn.Module):
   droppath_rate: float = 0.0
 
   @nn.compact
-  def __call__(self, inputs, *, train):
+  def __call__(self, inputs, *, train, encoder_norm=True):
     """Applies Transformer model on the inputs.
 
     Args:
@@ -240,7 +240,7 @@ class Encoder(nn.Module):
           num_heads=self.num_heads,
           layer_id=lyr)(
               x, deterministic=not train)
-    encoded = nn.LayerNorm(name='encoder_norm')(x)
+    encoded = nn.LayerNorm(name='encoder_norm')(x) if encoder_norm else x
 
     return encoded
 
@@ -290,7 +290,7 @@ class VisionTransformer(nn.Module):
     # we add posemb here
     x = AddPositionEmbs(posemb_init=posemb_init, name='posembed_encoder')(x)
 
-    x = Encoder(name='Transformer', **self.transformer)(x, train=train)
+    x = Encoder(name='Transformer', **self.transformer)(x, train=train, encoder_norm=(self.classifier == 'token'))
 
     if self.classifier == 'token':
       x = x[:, 0]
