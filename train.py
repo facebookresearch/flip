@@ -19,6 +19,7 @@ The data is loaded using tensorflow_datasets.
 """
 
 import functools
+from operator import iconcat
 import time, datetime
 from typing import Any
 
@@ -214,10 +215,10 @@ def eval_step(state, batch, ema_eval=False):
   metrics['perf/test_acc1'] = metrics['test_acc1']  # for comparing with pytorch
   metrics['test_loss'] = metrics.pop('loss')  # rename
 
-  if ema_eval:
-    logits = state.apply_fn(state.ema_state.ema, batch['image'], train=False, mutable=False)
-    metrics_ema = compute_metrics(logits, batch['label'], batch['label_one_hot'])
-    metrics['test_acc1_ema'] = metrics_ema.pop('accuracy') * 100  # rename
+  # if ema_eval:
+  #   logits = state.apply_fn(state.ema_state.ema, batch['image'], train=False, mutable=False)
+  #   metrics_ema = compute_metrics(logits, batch['label'], batch['label_one_hot'])
+  #   metrics['test_acc1_ema'] = metrics_ema.pop('accuracy') * 100  # rename
 
   return metrics
 
@@ -237,10 +238,10 @@ def prepare_tf_data(xs):
 
 
 def create_input_iter(dataset_builder, batch_size, image_size, dtype, train,
-                      cache, aug=None):
+                      cache, aug=None, force_shuffle=None):
   ds = input_pipeline.create_split(
       dataset_builder, batch_size, image_size=image_size, dtype=dtype,
-      train=train, cache=cache, aug=aug)
+      train=train, cache=cache, aug=aug, force_shuffle=force_shuffle)
 
   if aug is not None and (aug.mix.mixup or aug.mix.cutmix):
     apply_mix = functools.partial(mix_util.apply_mix, cfg=aug.mix)
@@ -409,7 +410,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
       cache=config.cache, aug=config.aug)
   eval_iter = create_input_iter(
       dataset_builder, local_batch_size, image_size, input_dtype, train=False,
-      cache=config.cache)
+      cache=config.cache, force_shuffle=False)
 
   steps_per_epoch = (
       dataset_builder.info.splits['train'].num_examples // config.batch_size
@@ -423,7 +424,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   if config.steps_per_eval == -1:
     num_validation_examples = dataset_builder.info.splits[
         'validation'].num_examples
-    steps_per_eval = num_validation_examples // config.batch_size
+    steps_per_eval = num_validation_examples // config.local_eval_batch_size
   else:
     steps_per_eval = config.steps_per_eval
 
@@ -530,18 +531,24 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
     if (step + 1) % steps_per_epoch == 0:
       epoch = step // steps_per_epoch
-      eval_metrics = []
 
-      # sync batch statistics across replicas
-      state = sync_batch_stats(state)
-      for _ in range(steps_per_eval):
-        eval_batch = next(eval_iter)
-        metrics = p_eval_step(state, eval_batch)
-        eval_metrics.append(metrics)
-      eval_metrics = common_utils.get_metrics(eval_metrics)
-      summary = jax.tree_map(lambda x: x.mean(), eval_metrics)
-      values = [f"{k}: {v:.6f}" for k, v in sorted(summary.items())]
-      logging.info('eval epoch: %d, %s', epoch, ', '.join(values))
+      summary = run_eval(state, p_eval_step, eval_iter, steps_per_eval, epoch)
+      summary = run_eval(state, p_eval_step, eval_iter, steps_per_eval, epoch)
+      # eval_metrics = []
+      # # sync batch statistics across replicas
+      # state = sync_batch_stats(state)
+      # tic = time.time()
+      # for i in range(steps_per_eval):
+      #   eval_batch = next(eval_iter)
+      #   metrics = p_eval_step(state, eval_batch)
+      #   eval_metrics.append(metrics)
+      # toc = time.time() - tic
+      # logging.info('Eval time: {}, {} steps'.format(str(datetime.timedelta(seconds=int(toc))), steps_per_eval))
+
+      # eval_metrics = common_utils.get_metrics(eval_metrics)
+      # summary = jax.tree_map(lambda x: x.mean(), eval_metrics)
+      # values = [f"{k}: {v:.6f}" for k, v in sorted(summary.items())]
+      # logging.info('eval epoch: %d, %s', epoch, ', '.join(values))
 
       # to make it consistent with PyTorch log
       summary['step_tensorboard'] = epoch  # step for tensorboard (no need to minus 1)
@@ -564,3 +571,22 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     profile_memory(workdir)
 
   return state
+
+
+def run_eval(state, p_eval_step, eval_iter, steps_per_eval, epoch):
+  eval_metrics = []
+  # sync batch statistics across replicas
+  state = sync_batch_stats(state)
+  tic = time.time()
+  for i in range(steps_per_eval):
+    eval_batch = next(eval_iter)
+    metrics = p_eval_step(state, eval_batch)
+    eval_metrics.append(metrics)
+  toc = time.time() - tic
+  logging.info('Eval time: {}, {} steps'.format(str(datetime.timedelta(seconds=int(toc))), steps_per_eval))
+
+  eval_metrics = common_utils.get_metrics(eval_metrics)
+  summary = jax.tree_map(lambda x: x.mean(), eval_metrics)
+  values = [f"{k}: {v:.6f}" for k, v in sorted(summary.items())]
+  logging.info('eval epoch: %d, %s', epoch, ', '.join(values))
+  return summary

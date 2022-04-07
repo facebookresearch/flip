@@ -136,7 +136,7 @@ def preprocess_for_eval(image_bytes, dtype=tf.float32, image_size=IMAGE_SIZE):
 
 
 def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
-                 image_size=IMAGE_SIZE, cache=False, aug=None):
+                 image_size=IMAGE_SIZE, cache=False, aug=None, force_shuffle=False):
   """Creates a split from the ImageNet dataset using TensorFlow Datasets.
 
   Args:
@@ -156,9 +156,10 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
     split = 'train[{}:{}]'.format(start, start + split_size)
   else:
     validate_examples = dataset_builder.info.splits['validation'].num_examples
-    split_size = validate_examples // jax.process_count()
-    start = jax.process_index() * split_size
-    split = 'validation[{}:{}]'.format(start, start + split_size)
+    # split_size = validate_examples // jax.process_count()
+    # start = jax.process_index() * split_size
+    # split = 'validation[{}:{}]'.format(start, start + split_size)
+    split = 'validation'
   num_classes = dataset_builder.info.features['label'].num_classes
 
   logging.set_verbosity(logging.INFO)  # show all processes
@@ -178,7 +179,7 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
   if cache:
     ds = ds.cache()
 
-  if train:
+  if train or force_shuffle:
     ds = ds.repeat()
     # ds = ds.shuffle(16 * batch_size, seed=0)
     ds = ds.shuffle(512 * batch_size, seed=0)  # batch_size = 1024 (faster in local)
