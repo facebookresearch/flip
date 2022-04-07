@@ -410,7 +410,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
       cache=config.cache, aug=config.aug)
   eval_iter = create_input_iter(
       dataset_builder, local_batch_size, image_size, input_dtype, train=False,
-      cache=config.cache, force_shuffle=False)
+      cache=config.cache, force_shuffle=True)
 
   steps_per_epoch = (
       dataset_builder.info.splits['train'].num_examples // config.batch_size

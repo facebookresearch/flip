@@ -224,7 +224,7 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
 
   ds = ds.map(ds_map_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
 
-  ds = ds.batch(batch_size, drop_remainder=True)
+  ds = ds.batch(batch_size, drop_remainder=True)  # if not True the batch size would be changed
 
   if not train:
     ds = ds.repeat()
