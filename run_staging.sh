@@ -1,5 +1,5 @@
-VM_NAME=kmh-tpuvm-v3-128-1
-# VM_NAME=kmh-tpuvm-v3-256-4
+# VM_NAME=kmh-tpuvm-v3-128-1
+VM_NAME=kmh-tpuvm-v3-256-3
 echo $VM_NAME
 REPO=https://71d519550fe3430ecbf39b70467e9210aed5da69:@github.com/KaimingHe/flax_dev.git
 BRANCH=main
@@ -41,7 +41,7 @@ gcloud alpha compute tpus tpu-vm ssh ${VM_NAME} --zone europe-west4-a \
     --worker=all --command "
 cd ~/flax_dev
 git pull
-git checkout vit.ft
+git checkout vit.ft.subtleties
 git pull
 git rev-parse --short HEAD
 
