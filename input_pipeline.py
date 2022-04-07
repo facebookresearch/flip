@@ -176,7 +176,7 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
   if train:
     ds = ds.repeat()
     # ds = ds.shuffle(16 * batch_size, seed=0)
-    ds = ds.shuffle(256 * batch_size, seed=0)  # batch_size = 1024 (faster in local)
+    ds = ds.shuffle(512 * batch_size, seed=0)  # batch_size = 1024 (faster in local)
 
   use_torchvision = (aug is not None and aug.torchvision)
   if use_torchvision:
