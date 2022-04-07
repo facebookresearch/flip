@@ -21,7 +21,7 @@ source scripts/select_chkpt_${vitsize}.sh
 name=`basename ${PRETRAIN_DIR}`
 
 # pytorch_recipe (pyre): _autoaug_lb0.1_cropv4_exwd_initv2_rsinit_dp0.1_cutmixup_minlr
-JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_FT_b${batch}_lr${lr}_lrd${lrd}_${cls}_hinit${head_init}_b0.999
+JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_FT_b${batch}_lr${lr}_lrd${lrd}_${cls}_hinit${head_init}_b0.999_NOmixup_NOcutmix_NOaa_NOerase
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
 LOGDIR=/home/${USER}/logs/${JOBNAME}
@@ -57,7 +57,7 @@ python3 main.py \
     --config.learning_rate_decay=${lrd} \
     --config.log_every_steps=100 \
     --config.num_epochs=${ep} \
-    --config.ema=True \
+    --config.ema=False \
     --config.save_every_epochs=10 \
     --config.profile_memory=True \
     --config.donate=True \
@@ -65,7 +65,11 @@ python3 main.py \
     --config.model.classifier=${cls} \
     --config.pretrain_dir=${PRETRAIN_DIR} \
     --config.aug.randerase.on=False \
-    --config.rescale_head_init=${head_init}
+    --config.rescale_head_init=${head_init} \
+    --config.aug.mix.mixup=False \
+    --config.aug.mix.cutmix=False \
+    --config.aug.autoaug=None \
+    --config.randerase.on=False \
 " 2>&1 | tee $LOGDIR/finetune.log
 
 echo ${VM_NAME}

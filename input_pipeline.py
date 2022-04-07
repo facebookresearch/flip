@@ -102,7 +102,7 @@ def preprocess_for_train(image_bytes, dtype=tf.float32, image_size=IMAGE_SIZE, a
     image = tf.cast(image, dtype=tf.uint8)
     image = distort_image_with_randaugment(image, num_layers=2, magnitude=9)
     image = tf.cast(image, dtype=tf.float32)
-  elif aug.autoaug is None:
+  elif aug.autoaug is None or aug.autoaug == 'None':
     pass
   else:
     raise NotImplementedError

@@ -338,7 +338,7 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
     )
   else:
     mask = None
-  # logging.info('Apply weight decay: {}'.format(mask))
+  logging.info('Apply weight decay: {}'.format(mask))
 
   # tx = getattr(optax, config.opt_type)  # optax.adamw
   tx = getattr(adamw_util, config.opt_type)  # optax.adamw
