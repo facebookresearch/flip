@@ -114,7 +114,7 @@ def compute_eval_metrics(logits, labels, labels_one_hot):
   }
   # metrics = lax.pmean(metrics, axis_name='batch')
   metrics = lax.all_gather(metrics, axis_name='batch')
-  # metrics = jax.tree_map(lambda x: jnp.reshape(x, [-1,]), metrics)
+  metrics = jax.tree_map(lambda x: jnp.reshape(x, [-1,]), metrics)
   return metrics
 
 
