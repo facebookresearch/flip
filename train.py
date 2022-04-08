@@ -553,8 +553,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
       epoch = step // steps_per_epoch
 
       summary = run_eval(state, p_eval_step, eval_iter, steps_per_eval, epoch)
-      if (step + 1) % steps_per_epoch == 0:
-        summary = run_eval(state, p_eval_step, eval_iter, steps_per_eval, epoch)  # run again sanity check
+      summary = run_eval(state, p_eval_step, eval_iter, steps_per_eval, epoch)  # run again sanity check
 
       # to make it consistent with PyTorch log
       summary['step_tensorboard'] = epoch  # step for tensorboard (no need to minus 1)

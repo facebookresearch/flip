@@ -158,7 +158,7 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
     validate_examples = dataset_builder.info.splits['validation'].num_examples
     split_size = validate_examples // jax.process_count()
     start = jax.process_index() * split_size
-    end = start + split_size if jax.process_index() < jax.process_count() - 1 else validate_examples
+    end = start + split_size if jax.process_index() < jax.process_count() - 1 else validate_examples  # kaiming: this may fail if each host has different iterations
     split = 'validation[{}:{}]'.format(start, end)
     logging.set_verbosity(logging.INFO)  # show all processes
     logging.info('split: {}'.format(split))
