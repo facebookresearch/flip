@@ -589,6 +589,7 @@ def run_eval(state, p_eval_step, eval_iter, steps_per_eval, epoch):
   for i in range(steps_per_eval):
     eval_batch = next(eval_iter)
     metrics = p_eval_step(state, eval_batch)
+    metrics = jax.tree_map(lambda x: x[0], metrics)
     eval_metrics.append(metrics)
     num_valid = jnp.sum(metrics['label'] >= 0)
     logging.info('process {}: {} / {}, valid {}'.format(jax.process_index(), i, steps_per_eval, num_valid))
