@@ -267,7 +267,8 @@ def create_input_iter(dataset_builder, batch_size, image_size, dtype, train,
     ds = map(apply_mix, ds)
 
   # ------------------------------------------------
-  # x = next(iter(ds))
+  x = next(iter(ds))
+  raise NotImplementedError
   # ------------------------------------------------
 
   ds = map(functools.partial(prepare_tf_data, batch_size=batch_size), ds)

@@ -9,19 +9,21 @@ def apply_mix(xs, cfg):
   xs['label']: (N, ). unchanged
   xs['label_one_hot']: (N, num_classes). had label smoothing.
   """
+  batch_size = xs.shape[0] if cfg.batch_size < 0 else cfg.batch_size
+
   imgs = xs['image']
   tgts = xs['label_one_hot']
 
-  imgs_rev = tf.reverse(imgs, axis=[0])
-  tgts_rev = tf.reverse(tgts, axis=[0])
+  imgs_rev = get_reverse(imgs, batch_size)
+  tgts_rev = get_reverse(tgts, batch_size)
 
   if cfg.mixup and cfg.cutmix and cfg.switch_elementwise:
     # element-wise mixup/cutmix switch (note lambda is always element-wise)
     use_mixup = (tf.random.uniform([imgs.shape[0]], minval=0, maxval=1., dtype=tf.float32) > 0.5)
     use_mixup = tf.cast(use_mixup, tf.float32)
 
-    imgs_mixup, lmb_mixup = apply_mixup(imgs, imgs_rev, cfg.mixup_alpha)
-    imgs_cutmix, lmb_cutmix = apply_cutmix(imgs, imgs_rev, cfg.cutmix_alpha)
+    imgs_mixup, lmb_mixup = apply_mixup(imgs, imgs_rev, cfg.mixup_alpha, batch_size)
+    imgs_cutmix, lmb_cutmix = apply_cutmix(imgs, imgs_rev, cfg.cutmix_alpha, batch_size)
 
     lmb = lmb_mixup * use_mixup + lmb_cutmix * (1 - use_mixup)
 
@@ -31,16 +33,16 @@ def apply_mix(xs, cfg):
     # host-wise mixup/cutmix switch (note lambda is always element-wise)
     use_mixup = (tf.random.uniform([], minval=0, maxval=1., dtype=tf.float32) > 0.5)
     imgs_mixed, lmb = tf.cond(use_mixup,
-      lambda: apply_mixup(imgs, imgs_rev, cfg.mixup_alpha),
-      lambda: apply_cutmix(imgs, imgs_rev, cfg.cutmix_alpha),
+      lambda: apply_mixup(imgs, imgs_rev, cfg.mixup_alpha, batch_size),
+      lambda: apply_cutmix(imgs, imgs_rev, cfg.cutmix_alpha, batch_size),
     )
   elif cfg.mixup and not cfg.cutmix:
-    imgs_mixed, lmb = apply_mixup(imgs, imgs_rev, cfg.mixup_alpha)
+    imgs_mixed, lmb = apply_mixup(imgs, imgs_rev, cfg.mixup_alpha, batch_size)
   elif cfg.cutmix and not cfg.mixup:
-    imgs_mixed, lmb = apply_cutmix(imgs, imgs_rev, cfg.cutmix_alpha)
+    imgs_mixed, lmb = apply_cutmix(imgs, imgs_rev, cfg.cutmix_alpha, batch_size)
   else:
     raise NotImplementedError
-
+  
   # mix one-hot labels
   lmb = tf.reshape(lmb, [-1] + [1] * (len(tgts.shape) - 1))  # [N, 1]
   tgts_mixed = tgts * lmb + tgts_rev * (1. - lmb)
@@ -48,16 +50,32 @@ def apply_mix(xs, cfg):
   return dict(image=imgs_mixed, label=xs['label'], label_one_hot=tgts_mixed)
 
 
-def apply_mixup(imgs, imgs_rev, mixup_alpha):
-  dist = tfp.distributions.Beta(mixup_alpha, mixup_alpha)
-  lmb = dist.sample(imgs.shape[0])  # element-wise mix
+def get_reverse(x, batch_size):
+  x_rev = tf.reshape(x, (batch_size, -1) + tuple(x.shape[1:]))
+  x_rev = tf.reverse(x_rev, axis=[0])
+  x_rev = tf.reshape(x_rev, x.shape)
+  return x_rev
 
-  lmb_ = tf.reshape(lmb, [-1] + [1] * (len(imgs.shape) - 1))  # [N, 1, 1, 1]
-  imgs_mixed = imgs * lmb_ + imgs_rev * (1 - lmb_)
+
+def apply_mixup(imgs, imgs_rev, mixup_alpha, batch_size):
+  """
+  imgs, imgs_rev: [N, H, W, 3]
+  output:
+  lmb: [N,]
+  """
+  dist = tfp.distributions.Beta(mixup_alpha, mixup_alpha)
+
+  lmb = dist.sample(batch_size)
+  lmb = tf.expand_dims(lmb, axis=-1)
+  lmb = tf.repeat(lmb, repeats=imgs.shape[0] // batch_size, axis=-1)  # e.g, [B, N // B]
+  lmb = tf.reshape(lmb, [-1] + [1] * (len(imgs.shape) - 1))  # [128, 1, 1, 1, 1]
+
+  imgs_mixed = imgs * lmb + imgs_rev * (1 - lmb)
+  lmb = tf.reshape(lmb, [-1,])
   return imgs_mixed, lmb
 
 
-def apply_cutmix(imgs, imgs_rev, cutmix_alpha):
+def apply_cutmix(imgs, imgs_rev, cutmix_alpha, batch_size):
   dist = tfp.distributions.Beta(cutmix_alpha, cutmix_alpha)
   lmb = dist.sample(imgs.shape[0])  # element-wise mix
 

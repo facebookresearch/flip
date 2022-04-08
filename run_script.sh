@@ -16,6 +16,8 @@ python3 main.py \
     --config.aug.randerase.on=True \
     --config.aug.randerase.prob=1. \
     --config.rescale_head_init=0.001 \
+    --config.aug.mix.mixup=True \
+    --config.aug.mix.cutmix=False \
 
     # --config.pretrain_dir='gs://kmh-gcp/from_pytorch/checkpoint/kaiminghe/converted/2021-10-26-22-16-05-v3-128-mb4096-epo1600-PMAEp16-ViTLarge-lr1e-4-wd5e-2-warm40-mask0.75-pred8d512-exNB-msaLNmlpLNeLNpLNkBN0-1view-NOrelpos-abspos-clstoken-qkv-NOlayerscale-LNtgt-resume3_convert_pt2jax'
 
