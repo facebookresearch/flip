@@ -114,7 +114,7 @@ def compute_eval_metrics(logits, labels, labels_one_hot):
   }
   # metrics = lax.pmean(metrics, axis_name='batch')
   metrics = lax.all_gather(metrics, axis_name='batch')
-  metrics = jax.tree_map(lambda x: jnp.reshape(x, [-1,]), metrics)
+  # metrics = jax.tree_map(lambda x: jnp.reshape(x, [-1,]), metrics)
   return metrics
 
 
@@ -580,6 +580,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
 
 def run_eval(state, p_eval_step, eval_iter, steps_per_eval, epoch):
+  logging.set_verbosity(logging.INFO)  # show all processes
+
   eval_metrics = []
   # sync batch statistics across replicas
   state = sync_batch_stats(state)
@@ -588,7 +590,10 @@ def run_eval(state, p_eval_step, eval_iter, steps_per_eval, epoch):
     eval_batch = next(eval_iter)
     metrics = p_eval_step(state, eval_batch)
     eval_metrics.append(metrics)
-    # print('{} / {}'.format(i, steps_per_eval), i, steps_per_eval, metrics['test_acc1'].shape)
+    print('process {}: {} / {}'.format(jax.process_index(), i, steps_per_eval, metrics['test_acc1'].shape))
+
+  if not (jax.process_index() == 0):  # not first process
+    logging.set_verbosity(logging.ERROR)  # disable info/warning
 
   eval_metrics = jax.tree_map(lambda x: x[0], eval_metrics)
   eval_metrics = jax.device_get(eval_metrics)

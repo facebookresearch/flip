@@ -231,11 +231,6 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
   ds = ds.batch(batch_size, drop_remainder=train)  # we drop the remainder if eval
 
   if not train:
-    logging.set_verbosity(logging.INFO)  # show all processes
-    logging.info('Split iters: {}'.format(len(ds)))
-    if not (jax.process_index() == 0):  # not first process
-      logging.set_verbosity(logging.ERROR)  # disable info/warning
-
     ds = ds.repeat()
 
   ds = ds.prefetch(10)
