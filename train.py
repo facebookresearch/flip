@@ -553,22 +553,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
       epoch = step // steps_per_epoch
 
       summary = run_eval(state, p_eval_step, eval_iter, steps_per_eval, epoch)
-      summary = run_eval(state, p_eval_step, eval_iter, steps_per_eval, epoch)
-      # eval_metrics = []
-      # # sync batch statistics across replicas
-      # state = sync_batch_stats(state)
-      # tic = time.time()
-      # for i in range(steps_per_eval):
-      #   eval_batch = next(eval_iter)
-      #   metrics = p_eval_step(state, eval_batch)
-      #   eval_metrics.append(metrics)
-      # toc = time.time() - tic
-      # logging.info('Eval time: {}, {} steps'.format(str(datetime.timedelta(seconds=int(toc))), steps_per_eval))
-
-      # eval_metrics = common_utils.get_metrics(eval_metrics)
-      # summary = jax.tree_map(lambda x: x.mean(), eval_metrics)
-      # values = [f"{k}: {v:.6f}" for k, v in sorted(summary.items())]
-      # logging.info('eval epoch: %d, %s', epoch, ', '.join(values))
+      if (step + 1) % steps_per_epoch == 0:
+        summary = run_eval(state, p_eval_step, eval_iter, steps_per_eval, epoch)  # run again sanity check
 
       # to make it consistent with PyTorch log
       summary['step_tensorboard'] = epoch  # step for tensorboard (no need to minus 1)
@@ -598,7 +584,6 @@ def run_eval(state, p_eval_step, eval_iter, steps_per_eval, epoch):
   # sync batch statistics across replicas
   state = sync_batch_stats(state)
   tic = time.time()
-  steps_per_eval = 2
   for i in range(steps_per_eval):
     eval_batch = next(eval_iter)
     metrics = p_eval_step(state, eval_batch)
