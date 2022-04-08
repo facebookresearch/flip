@@ -162,10 +162,6 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
     end = min(start + split_size, validate_examples)
     split = 'validation[{}:{}]'.format(start, end)
     assert math.ceil(split_size / batch_size) == math.ceil((end - start) / batch_size)  # hack to make sure every host has the same # iter
-    logging.set_verbosity(logging.INFO)  # show all processes
-    logging.info('Split: {}'.format(split))
-    if not (jax.process_index() == 0):  # not first process
-      logging.set_verbosity(logging.ERROR)  # disable info/warning
 
   num_classes = dataset_builder.info.features['label'].num_classes
 
@@ -183,10 +179,7 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
 
   if train:
     ds = ds.repeat()
-    # ds = ds.shuffle(16 * batch_size, seed=0)
     ds = ds.shuffle(512 * batch_size, seed=0)  # batch_size = 1024 (faster in local)
-  # else:
-  #   assert len(ds) % 8 == 0  # we need the eval set to be divisible by 8 in this impl
 
   use_torchvision = (aug is not None and aug.torchvision)
   if use_torchvision:
