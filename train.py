@@ -444,7 +444,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   if config.steps_per_eval == -1:
     num_validation_examples = dataset_builder.info.splits[
         'validation'].num_examples
-    steps_per_eval = math.ceil(num_validation_examples / config.batch_size)  # we will pad it
+    num_validation_examples_split = math.ceil(num_validation_examples / jax.process_count())
+    steps_per_eval = math.ceil(num_validation_examples_split / config.batch_size)
   else:
     steps_per_eval = config.steps_per_eval
 
@@ -587,7 +588,7 @@ def run_eval(state, p_eval_step, eval_iter, steps_per_eval, epoch):
     eval_batch = next(eval_iter)
     metrics = p_eval_step(state, eval_batch)
     eval_metrics.append(metrics)
-    print('{} / {}'.format(i, steps_per_eval), i, steps_per_eval, metrics['test_acc1'].shape)
+    # print('{} / {}'.format(i, steps_per_eval), i, steps_per_eval, metrics['test_acc1'].shape)
 
   eval_metrics = jax.tree_map(lambda x: x[0], eval_metrics)
   eval_metrics = jax.device_get(eval_metrics)

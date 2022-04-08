@@ -31,6 +31,7 @@ from PIL import Image
 import io
 from torchvision import transforms
 
+import math
 
 IMAGE_SIZE = 224
 
@@ -156,14 +157,12 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
     split = 'train[{}:{}]'.format(start, start + split_size)
   else:
     validate_examples = dataset_builder.info.splits['validation'].num_examples
-    split_size = max(validate_examples // jax.process_count(), 3125)  # kaiming: hack to make it devisible
-    assert validate_examples % split_size == 0
-    num_splits = validate_examples // split_size
-    split_id = jax.process_index() % num_splits
-    start = split_id * split_size
-    split = 'validation[{}:{}]'.format(start, start + split_size)
+    split_size = math.ceil(validate_examples / jax.process_count())
+    start = split_size * jax.process_index()
+    end = min(start + split_size, validate_examples)
+    split = 'validation[{}:{}]'.format(start, end)
     logging.set_verbosity(logging.INFO)  # show all processes
-    logging.info('split: {}'.format(split))
+    logging.info('Split: {}'.format(split))
     if not (jax.process_index() == 0):  # not first process
       logging.set_verbosity(logging.ERROR)  # disable info/warning
 
@@ -231,6 +230,11 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
   ds = ds.batch(batch_size, drop_remainder=train)  # we drop the remainder if eval
 
   if not train:
+    logging.set_verbosity(logging.INFO)  # show all processes
+    logging.info('Split iters: {}'.format(len(ds)))
+    if not (jax.process_index() == 0):  # not first process
+      logging.set_verbosity(logging.ERROR)  # disable info/warning
+
     ds = ds.repeat()
 
   ds = ds.prefetch(10)
