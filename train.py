@@ -270,7 +270,7 @@ def create_input_iter(dataset_builder, batch_size, image_size, dtype, train,
     ds = map(apply_mix, ds)
 
   # ------------------------------------------------
-  x = next(iter(ds))
+  # x = next(iter(ds))
   # ------------------------------------------------
 
   ds = map(prepare_tf_data, ds)
