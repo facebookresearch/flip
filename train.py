@@ -445,7 +445,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     num_validation_examples = dataset_builder.info.splits[
         'validation'].num_examples
     num_validation_examples_split = math.ceil(num_validation_examples / jax.process_count())
-    steps_per_eval = math.ceil(num_validation_examples_split / config.batch_size)
+    steps_per_eval = math.ceil(num_validation_examples_split / local_batch_size)
   else:
     steps_per_eval = config.steps_per_eval
 

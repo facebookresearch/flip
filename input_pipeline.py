@@ -161,6 +161,7 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
     start = split_size * jax.process_index()
     end = min(start + split_size, validate_examples)
     split = 'validation[{}:{}]'.format(start, end)
+    assert math.ceil(split_size / batch_size) == math.ceil((end - start) / batch_size)  # hack to make sure every host has the same # iter
     logging.set_verbosity(logging.INFO)  # show all processes
     logging.info('Split: {}'.format(split))
     if not (jax.process_index() == 0):  # not first process
