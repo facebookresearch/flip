@@ -599,11 +599,11 @@ def run_eval(state, p_eval_step, eval_iter, steps_per_eval, epoch):
       for j in range(labels.shape[0]):
         logging.info('j: {} {}'.format(j, labels[j]))
 
-    jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
-    if i == steps_per_eval - 1:
-      verbose_on()
-      logging.info('process {}: eval_batch:\n{}'.format(jax.process_index(), eval_batch['label']))
-      verbose_off()
+    # jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
+    # if i == steps_per_eval - 1:
+    #   verbose_on()
+    #   logging.info('process {}: eval_batch:\n{}'.format(jax.process_index(), eval_batch['label']))
+    #   verbose_off()
       
   jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
   from IPython import embed; embed();
