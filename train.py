@@ -594,10 +594,14 @@ def run_eval(state, p_eval_step, eval_iter, steps_per_eval, epoch):
     num_valid = jnp.sum(metrics['label'] >= 0)
     logging.info('process {}: {} / {}, valid {}'.format(jax.process_index(), i, steps_per_eval, num_valid))
     if i >= steps_per_eval - 2:
-      logging.info(metrics['label'])
+      labels = metrics['label']
+      logging.info('labels.shape: {}'.format(labels.shape))
+      logging.info('labels:\n{}'.format(labels))
 
   if not (jax.process_index() == 0):  # not first process
     logging.set_verbosity(logging.ERROR)  # disable info/warning
+  from IPython import embed; embed();
+  if (0 == 0): raise NotImplementedError
 
   eval_metrics = jax.tree_map(lambda x: x[0], eval_metrics)
   eval_metrics = jax.device_get(eval_metrics)
