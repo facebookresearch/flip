@@ -14,9 +14,9 @@ cls='tgap'
 
 head_init=0.001
 
-vitsize=large
+vitsize=dbg
 CONFIG=cfg_vit_${vitsize}
-source scripts/select_chkpt_${vitsize}.sh
+# source scripts/select_chkpt_${vitsize}.sh
 
 name=`basename ${PRETRAIN_DIR}`
 
@@ -63,7 +63,6 @@ python3 main.py \
     --config.donate=True \
     --config.init_backend=tpu \
     --config.model.classifier=${cls} \
-    --config.pretrain_dir=${PRETRAIN_DIR} \
     --config.rescale_head_init=${head_init} \
     --config.aug.mix.mixup=False \
     --config.aug.mix.cutmix=False \
@@ -71,5 +70,6 @@ python3 main.py \
     --config.aug.randerase.on=False \
     --config.warmup_abs_lr=1e-6 \
 " 2>&1 | tee $LOGDIR/finetune.log
+    # --config.pretrain_dir=${PRETRAIN_DIR} \
 
 echo ${VM_NAME}

@@ -590,7 +590,7 @@ def run_eval(state, p_eval_step, eval_iter, steps_per_eval, epoch):
     eval_batch = next(eval_iter)
     metrics = p_eval_step(state, eval_batch)
     eval_metrics.append(metrics)
-    logging.info('process {}: {} / {}'.format(jax.process_index(), i, steps_per_eval, metrics['test_acc1'].shape))
+    logging.info('process {}: {} / {}, {}'.format(jax.process_index(), i, steps_per_eval, metrics['test_acc1'].shape))
 
   if not (jax.process_index() == 0):  # not first process
     logging.set_verbosity(logging.ERROR)  # disable info/warning
