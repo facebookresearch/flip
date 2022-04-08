@@ -596,7 +596,9 @@ def run_eval(state, p_eval_step, eval_iter, steps_per_eval, epoch):
     if i >= steps_per_eval - 2:
       labels = metrics['label']
       logging.info('labels.shape: {}'.format(labels.shape))
-      logging.info('labels:\n{}'.format(labels))
+      # logging.info('labels:\n{}'.format(labels))
+      for j in range(labels.shape[0]):
+        logging.info('j: {} {}'.format(j, labels[j]))
 
   if not (jax.process_index() == 0):  # not first process
     logging.set_verbosity(logging.ERROR)  # disable info/warning
