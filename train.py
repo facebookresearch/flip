@@ -58,6 +58,7 @@ import jax.profiler
 
 import numpy as np
 import os
+import math
 
 
 NUM_CLASSES = 1000
@@ -98,6 +99,21 @@ def compute_metrics(logits, labels, labels_one_hot):
       'accuracy': accuracy,
   }
   metrics = lax.pmean(metrics, axis_name='batch')
+  return metrics
+
+
+def compute_eval_metrics(logits, labels, labels_one_hot):
+  """kaiming: we do not average here (to support the reminder batch)
+  """
+  loss = optax.softmax_cross_entropy(logits=logits, labels=labels_one_hot)
+  accuracy = (jnp.argmax(logits, -1) == labels)
+  metrics = {
+      'loss': loss,
+      'accuracy': accuracy,
+  }
+  # metrics = lax.pmean(metrics, axis_name='batch')
+  metrics = lax.all_gather(metrics, axis_name='batch')
+  metrics = jax.tree_map(lambda x: jnp.reshape(x, [-1,]), metrics)
   return metrics
 
 
@@ -210,7 +226,7 @@ def train_step(state, batch, learning_rate_fn, config):
 def eval_step(state, batch, ema_eval=False):
   variables = {'params': state.params, **state.variables}
   logits = state.apply_fn(variables, batch['image'], train=False, mutable=False)
-  metrics = compute_metrics(logits, batch['label'], batch['label_one_hot'])
+  metrics = compute_eval_metrics(logits, batch['label'], batch['label_one_hot'])
   metrics['test_acc1'] = metrics.pop('accuracy') * 100  # rename
   metrics['perf/test_acc1'] = metrics['test_acc1']  # for comparing with pytorch
   metrics['test_loss'] = metrics.pop('loss')  # rename
@@ -238,10 +254,10 @@ def prepare_tf_data(xs):
 
 
 def create_input_iter(dataset_builder, batch_size, image_size, dtype, train,
-                      cache, aug=None, force_shuffle=None):
+                      cache, aug=None):
   ds = input_pipeline.create_split(
       dataset_builder, batch_size, image_size=image_size, dtype=dtype,
-      train=train, cache=cache, aug=aug, force_shuffle=force_shuffle)
+      train=train, cache=cache, aug=aug)
 
   if aug is not None and (aug.mix.mixup or aug.mix.cutmix):
     apply_mix = functools.partial(mix_util.apply_mix, cfg=aug.mix)
@@ -410,7 +426,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
       cache=config.cache, aug=config.aug)
   eval_iter = create_input_iter(
       dataset_builder, local_batch_size, image_size, input_dtype, train=False,
-      cache=config.cache, force_shuffle=True)
+      cache=config.cache)
 
   steps_per_epoch = (
       dataset_builder.info.splits['train'].num_examples // config.batch_size
@@ -424,7 +440,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   if config.steps_per_eval == -1:
     num_validation_examples = dataset_builder.info.splits[
         'validation'].num_examples
-    steps_per_eval = num_validation_examples // config.local_eval_batch_size
+    steps_per_eval = math.ceil(num_validation_examples / local_batch_size)
   else:
     steps_per_eval = config.steps_per_eval
 
@@ -529,7 +545,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
         train_metrics = []
         train_metrics_last_t = time.time()
 
-    if (step + 1) % steps_per_epoch == 0:
+    if (step + 1) % steps_per_epoch == 0 or step == 1:
       epoch = step // steps_per_epoch
 
       summary = run_eval(state, p_eval_step, eval_iter, steps_per_eval, epoch)
@@ -582,11 +598,21 @@ def run_eval(state, p_eval_step, eval_iter, steps_per_eval, epoch):
     eval_batch = next(eval_iter)
     metrics = p_eval_step(state, eval_batch)
     eval_metrics.append(metrics)
-  toc = time.time() - tic
-  logging.info('Eval time: {}, {} steps'.format(str(datetime.timedelta(seconds=int(toc))), steps_per_eval))
+    # print('{} / {}'.format(i, steps_per_eval), i, steps_per_eval, metrics['test_acc1'].shape)
 
-  eval_metrics = common_utils.get_metrics(eval_metrics)
+  eval_metrics = jax.tree_map(lambda x: x[0], eval_metrics)
+  eval_metrics = jax.device_get(eval_metrics)
+  eval_metrics = jax.tree_multimap(lambda *args: np.concatenate(args), *eval_metrics)
+
+  toc = time.time() - tic
+  logging.info('Eval time: {}, {} steps, {} samples'.format(
+    str(datetime.timedelta(seconds=int(toc))),
+    steps_per_eval,
+    len(eval_metrics['test_acc1'])))
+
+  # eval_metrics = common_utils.get_metrics(eval_metrics)
   summary = jax.tree_map(lambda x: x.mean(), eval_metrics)
   values = [f"{k}: {v:.6f}" for k, v in sorted(summary.items())]
   logging.info('eval epoch: %d, %s', epoch, ', '.join(values))
   return summary
+

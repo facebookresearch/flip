@@ -136,7 +136,7 @@ def preprocess_for_eval(image_bytes, dtype=tf.float32, image_size=IMAGE_SIZE):
 
 
 def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
-                 image_size=IMAGE_SIZE, cache=False, aug=None, force_shuffle=False):
+                 image_size=IMAGE_SIZE, cache=False, aug=None):
   """Creates a split from the ImageNet dataset using TensorFlow Datasets.
 
   Args:
@@ -159,7 +159,7 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
     # split_size = validate_examples // jax.process_count()
     # start = jax.process_index() * split_size
     # split = 'validation[{}:{}]'.format(start, start + split_size)
-    split = 'validation'
+    split = 'validation'  # use full val
   num_classes = dataset_builder.info.features['label'].num_classes
 
   logging.set_verbosity(logging.INFO)  # show all processes
@@ -179,10 +179,12 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
   if cache:
     ds = ds.cache()
 
-  if train or force_shuffle:
+  if train:
     ds = ds.repeat()
     # ds = ds.shuffle(16 * batch_size, seed=0)
     ds = ds.shuffle(512 * batch_size, seed=0)  # batch_size = 1024 (faster in local)
+  else:
+    assert len(ds) % 8 == 0  # we need the eval set to be divisible by 8 in this impl
 
   use_torchvision = (aug is not None and aug.torchvision)
   if use_torchvision:
@@ -224,7 +226,7 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
 
   ds = ds.map(ds_map_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
 
-  ds = ds.batch(batch_size, drop_remainder=True)  # if not True the batch size would be changed
+  ds = ds.batch(batch_size, drop_remainder=train)  # we drop the remainder if eval
 
   if not train:
     ds = ds.repeat()
