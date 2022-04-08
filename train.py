@@ -591,8 +591,8 @@ def run_eval(state, p_eval_step, eval_iter, steps_per_eval, epoch):
     metrics = p_eval_step(state, eval_batch)
     eval_metrics.append(metrics)
     num_valid = jnp.sum(metrics['label'] >= 0)
-    logging.info('process {}: {} / {}, valid {}'.format(jax.process_index(), i, steps_per_eval, valid))
-    if i == steps_per_eval - 1:
+    logging.info('process {}: {} / {}, valid {}'.format(jax.process_index(), i, steps_per_eval, num_valid))
+    if i >= steps_per_eval - 2:
       logging.info(eval_metrics['label'])
 
   if not (jax.process_index() == 0):  # not first process
