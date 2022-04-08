@@ -602,6 +602,7 @@ def run_eval(state, p_eval_step, eval_iter, steps_per_eval, epoch):
 
   if not (jax.process_index() == 0):  # not first process
     logging.set_verbosity(logging.ERROR)  # disable info/warning
+  jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
   from IPython import embed; embed();
   if (0 == 0): raise NotImplementedError
 
