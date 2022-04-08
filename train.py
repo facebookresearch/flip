@@ -114,7 +114,7 @@ def compute_eval_metrics(logits, labels, labels_one_hot):
   }
   # metrics = lax.pmean(metrics, axis_name='batch')
   metrics = lax.all_gather(metrics, axis_name='batch')
-  # metrics = jax.tree_map(lambda x: jnp.reshape(x, [-1,]), metrics)
+  metrics = jax.tree_map(lambda x: jnp.reshape(x, [-1,]), metrics)
   return metrics
 
 
@@ -588,26 +588,9 @@ def run_eval(state, p_eval_step, eval_iter, steps_per_eval, epoch):
   for i in range(steps_per_eval):
     eval_batch = next(eval_iter)
     metrics = p_eval_step(state, eval_batch)
-    metrics = jax.tree_map(lambda x: x[0], metrics)
     eval_metrics.append(metrics)
-    num_valid = jnp.sum(metrics['label'] >= 0)
-    logging.info('process {}: {} / {}, valid {}'.format(jax.process_index(), i, steps_per_eval, num_valid))
-    if i >= steps_per_eval - 2:
-      labels = metrics['label']
-      logging.info('labels.shape: {}'.format(labels.shape))
-      # logging.info('labels:\n{}'.format(labels))
-      for j in range(labels.shape[0]):
-        logging.info('j: {} {}'.format(j, labels[j]))
-
-    # jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
-    # if i == steps_per_eval - 1:
-    #   verbose_on()
-    #   logging.info('process {}: eval_batch:\n{}'.format(jax.process_index(), eval_batch['label']))
-    #   verbose_off()
-      
-  jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
-  from IPython import embed; embed();
-  if (0 == 0): raise NotImplementedError
+    # num_valid = jnp.sum(metrics['label'] >= 0)
+    # logging.info('process {}: {} / {}, valid {}'.format(jax.process_index(), i, steps_per_eval, num_valid))
 
   eval_metrics = jax.tree_map(lambda x: x[0], eval_metrics)
   eval_metrics = jax.device_get(eval_metrics)
