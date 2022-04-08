@@ -156,16 +156,15 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
     split = 'train[{}:{}]'.format(start, start + split_size)
   else:
     validate_examples = dataset_builder.info.splits['validation'].num_examples
-    # split_size = validate_examples // jax.process_count()
-    # start = jax.process_index() * split_size
-    # split = 'validation[{}:{}]'.format(start, start + split_size)
-    split = 'validation'  # use full val
-  num_classes = dataset_builder.info.features['label'].num_classes
+    split_size = validate_examples // jax.process_count()
+    start = jax.process_index() * split_size
+    split = 'validation[{}:{}]'.format(start, start + split_size)
+    logging.set_verbosity(logging.INFO)  # show all processes
+    logging.info('split: {}'.format(split))
+    if not (jax.process_index() == 0):  # not first process
+      logging.set_verbosity(logging.ERROR)  # disable info/warning
 
-  logging.set_verbosity(logging.INFO)  # show all processes
-  logging.info('split: {}'.format(split))
-  if not (jax.process_index() == 0):  # not first process
-    logging.set_verbosity(logging.ERROR)  # disable info/warning
+  num_classes = dataset_builder.info.features['label'].num_classes
 
   ds = dataset_builder.as_dataset(split=split, decoders={
       'image': tfds.decode.SkipDecoding(),
@@ -183,8 +182,8 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
     ds = ds.repeat()
     # ds = ds.shuffle(16 * batch_size, seed=0)
     ds = ds.shuffle(512 * batch_size, seed=0)  # batch_size = 1024 (faster in local)
-  else:
-    assert len(ds) % 8 == 0  # we need the eval set to be divisible by 8 in this impl
+  # else:
+  #   assert len(ds) % 8 == 0  # we need the eval set to be divisible by 8 in this impl
 
   use_torchvision = (aug is not None and aug.torchvision)
   if use_torchvision:

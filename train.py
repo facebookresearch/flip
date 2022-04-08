@@ -110,6 +110,7 @@ def compute_eval_metrics(logits, labels, labels_one_hot):
   metrics = {
       'loss': loss,
       'accuracy': accuracy,
+      'label': labels
   }
   # metrics = lax.pmean(metrics, axis_name='batch')
   metrics = lax.all_gather(metrics, axis_name='batch')
@@ -246,6 +247,11 @@ def prepare_tf_data(xs):
     # Use _numpy() for zero-copy conversion between TF and NumPy.
     x = x._numpy()  # pylint: disable=protected-access
 
+    if x.shape[0] % local_device_count != 0:
+      n = math.ceil(x.shape[0] / local_device_count) * local_device_count
+      pads = -np.ones((n - x.shape[0],) + x.shape[1:], dtype=x.dtype)
+      x = np.concatenate([x, pads], axis=0)
+
     # reshape (host_batch_size, height, width, 3) to
     # (local_devices, device_batch_size, height, width, 3)
     return x.reshape((local_device_count, -1) + x.shape[1:])
@@ -264,9 +270,7 @@ def create_input_iter(dataset_builder, batch_size, image_size, dtype, train,
     ds = map(apply_mix, ds)
 
   # ------------------------------------------------
-  # from IPython import embed; embed();
-  # if (0 == 0): raise NotImplementedError
-  # x = next(iter(ds))
+  x = next(iter(ds))
   # ------------------------------------------------
 
   ds = map(prepare_tf_data, ds)
@@ -440,7 +444,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   if config.steps_per_eval == -1:
     num_validation_examples = dataset_builder.info.splits[
         'validation'].num_examples
-    steps_per_eval = math.ceil(num_validation_examples / local_batch_size)
+    steps_per_eval = math.ceil(num_validation_examples / config.batch_size)  # we will pad it
   else:
     steps_per_eval = config.steps_per_eval
 
@@ -594,15 +598,19 @@ def run_eval(state, p_eval_step, eval_iter, steps_per_eval, epoch):
   # sync batch statistics across replicas
   state = sync_batch_stats(state)
   tic = time.time()
+  steps_per_eval = 2
   for i in range(steps_per_eval):
     eval_batch = next(eval_iter)
     metrics = p_eval_step(state, eval_batch)
     eval_metrics.append(metrics)
-    # print('{} / {}'.format(i, steps_per_eval), i, steps_per_eval, metrics['test_acc1'].shape)
+    print('{} / {}'.format(i, steps_per_eval), i, steps_per_eval, metrics['test_acc1'].shape)
 
   eval_metrics = jax.tree_map(lambda x: x[0], eval_metrics)
   eval_metrics = jax.device_get(eval_metrics)
   eval_metrics = jax.tree_multimap(lambda *args: np.concatenate(args), *eval_metrics)
+
+  valid = np.where(eval_metrics['label'] >= 0)  # remove padded patch
+  eval_metrics = jax.tree_util.tree_map(lambda x: x[valid], eval_metrics)
 
   toc = time.time() - tic
   logging.info('Eval time: {}, {} steps, {} samples'.format(
