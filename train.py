@@ -19,7 +19,6 @@ The data is loaded using tensorflow_datasets.
 """
 
 import functools
-from operator import iconcat
 import time, datetime
 from typing import Any
 
@@ -112,7 +111,6 @@ def compute_eval_metrics(logits, labels, labels_one_hot):
       'accuracy': accuracy,
       'label': labels
   }
-  # metrics = lax.pmean(metrics, axis_name='batch')
   metrics = lax.all_gather(metrics, axis_name='batch')
   metrics = jax.tree_map(lambda x: jnp.reshape(x, [-1,]), metrics)
   return metrics
@@ -578,8 +576,6 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
 
 def run_eval(state, p_eval_step, eval_iter, steps_per_eval, epoch):
-  # logging.set_verbosity(logging.INFO)  # show all processes
-
   eval_metrics = []
   # sync batch statistics across replicas
   state = sync_batch_stats(state)
@@ -588,8 +584,6 @@ def run_eval(state, p_eval_step, eval_iter, steps_per_eval, epoch):
     eval_batch = next(eval_iter)
     metrics = p_eval_step(state, eval_batch)
     eval_metrics.append(metrics)
-    # num_valid = jnp.sum(metrics['label'] >= 0)
-    # logging.info('process {}: {} / {}, valid {}'.format(jax.process_index(), i, steps_per_eval, num_valid))
 
   eval_metrics = jax.tree_map(lambda x: x[0], eval_metrics)
   eval_metrics = jax.device_get(eval_metrics)
@@ -605,16 +599,7 @@ def run_eval(state, p_eval_step, eval_iter, steps_per_eval, epoch):
     steps_per_eval,
     len(eval_metrics['test_acc1'])))
 
-  # eval_metrics = common_utils.get_metrics(eval_metrics)
   summary = jax.tree_map(lambda x: x.mean(), eval_metrics)
   values = [f"{k}: {v:.6f}" for k, v in sorted(summary.items())]
   logging.info('eval epoch: %d, %s', epoch, ', '.join(values))
   return summary
-
-
-def verbose_on():
-  logging.set_verbosity(logging.INFO)  # show all processes
-
-def verbose_off():
-  if not (jax.process_index() == 0):  # not first process
-    logging.set_verbosity(logging.ERROR)  # disable info/warning
