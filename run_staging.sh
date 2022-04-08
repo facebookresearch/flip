@@ -14,9 +14,9 @@ cls='tgap'
 
 head_init=0.001
 
-vitsize=dbg
+vitsize=large
 CONFIG=cfg_vit_${vitsize}
-# source scripts/select_chkpt_${vitsize}.sh
+source scripts/select_chkpt_${vitsize}.sh
 
 name=`basename ${PRETRAIN_DIR}`
 
@@ -52,6 +52,7 @@ export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets
 python3 main.py \
     --workdir=$WORKDIR \
     --config=configs/$CONFIG.py \
+    --config.pretrain_dir=${PRETRAIN_DIR} \
     --config.batch_size=${batch} \
     --config.learning_rate=${lr} \
     --config.learning_rate_decay=${lrd} \
@@ -70,6 +71,5 @@ python3 main.py \
     --config.aug.randerase.on=False \
     --config.warmup_abs_lr=1e-6 \
 " 2>&1 | tee $LOGDIR/finetune.log
-    # --config.pretrain_dir=${PRETRAIN_DIR} \
 
 echo ${VM_NAME}
