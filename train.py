@@ -240,16 +240,15 @@ def eval_step(state, batch, ema_eval=False):
   return metrics
 
 
-def prepare_tf_data(xs):
+def prepare_tf_data(xs, batch_size):
   """Convert a input batch from tf Tensors to numpy arrays."""
   local_device_count = jax.local_device_count()
   def _prepare(x):
     # Use _numpy() for zero-copy conversion between TF and NumPy.
     x = x._numpy()  # pylint: disable=protected-access
 
-    if x.shape[0] % local_device_count != 0:
-      n = math.ceil(x.shape[0] / local_device_count) * local_device_count
-      pads = -np.ones((n - x.shape[0],) + x.shape[1:], dtype=x.dtype)
+    if x.shape[0] != batch_size:
+      pads = -np.ones((batch_size - x.shape[0],) + x.shape[1:], dtype=x.dtype)
       x = np.concatenate([x, pads], axis=0)
 
     # reshape (host_batch_size, height, width, 3) to
@@ -273,7 +272,7 @@ def create_input_iter(dataset_builder, batch_size, image_size, dtype, train,
   # x = next(iter(ds))
   # ------------------------------------------------
 
-  ds = map(prepare_tf_data, ds)
+  ds = map(functools.partial(prepare_tf_data, batch_size=batch_size), ds)
   it = jax_utils.prefetch_to_device(ds, 2)
   return it
 
