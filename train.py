@@ -595,6 +595,7 @@ def run_eval(state, p_eval_step, eval_iter, steps_per_eval, epoch):
   eval_metrics = jax.tree_multimap(lambda *args: np.concatenate(args), *eval_metrics)
 
   valid = np.where(eval_metrics['label'] >= 0)  # remove padded patch
+  eval_metrics.pop('label')
   eval_metrics = jax.tree_util.tree_map(lambda x: x[valid], eval_metrics)
 
   toc = time.time() - tic
