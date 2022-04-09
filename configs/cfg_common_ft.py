@@ -109,6 +109,8 @@ def get_config():
   config.aug.mix.switch_elementwise = False  # element-wise switch between mixup/cutmix
   config.aug.mix.batch_size = 32  # the mix batch size to mimic timm; -1 is element-wise
 
+  config.aug.mix.lambda_elementwise = False  # element-wise random lambda (otherwise batch-wise, using mix.batch_size)
+
   # rand erase config
   config.aug.randerase = ml_collections.ConfigDict()
   config.aug.randerase.on = False

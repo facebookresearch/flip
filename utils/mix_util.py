@@ -23,8 +23,8 @@ def apply_mix(xs, cfg):
     use_mixup = (tf.random.uniform([imgs.shape[0]], minval=0, maxval=1., dtype=tf.float32) > 0.5)
     use_mixup = tf.cast(use_mixup, tf.float32)
 
-    imgs_mixup, lmb_mixup = apply_mixup(imgs, imgs_rev, cfg.mixup_alpha, batch_size)
-    imgs_cutmix, lmb_cutmix = apply_cutmix(imgs, imgs_rev, cfg.cutmix_alpha, batch_size)
+    imgs_mixup, lmb_mixup = apply_mixup(imgs, imgs_rev, batch_size, cfg)
+    imgs_cutmix, lmb_cutmix = apply_cutmix(imgs, imgs_rev, batch_size, cfg)
 
     lmb = lmb_mixup * use_mixup + lmb_cutmix * (1 - use_mixup)
 
@@ -34,13 +34,13 @@ def apply_mix(xs, cfg):
     # host-wise mixup/cutmix switch (note lambda is always element-wise)
     use_mixup = (tf.random.uniform([], minval=0, maxval=1., dtype=tf.float32) > 0.5)
     imgs_mixed, lmb = tf.cond(use_mixup,
-      lambda: apply_mixup(imgs, imgs_rev, cfg.mixup_alpha, batch_size),
-      lambda: apply_cutmix(imgs, imgs_rev, cfg.cutmix_alpha, batch_size),
+      lambda: apply_mixup(imgs, imgs_rev, batch_size, cfg),
+      lambda: apply_cutmix(imgs, imgs_rev, batch_size, cfg),
     )
   elif cfg.mixup and not cfg.cutmix:
-    imgs_mixed, lmb = apply_mixup(imgs, imgs_rev, cfg.mixup_alpha, batch_size)
+    imgs_mixed, lmb = apply_mixup(imgs, imgs_rev, batch_size, cfg)
   elif cfg.cutmix and not cfg.mixup:
-    imgs_mixed, lmb = apply_cutmix(imgs, imgs_rev, cfg.cutmix_alpha, batch_size)
+    imgs_mixed, lmb = apply_cutmix(imgs, imgs_rev, batch_size, cfg)
   else:
     raise NotImplementedError
   
@@ -58,16 +58,19 @@ def get_reverse(x, batch_size):
   return x_rev
 
 
-def apply_mixup(imgs, imgs_rev, mixup_alpha, batch_size):
+def apply_mixup(imgs, imgs_rev, batch_size, cfg):
   """
   imgs, imgs_rev: [N, H, W, 3]
   output:
   lmb: [N,]
   """
-  dist = tfp.distributions.Beta(mixup_alpha, mixup_alpha)
-  lmb = dist.sample(imgs.shape[0] // batch_size)
-  lmb = tf.expand_dims(lmb, axis=0)
-  lmb = tf.repeat(lmb, repeats=batch_size, axis=0)  # e.g, [B, N // B]
+  dist = tfp.distributions.Beta(cfg.mixup_alpha, cfg.mixup_alpha)
+  if cfg.lambda_elementwise:
+    lmb = dist.sample(imgs.shape[0])
+  else:
+    lmb = dist.sample(imgs.shape[0] // batch_size)
+    lmb = tf.expand_dims(lmb, axis=0)
+    lmb = tf.repeat(lmb, repeats=batch_size, axis=0)  # e.g, [B, N // B]
   lmb = tf.reshape(lmb, [-1] + [1] * (len(imgs.shape) - 1))  # [N, 1, 1, 1, 1]
 
   imgs_mixed = imgs * lmb + imgs_rev * (1 - lmb)
@@ -75,11 +78,15 @@ def apply_mixup(imgs, imgs_rev, mixup_alpha, batch_size):
   return imgs_mixed, lmb
 
 
-def apply_cutmix(imgs, imgs_rev, cutmix_alpha, batch_size):
-  dist = tfp.distributions.Beta(cutmix_alpha, cutmix_alpha)
-  lmb = dist.sample(imgs.shape[0] // batch_size)
-  lmb = tf.expand_dims(lmb, axis=0)
-  lmb = tf.repeat(lmb, repeats=batch_size, axis=0)  # e.g, [B, N // B]
+def apply_cutmix(imgs, imgs_rev, batch_size, cfg):
+  dist = tfp.distributions.Beta(cfg.cutmix_alpha, cfg.cutmix_alpha)
+
+  if cfg.lambda_elementwise:
+    lmb = dist.sample(imgs.shape[0])
+  else:
+    lmb = dist.sample(imgs.shape[0] // batch_size)
+    lmb = tf.expand_dims(lmb, axis=0)
+    lmb = tf.repeat(lmb, repeats=batch_size, axis=0)  # e.g, [B, N // B]
   lmb = tf.reshape(lmb, -1)
 
   H, W = imgs.shape[1:3]

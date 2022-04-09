@@ -21,7 +21,7 @@ source scripts/select_chkpt_${vitsize}.sh
 name=`basename ${PRETRAIN_DIR}`
 
 # pytorch_recipe (pyre): _autoaug_lb0.1_cropv4_exwd_initv2_rsinit_dp0.1_cutmixup_minlr
-JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_FT_b${batch}_lr${lr}_lrd${lrd}_${cls}_hinit${head_init}_b0.999_NOmixup_32cutmix_NOaa_NOerase_warmlr_NOencnorm_shf512b_fullevsp
+JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_FT_b${batch}_lr${lr}_lrd${lrd}_${cls}_hinit${head_init}_b0.999_32mixup_32cutmix_elelmd_NOaa_NOerase_warmlr_NOencnorm_shf512b_fullevsp
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
 LOGDIR=/home/${USER}/logs/${JOBNAME}
@@ -65,9 +65,10 @@ python3 main.py \
     --config.init_backend=tpu \
     --config.model.classifier=${cls} \
     --config.rescale_head_init=${head_init} \
-    --config.aug.mix.mixup=False \
+    --config.aug.mix.mixup=True \
     --config.aug.mix.cutmix=True \
     --config.aug.mix.batch_size=32 \
+    --config.aug.mix.lambda_elementwise=True \
     --config.aug.autoaug=None \
     --config.aug.randerase.on=False \
     --config.warmup_abs_lr=1e-6 \
