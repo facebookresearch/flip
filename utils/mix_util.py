@@ -68,7 +68,7 @@ def apply_mixup(imgs, imgs_rev, mixup_alpha, batch_size):
   lmb = dist.sample(imgs.shape[0] // batch_size)
   lmb = tf.expand_dims(lmb, axis=0)
   lmb = tf.repeat(lmb, repeats=batch_size, axis=0)  # e.g, [B, N // B]
-  lmb = tf.reshape(lmb, [-1] + [1] * (len(imgs.shape) - 1))  # [128, 1, 1, 1, 1]
+  lmb = tf.reshape(lmb, [-1] + [1] * (len(imgs.shape) - 1))  # [N, 1, 1, 1, 1]
 
   imgs_mixed = imgs * lmb + imgs_rev * (1 - lmb)
   lmb = tf.reshape(lmb, [-1,])
@@ -80,7 +80,7 @@ def apply_cutmix(imgs, imgs_rev, cutmix_alpha, batch_size):
   lmb = dist.sample(imgs.shape[0] // batch_size)
   lmb = tf.expand_dims(lmb, axis=0)
   lmb = tf.repeat(lmb, repeats=batch_size, axis=0)  # e.g, [B, N // B]
-  lmb = tf.reshape(lmb, [-1] + [1] * (len(imgs.shape) - 1))  # [128, 1, 1, 1, 1]
+  lmb = tf.reshape(lmb, -1)
 
   H, W = imgs.shape[1:3]
   assert H == W  # hack
