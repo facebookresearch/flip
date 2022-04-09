@@ -152,9 +152,10 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
   """
   if train:
     train_examples = dataset_builder.info.splits['train'].num_examples
-    split_size = train_examples // jax.process_count()
-    start = jax.process_index() * split_size
-    split = 'train[{}:{}]'.format(start, start + split_size)
+    # split_size = train_examples // jax.process_count()
+    # start = jax.process_index() * split_size
+    # split = 'train[{}:{}]'.format(start, start + split_size)
+    split = 'train'
   else:
     validate_examples = dataset_builder.info.splits['validation'].num_examples
     split_size = math.ceil(validate_examples / jax.process_count())
