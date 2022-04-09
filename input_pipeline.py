@@ -152,10 +152,9 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
   """
   if train:
     train_examples = dataset_builder.info.splits['train'].num_examples
-    # split_size = train_examples // jax.process_count()
-    # start = jax.process_index() * split_size
-    # split = 'train[{}:{}]'.format(start, start + split_size)
-    split = 'train'
+    split_size = train_examples // jax.process_count()
+    start = jax.process_index() * split_size
+    split = 'train[{}:{}]'.format(start, start + split_size)
   else:
     validate_examples = dataset_builder.info.splits['validation'].num_examples
     split_size = math.ceil(validate_examples / jax.process_count())
@@ -179,9 +178,8 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
     ds = ds.cache()
 
   if train:
-    seed = jax.process_index()  # 0
     ds = ds.repeat()
-    ds = ds.shuffle(512 * batch_size, seed=seed)  # batch_size = 1024 (faster in local)
+    ds = ds.shuffle(512 * batch_size, seed=0)  # batch_size = 1024 (faster in local)
 
   use_torchvision = (aug is not None and aug.torchvision)
   if use_torchvision:
