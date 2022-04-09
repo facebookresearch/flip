@@ -77,7 +77,10 @@ def apply_mixup(imgs, imgs_rev, mixup_alpha, batch_size):
 
 def apply_cutmix(imgs, imgs_rev, cutmix_alpha, batch_size):
   dist = tfp.distributions.Beta(cutmix_alpha, cutmix_alpha)
-  lmb = dist.sample(imgs.shape[0])  # element-wise mix
+  lmb = dist.sample(imgs.shape[0] // batch_size)
+  lmb = tf.expand_dims(lmb, axis=0)
+  lmb = tf.repeat(lmb, repeats=batch_size, axis=0)  # e.g, [B, N // B]
+  lmb = tf.reshape(lmb, [-1] + [1] * (len(imgs.shape) - 1))  # [128, 1, 1, 1, 1]
 
   H, W = imgs.shape[1:3]
   assert H == W  # hack
