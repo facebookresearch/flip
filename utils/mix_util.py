@@ -8,6 +8,7 @@ def apply_mix(xs, cfg):
   xs['image']: (N, H, W, C).
   xs['label']: (N, ). unchanged
   xs['label_one_hot']: (N, num_classes). had label smoothing.
+  cfg.batch_size: to mimic the smaller per-GPU batch size behavior in PyTorch.
   """
   batch_size = xs.shape[0] if cfg.batch_size < 0 else cfg.batch_size
 
@@ -64,10 +65,9 @@ def apply_mixup(imgs, imgs_rev, mixup_alpha, batch_size):
   lmb: [N,]
   """
   dist = tfp.distributions.Beta(mixup_alpha, mixup_alpha)
-
-  lmb = dist.sample(batch_size)
-  lmb = tf.expand_dims(lmb, axis=-1)
-  lmb = tf.repeat(lmb, repeats=imgs.shape[0] // batch_size, axis=-1)  # e.g, [B, N // B]
+  lmb = dist.sample(imgs.shape[0] // batch_size)
+  lmb = tf.expand_dims(lmb, axis=0)
+  lmb = tf.repeat(lmb, repeats=batch_size, axis=0)  # e.g, [B, N // B]
   lmb = tf.reshape(lmb, [-1] + [1] * (len(imgs.shape) - 1))  # [128, 1, 1, 1, 1]
 
   imgs_mixed = imgs * lmb + imgs_rev * (1 - lmb)
