@@ -219,9 +219,8 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
 
   # ---------------------------------------
   # debugging 
-  # for _ in range(10):
-  #   x = next(iter(ds))
-  #   decode_example(x)
+  # x = next(iter(ds))
+  # decode_example(x)
   # raise NotImplementedError
   # ---------------------------------------
 

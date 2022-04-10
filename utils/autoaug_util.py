@@ -821,7 +821,7 @@ def distort_image_with_randaugment_v2(image, num_layers, magnitude):
       'Rotate',
       'PosterizeIncreasing',  # new in timm
       'SolarizeIncreasing',  # new in timm
-      'SolarizeAddModified',  # modified
+      'SolarizeAddModified',  # modified for dtype
       'ColorIncreasing',  # new in timm
       'ContrastIncreasing',  # new in timm
       'BrightnessIncreasing',  # new in timm
@@ -846,8 +846,10 @@ def distort_image_with_randaugment_v2(image, num_layers, magnitude):
         image = tf.cond(
             tf.equal(i, op_to_select),
             # pylint:disable=g-long-lambda
-            lambda selected_func=func, selected_args=args: selected_func(
-                image, *selected_args),
+            # lambda selected_func=func, selected_args=args: selected_func(
+            #     image, *selected_args),
+            lambda selected_func=func, selected_args=args: 
+              _apply_func_with_prob(selected_func, image, selected_args, prob=0.5),  # prob=0.5: new in timm
             # pylint:enable=g-long-lambda
             lambda: image)
 
