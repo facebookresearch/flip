@@ -1,5 +1,5 @@
 # VM_NAME=kmh-tpuvm-v3-128-1
-VM_NAME=kmh-tpuvm-v3-256-3
+VM_NAME=kmh-tpuvm-v3-256-4
 echo $VM_NAME
 REPO=https://71d519550fe3430ecbf39b70467e9210aed5da69:@github.com/KaimingHe/flax_dev.git
 BRANCH=main
@@ -21,7 +21,7 @@ source scripts/select_chkpt_${vitsize}.sh
 name=`basename ${PRETRAIN_DIR}`
 
 # pytorch_recipe (pyre): _autoaug_lb0.1_cropv4_exwd_initv2_rsinit_dp0.1_cutmixup_minlr
-JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_FT_b${batch}_lr${lr}_lrd${lrd}_${cls}_hinit${head_init}_b0.999_32mixup_32cutmix_aaRand_NOerase_warmlr_NOencnorm_shf512b_fullevsp
+JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_FT_b${batch}_lr${lr}_lrd${lrd}_${cls}_hinit${head_init}_b0.999_32mixup_32cutmix_randaugv2NOmstd_NOerase_warmlr_NOencnorm_shf512b_fullevsp
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
 LOGDIR=/home/${USER}/logs/${JOBNAME}
@@ -41,7 +41,7 @@ gcloud alpha compute tpus tpu-vm ssh ${VM_NAME} --zone europe-west4-a \
     --worker=all --command "
 cd ~/flax_dev
 git pull
-git checkout vit.ft.subtleties
+git checkout vit.ft.randaugv2
 git pull
 git rev-parse --short HEAD
 
@@ -69,7 +69,7 @@ python3 main.py \
     --config.aug.mix.cutmix=True \
     --config.aug.mix.batch_size=32 \
     --config.aug.mix.lambda_elementwise=False \
-    --config.aug.autoaug=randaug \
+    --config.aug.autoaug=randaugv2 \
     --config.aug.randerase.on=False \
     --config.warmup_abs_lr=1e-6 \
 " 2>&1 | tee $LOGDIR/finetune.log
