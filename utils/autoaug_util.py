@@ -769,7 +769,9 @@ def distort_image_with_randaugment(image, num_layers, magnitude):
 
 def distort_image_with_randaugment_v2(image, num_layers, magnitude):
   """Applies the RandAugment policy to `image`.
-  kaiming: following timm's implementation.
+  kaiming: v2 following timm's implementation:
+  1. Using "-inc1": all "increasing" configs
+  2. Using "-mstd0.5": jitter magnitude
   Returns:
     The augmented version of `image`.
   """
@@ -803,7 +805,8 @@ def distort_image_with_randaugment_v2(image, num_layers, magnitude):
   for layer_num in range(num_layers):
     op_to_select = tf.random_uniform(
         [], maxval=len(available_ops), dtype=tf.int32)
-    random_magnitude = float(magnitude)
+    # random_magnitude = float(magnitude)
+    random_magnitude = tf.random.normal([], mean=magnitude, stddev=0.5)
     with tf.name_scope('randaug_layer_{}'.format(layer_num)):
       for (i, op_name) in enumerate(available_ops):
         prob = tf.random_uniform([], minval=0.2, maxval=0.8, dtype=tf.float32)
@@ -817,9 +820,6 @@ def distort_image_with_randaugment_v2(image, num_layers, magnitude):
                 image, *selected_args),
             # pylint:enable=g-long-lambda
             lambda: image)
-
-  from IPython import embed; embed();
-  if (0 == 0): raise NotImplementedError
 
   # disable warnings; will enable afterwards
   tf.logging.set_verbosity(tf.logging.INFO)
