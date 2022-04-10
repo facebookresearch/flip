@@ -106,7 +106,7 @@ def preprocess_for_train(image_bytes, dtype=tf.float32, image_size=IMAGE_SIZE, a
   elif aug.autoaug == 'randaugv2':
     image = tf.clip_by_value(image, 0.0, 255.0)
     image = tf.cast(image, dtype=tf.uint8)
-    image = distort_image_with_randaugment_v2(image, num_layers=2, magnitude=9)
+    image = distort_image_with_randaugment_v2(image, num_layers=15, magnitude=9)
     image = tf.cast(image, dtype=tf.float32)
   elif aug.autoaug is None or aug.autoaug == 'None':
     pass
@@ -219,9 +219,9 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
 
   # ---------------------------------------
   # debugging 
-  x = next(iter(ds))
-  decode_example(x)
-  raise NotImplementedError
+  # x = next(iter(ds))
+  # decode_example(x)
+  # raise NotImplementedError
   # ---------------------------------------
 
   ds = ds.map(ds_map_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)

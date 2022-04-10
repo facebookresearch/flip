@@ -235,6 +235,16 @@ def posterize(image, bits):
   return tf.bitwise.left_shift(tf.bitwise.right_shift(image, shift), shift)
 
 
+def posterize_increasing(image, bits):
+  """Following timm."""
+  shift = tf.cast(8 - bits, tf.uint8)
+  output = tf.cond(bits >= 8,
+    lambda: image,
+    lambda: tf.bitwise.left_shift(tf.bitwise.right_shift(image, shift), shift)
+  )
+  return output
+
+
 def rotate(image, degrees, replace):
   """Rotates the image by degrees either clockwise or counterclockwise.
 
@@ -463,7 +473,7 @@ NAME_TO_FUNC = {
     'Invert': invert,
     'Rotate': rotate,
     'Posterize': posterize,
-    'PosterizeIncreasing': posterize,  # new in timm
+    'PosterizeIncreasing': posterize_increasing,  # new in timm
     'Solarize': solarize,
     'SolarizeIncreasing': solarize,  # new in timm
     'SolarizeAdd': solarize_add,
@@ -544,9 +554,10 @@ def level_to_arg(hparams):
       'Invert': lambda level: (),
       'Rotate': _rotate_level_to_arg,
       'Posterize': lambda level: (int((level/_MAX_LEVEL) * 4),),
-      'PosterizeIncreasing': lambda level: (4 - int((level/_MAX_LEVEL) * 4),),  # new in timm
+      # 'PosterizeIncreasing': lambda level: (int(4 - (level/_MAX_LEVEL) * 4),),  # new in timm
+      'PosterizeIncreasing': lambda level: (int((level/_MAX_LEVEL) * 4),),
       'Solarize': lambda level: (int((level/_MAX_LEVEL) * 256),),
-      'SolarizeIncreasing': lambda level: (256 - int((level/_MAX_LEVEL) * 256),),  # new in timm
+      'SolarizeIncreasing': lambda level: (int(256 - (level/_MAX_LEVEL) * 256),),  # new in timm
       'SolarizeAdd': lambda level: (int((level/_MAX_LEVEL) * 110),),
       'Color': _enhance_level_to_arg,
       'ColorIncreasing': _enhance_increasing_level_to_arg,  # new in timm
