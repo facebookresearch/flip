@@ -492,7 +492,7 @@ NAME_TO_FUNC = {
     'Invert': invert,
     'Rotate': rotate,
     'Posterize': posterize,
-    'PosterizeIncreasing': posterize,  # new in timm, posterize_modified
+    'PosterizeIncreasing': posterize_modified,  # new in timm, posterize_modified
     'Solarize': solarize,
     'SolarizeIncreasing': solarize_modified,  # new in timm
     'SolarizeAdd': solarize_add,
@@ -836,8 +836,8 @@ def distort_image_with_randaugment_v2(image, num_layers, magnitude):
   for layer_num in range(num_layers):
     op_to_select = tf.random_uniform(
         [], maxval=len(available_ops), dtype=tf.int32)
-    random_magnitude = float(magnitude)
-    # random_magnitude = tf.random.normal([], mean=magnitude, stddev=0.5)
+    # random_magnitude = float(magnitude)
+    random_magnitude = tf.random.normal([], mean=magnitude, stddev=0.5)
     with tf.name_scope('randaug_layer_{}'.format(layer_num)):
       for (i, op_name) in enumerate(available_ops):
         # prob = tf.random_uniform([], minval=0.2, maxval=0.8, dtype=tf.float32)
