@@ -22,7 +22,7 @@ source scripts/select_chkpt_${vitsize}.sh
 name=`basename ${PRETRAIN_DIR}`
 
 # pytorch_recipe (pyre): _autoaug_lb0.1_cropv4_exwd_initv2_rsinit_dp0.1_cutmixup_minlr
-JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_FT_b${batch}_lr${lr}_lrd${lrd}_${cls}_hinit${head_init}_b0.999_32mixup_32cutmix_NOerase_warmlr_NOencnorm_shf512b_fullevsp_randaugv2_mstd_prob0.5
+JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_FT_b${batch}_lr${lr}_lrd${lrd}_${cls}_hinit${head_init}_b0.999_32mixup_32cutmix_YESerase_warmlr_NOencnorm_shf512b_fullevsp_randaugv2
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
 LOGDIR=/home/${USER}/logs/${JOBNAME}
@@ -49,7 +49,7 @@ git rev-parse --short HEAD
 # pip3 list | grep 'jax\|flax\|tensorflow '
 
 cd ~/flax_dev
-export TCMALLOC_LARGE_ALLOC_REPORT_THRESHOLD=2147483648
+export TCMALLOC_LARGE_ALLOC_REPORT_THRESHOLD=8589934592
 export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets
 python3 main.py \
     --workdir=$WORKDIR \
@@ -72,7 +72,7 @@ python3 main.py \
     --config.aug.mix.batch_size=32 \
     --config.aug.mix.lambda_elementwise=False \
     --config.aug.autoaug=randaugv2 \
-    --config.aug.randerase.on=False \
+    --config.aug.randerase.on=True \
     --config.warmup_abs_lr=1e-6 \
 " 2>&1 | tee $LOGDIR/finetune.log
 
