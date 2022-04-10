@@ -190,12 +190,31 @@ def solarize(image, threshold=128):
   return tf.where(image < threshold, image, 255 - image)
 
 
+def solarize_modified(image, threshold=128):
+  # For each pixel in the image, select the pixel
+  # if the value is less than the threshold.
+  # Otherwise, subtract 255 from the pixel.
+  threshold = tf.clip_by_value(threshold, 0, 255)
+  threshold = tf.cast(threshold, tf.uint8)
+  return tf.where(image < threshold, image, 255 - image)
+
+
 def solarize_add(image, addition=0, threshold=128):
   # For each pixel in the image less than threshold
   # we add 'addition' amount to it and then clip the
   # pixel value to be between 0 and 255. The value
   # of 'addition' is between -128 and 128.
   added_image = tf.cast(image, tf.int64) + addition
+  added_image = tf.cast(tf.clip_by_value(added_image, 0, 255), tf.uint8)
+  return tf.where(image < threshold, added_image, image)
+
+
+def solarize_add_modified(image, addition=0, threshold=128):
+  # For each pixel in the image less than threshold
+  # we add 'addition' amount to it and then clip the
+  # pixel value to be between 0 and 255. The value
+  # of 'addition' is between -128 and 128.
+  added_image = tf.cast(image, tf.int64) + tf.cast(addition, tf.int64)
   added_image = tf.cast(tf.clip_by_value(added_image, 0, 255), tf.uint8)
   return tf.where(image < threshold, added_image, image)
 
@@ -235,7 +254,7 @@ def posterize(image, bits):
   return tf.bitwise.left_shift(tf.bitwise.right_shift(image, shift), shift)
 
 
-def posterize_increasing(image, bits):
+def posterize_modified(image, bits):
   """Following timm."""
   shift = tf.cast(8 - bits, tf.uint8)
   output = tf.cond(bits >= 8,
@@ -473,10 +492,11 @@ NAME_TO_FUNC = {
     'Invert': invert,
     'Rotate': rotate,
     'Posterize': posterize,
-    'PosterizeIncreasing': posterize_increasing,  # new in timm
+    'PosterizeIncreasing': posterize_modified,  # new in timm
     'Solarize': solarize,
-    'SolarizeIncreasing': solarize,  # new in timm
+    'SolarizeIncreasing': solarize_modified,  # new in timm
     'SolarizeAdd': solarize_add,
+    'SolarizeAddModified': solarize_add_modified,
     'Color': color,
     'ColorIncreasing': color,  # new in timm
     'Contrast': contrast,
@@ -554,11 +574,11 @@ def level_to_arg(hparams):
       'Invert': lambda level: (),
       'Rotate': _rotate_level_to_arg,
       'Posterize': lambda level: (int((level/_MAX_LEVEL) * 4),),
-      # 'PosterizeIncreasing': lambda level: (int(4 - (level/_MAX_LEVEL) * 4),),  # new in timm
-      'PosterizeIncreasing': lambda level: (int((level/_MAX_LEVEL) * 4),),
+      'PosterizeIncreasing': lambda level: (4 - int((level/_MAX_LEVEL) * 4),),  # new in timm
       'Solarize': lambda level: (int((level/_MAX_LEVEL) * 256),),
-      'SolarizeIncreasing': lambda level: (int(256 - (level/_MAX_LEVEL) * 256),),  # new in timm
+      'SolarizeIncreasing': lambda level: (256 - int((level/_MAX_LEVEL) * 256),),  # new in timm
       'SolarizeAdd': lambda level: (int((level/_MAX_LEVEL) * 110),),
+      'SolarizeAddModified': lambda level: (int((level/_MAX_LEVEL) * 110),),
       'Color': _enhance_level_to_arg,
       'ColorIncreasing': _enhance_increasing_level_to_arg,  # new in timm
       'Contrast': _enhance_level_to_arg,
@@ -801,7 +821,7 @@ def distort_image_with_randaugment_v2(image, num_layers, magnitude):
       'Rotate',
       'PosterizeIncreasing',  # new in timm
       'SolarizeIncreasing',  # new in timm
-      'SolarizeAdd',
+      'SolarizeAddModified',  # modified
       'ColorIncreasing',  # new in timm
       'ContrastIncreasing',  # new in timm
       'BrightnessIncreasing',  # new in timm
