@@ -463,12 +463,18 @@ NAME_TO_FUNC = {
     'Invert': invert,
     'Rotate': rotate,
     'Posterize': posterize,
+    'PosterizeIncreasing': posterize,  # new in timm
     'Solarize': solarize,
+    'SolarizeIncreasing': solarize,  # new in timm
     'SolarizeAdd': solarize_add,
     'Color': color,
+    'ColorIncreasing': color,  # new in timm
     'Contrast': contrast,
+    'ContrastIncreasing': contrast,  # new in timm
     'Brightness': brightness,
+    'BrightnessIncreasing': brightness,  # new in timm
     'Sharpness': sharpness,
+    'SharpnessIncreasing': sharpness,  # new in timm
     'ShearX': shear_x,
     'ShearY': shear_y,
     'TranslateX': translate_x,
@@ -503,6 +509,20 @@ def _enhance_level_to_arg(level):
   return ((level/_MAX_LEVEL) * 1.8 + 0.1,)
 
 
+def _randomly_negate(v):
+    """With 50% prob, negate the value"""
+    return -v if tf.random_uniform([]) > 0.5 else v
+
+
+def _enhance_increasing_level_to_arg(level):  # new in timm
+  # the 'no change' level is 1.0, moving away from that towards 0. or 2.0 increases the enhancement blend
+  # range [0.1, 1.9]
+  level = (level/_MAX_LEVEL) * .9
+  level = 1.0 + _randomly_negate(level)
+  return level,
+
+
+
 def _shear_level_to_arg(level):
   level = (level/_MAX_LEVEL) * 0.3
   # Flip level to negative with 50% chance.
@@ -524,12 +544,18 @@ def level_to_arg(hparams):
       'Invert': lambda level: (),
       'Rotate': _rotate_level_to_arg,
       'Posterize': lambda level: (int((level/_MAX_LEVEL) * 4),),
+      'PosterizeIncreasing': lambda level: (4 - int((level/_MAX_LEVEL) * 4),),  # new in timm
       'Solarize': lambda level: (int((level/_MAX_LEVEL) * 256),),
+      'SolarizeIncreasing': lambda level: (256 - int((level/_MAX_LEVEL) * 256),),  # new in timm
       'SolarizeAdd': lambda level: (int((level/_MAX_LEVEL) * 110),),
       'Color': _enhance_level_to_arg,
+      'ColorIncreasing': _enhance_increasing_level_to_arg,  # new in timm
       'Contrast': _enhance_level_to_arg,
+      'ContrastIncreasing': _enhance_increasing_level_to_arg,  # new in timm
       'Brightness': _enhance_level_to_arg,
+      'BrightnessIncreasing': _enhance_increasing_level_to_arg,  # new in timm
       'Sharpness': _enhance_level_to_arg,
+      'SharpnessIncreasing': _enhance_increasing_level_to_arg,  # new in timm
       'ShearX': _shear_level_to_arg,
       'ShearY': _shear_level_to_arg,
       'Cutout': lambda level: (int((level/_MAX_LEVEL) * hparams.cutout_const),),
@@ -734,6 +760,66 @@ def distort_image_with_randaugment(image, num_layers, magnitude):
                 image, *selected_args),
             # pylint:enable=g-long-lambda
             lambda: image)
+
+  # disable warnings; will enable afterwards
+  tf.logging.set_verbosity(tf.logging.INFO)
+
+  return image
+
+
+def distort_image_with_randaugment_v2(image, num_layers, magnitude):
+  """Applies the RandAugment policy to `image`.
+  kaiming: following timm's implementation.
+  Returns:
+    The augmented version of `image`.
+  """
+  replace_value = [128] * 3
+  # tf.logging.info('Using RandAug.')
+
+  # disable warnings; will enable afterwards
+  tf.logging.set_verbosity(tf.logging.ERROR)
+
+  augmentation_hparams = HParams(
+      cutout_const=40, translate_const=100)
+  available_ops = [
+      'AutoContrast',
+      'Equalize',
+      'Invert',
+      'Rotate',
+      'PosterizeIncreasing',  # new in timm
+      'SolarizeIncreasing',  # new in timm
+      'SolarizeAdd',
+      'ColorIncreasing',  # new in timm
+      'ContrastIncreasing',  # new in timm
+      'BrightnessIncreasing',  # new in timm
+      'SharpnessIncreasing',  # new in timm
+      'ShearX',
+      'ShearY',
+      'TranslateX',
+      'TranslateY',
+      # 'Cutout',  # removed
+      ]
+
+  for layer_num in range(num_layers):
+    op_to_select = tf.random_uniform(
+        [], maxval=len(available_ops), dtype=tf.int32)
+    random_magnitude = float(magnitude)
+    with tf.name_scope('randaug_layer_{}'.format(layer_num)):
+      for (i, op_name) in enumerate(available_ops):
+        prob = tf.random_uniform([], minval=0.2, maxval=0.8, dtype=tf.float32)
+        func, _, args = _parse_policy_info(op_name, prob, random_magnitude,
+                                           replace_value, augmentation_hparams)
+        print('{} : {}'.format(func, args))
+        image = tf.cond(
+            tf.equal(i, op_to_select),
+            # pylint:disable=g-long-lambda
+            lambda selected_func=func, selected_args=args: selected_func(
+                image, *selected_args),
+            # pylint:enable=g-long-lambda
+            lambda: image)
+
+  from IPython import embed; embed();
+  if (0 == 0): raise NotImplementedError
 
   # disable warnings; will enable afterwards
   tf.logging.set_verbosity(tf.logging.INFO)

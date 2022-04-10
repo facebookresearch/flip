@@ -23,7 +23,7 @@ from utils.transform_util import \
   decode_and_random_crop, \
   _decode_and_center_crop, normalize_image, color_jitter
 
-from utils.autoaug_util import distort_image_with_autoaugment, distort_image_with_randaugment
+from utils.autoaug_util import distort_image_with_autoaugment, distort_image_with_randaugment, distort_image_with_randaugment_v2
 from utils.randerase_util import random_erase
 
 from absl import logging
@@ -102,6 +102,11 @@ def preprocess_for_train(image_bytes, dtype=tf.float32, image_size=IMAGE_SIZE, a
     image = tf.clip_by_value(image, 0.0, 255.0)
     image = tf.cast(image, dtype=tf.uint8)
     image = distort_image_with_randaugment(image, num_layers=2, magnitude=9)
+    image = tf.cast(image, dtype=tf.float32)
+  elif aug.autoaug == 'randaugv2':
+    image = tf.clip_by_value(image, 0.0, 255.0)
+    image = tf.cast(image, dtype=tf.uint8)
+    image = distort_image_with_randaugment_v2(image, num_layers=2, magnitude=9)
     image = tf.cast(image, dtype=tf.float32)
   elif aug.autoaug is None or aug.autoaug == 'None':
     pass
@@ -214,9 +219,9 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
 
   # ---------------------------------------
   # debugging 
-  # x = next(iter(ds))
-  # decode_example(x)
-  # raise NotImplementedError
+  x = next(iter(ds))
+  decode_example(x)
+  raise NotImplementedError
   # ---------------------------------------
 
   ds = ds.map(ds_map_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
