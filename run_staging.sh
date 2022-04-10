@@ -49,6 +49,7 @@ git rev-parse --short HEAD
 # pip3 list | grep 'jax\|flax\|tensorflow '
 
 cd ~/flax_dev
+export TCMALLOC_LARGE_ALLOC_REPORT_THRESHOLD=2147483648
 export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets
 python3 main.py \
     --workdir=$WORKDIR \

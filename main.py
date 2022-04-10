@@ -30,9 +30,6 @@ import train
 
 from utils import logging_util
 
-import os
-os.environ["TCMALLOC_LARGE_ALLOC_REPORT_THRESHOLD"] = str(3 * 1024 * 1024 * 1024)
-
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string('workdir', None, 'Directory to store model data.')
