@@ -2,8 +2,6 @@
 VM_NAME=kmh-tpuvm-v3-256-3
 echo $VM_NAME
 
-git push
-
 REPO=https://71d519550fe3430ecbf39b70467e9210aed5da69:@github.com/KaimingHe/flax_dev.git
 BRANCH=main
 
