@@ -1,5 +1,5 @@
-# VM_NAME=kmh-tpuvm-v3-128-1
-VM_NAME=kmh-tpuvm-v3-256-4
+VM_NAME=kmh-tpuvm-v3-128-1
+# VM_NAME=kmh-tpuvm-v3-256-4
 echo $VM_NAME
 
 REPO=https://71d519550fe3430ecbf39b70467e9210aed5da69:@github.com/KaimingHe/flax_dev.git
@@ -22,7 +22,7 @@ source scripts/select_chkpt_${vitsize}.sh
 name=`basename ${PRETRAIN_DIR}`
 
 # pytorch_recipe (pyre): _autoaug_lb0.1_cropv4_exwd_initv2_rsinit_dp0.1_cutmixup_minlr
-JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_FT_b${batch}_lr${lr}_lrd${lrd}_${cls}_hinit${head_init}_b0.999_32mixup_32cutmix_YESerase_warmlr_NOencnorm_shf512b_fullevsp_autoaug
+JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_FT_b${batch}_lr${lr}_lrd${lrd}_${cls}_hinit${head_init}_b0.999_32mixup_32cutmix_ele_YESerase_warmlr_NOencnorm_shf512b_fullevsp_autoaug
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
 LOGDIR=/home/${USER}/logs/${JOBNAME}
@@ -70,7 +70,7 @@ python3 main.py \
     --config.aug.mix.mixup=True \
     --config.aug.mix.cutmix=True \
     --config.aug.mix.batch_size=32 \
-    --config.aug.mix.lambda_elementwise=False \
+    --config.aug.mix.lambda_elementwise=True \
     --config.aug.autoaug=autoaug \
     --config.aug.randerase.on=True \
     --config.warmup_abs_lr=1e-6 \
