@@ -11,6 +11,7 @@ batch=1024
 lr=1e-3
 lrd=0.75
 ep=50
+dp=0.2
 
 vitsize=large
 CONFIG=cfg_vit_${vitsize}
@@ -19,7 +20,7 @@ source scripts/select_chkpt_${vitsize}.sh
 name=`basename ${PRETRAIN_DIR}`
 
 # finetune_pytorch_recipe (ftpy): lb0.1_b0.999_cropv4_exwd_initv2_headinit0.001_tgap_dp_mixup32_cutmix32_noerase_warmlr_minlr_autoaug
-JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_ftpy_b${batch}_lr${lr}_lrd${lrd}_autoaug_sanity2
+JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_ftpy_b${batch}_lr${lr}_lrd${lrd}_dp${dp}_autoaug_shf1280b
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
 LOGDIR=/home/${USER}/logs/${JOBNAME}
@@ -67,6 +68,7 @@ python3 main.py \
     --config.aug.mix.batch_size=32 \
     --config.aug.randerase.on=False \
     --config.aug.autoaug=autoaug \
+    --config.model.transformer.droppath_rate=${dp} \
 " 2>&1 | tee $LOGDIR/finetune.log
 
 echo ${VM_NAME}
