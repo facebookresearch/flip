@@ -39,7 +39,7 @@ gcloud alpha compute tpus tpu-vm ssh ${VM_NAME} --zone europe-west4-a \
     --worker=all --command "
 cd ~/flax_dev
 git pull
-git checkout vit.ft.randaugv2
+git checkout vit.ft.subtleties
 git pull
 git rev-parse --short HEAD
 
