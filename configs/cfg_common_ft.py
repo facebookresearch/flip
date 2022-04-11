@@ -44,7 +44,7 @@ def get_config():
   config.learning_rate = 1e-3  # this is the base lr
   config.warmup_epochs = 5.0
   config.min_abs_lr = 1e-6  # this is abs lr
-  config.warmup_abs_lr = 0.  # this is abs lr
+  config.warmup_abs_lr = =1e-6  # this is abs lr
 
   config.learning_rate_decay = 0.75  # lrd
 
@@ -118,7 +118,7 @@ def get_config():
 
   # init config
   config.rescale_init = False  # rescale initialized weights by layer id
-  config.rescale_head_init = 1.  # rescale the head initialized weights
+  config.rescale_head_init = 0.001  # rescale the head initialized weights
 
   # memory
   config.profile_memory = False
