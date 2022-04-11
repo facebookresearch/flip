@@ -85,7 +85,7 @@ def convert_from_pytorch(state, pretrain_dir):
   converted_params = flax.core.frozen_dict.freeze(converted_params)
   
   # sanity
-  verify = tu.tree_multimap(lambda x, y: (x.shape == y.shape),
+  verify = tu.tree_map(lambda x, y: (x.shape == y.shape),
       converted_params, state_params)
   verify = tu.tree_leaves(verify)
   assert jnp.all(jnp.array(verify)).item()

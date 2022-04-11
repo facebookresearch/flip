@@ -209,11 +209,11 @@ def train_step(state, batch, learning_rate_fn, config):
     # if is_fin == False the gradients contain Inf/NaNs and optimizer state and
     # params should be restored (= skip this step).
     new_state = new_state.replace(
-        opt_state=jax.tree_multimap(
+        opt_state=jax.tree_map(
             functools.partial(jnp.where, is_fin),
             new_state.opt_state,
             state.opt_state),
-        params=jax.tree_multimap(
+        params=jax.tree_map(
             functools.partial(jnp.where, is_fin),
             new_state.params,
             state.params))
@@ -339,7 +339,7 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
   # optional: rescale
   if config.rescale_init:
     rescales = opt_util.filter_parameters(params, opt_util.layer_rescale)
-    params = jax.tree_util.tree_multimap(lambda x, y: x * y, rescales, params)
+    params = jax.tree_util.tree_map(lambda x, y: x * y, rescales, params)
 
   if config.rescale_head_init != 1.:
     params = flax.core.frozen_dict.unfreeze(params)
@@ -351,7 +351,7 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
 
   # optional: exclude some wd
   if config.exclude_wd:
-    mask = jax.tree_util.tree_multimap(lambda x, y: bool(x and y), 
+    mask = jax.tree_util.tree_map(lambda x, y: bool(x and y), 
       opt_util.filter_parameters(params, opt_util.filter_bias_and_norm),
       opt_util.filter_parameters(params, opt_util.filter_cls_and_posembed)
     )
@@ -588,7 +588,7 @@ def run_eval(state, p_eval_step, eval_iter, steps_per_eval, epoch):
 
   eval_metrics = jax.tree_map(lambda x: x[0], eval_metrics)
   eval_metrics = jax.device_get(eval_metrics)
-  eval_metrics = jax.tree_multimap(lambda *args: np.concatenate(args), *eval_metrics)
+  eval_metrics = jax.tree_map(lambda *args: np.concatenate(args), *eval_metrics)
 
   valid = np.where(eval_metrics['label'] >= 0)  # remove padded patch
   eval_metrics.pop('label')

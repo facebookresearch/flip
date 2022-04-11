@@ -26,6 +26,6 @@ class EmaState:
     def update(self, new_variables):
         if self.decay == 0.:
             return self.replace(variables=None)
-        new_ema_variables = jax.tree_multimap(
+        new_ema_variables = jax.tree_map(
             lambda ema, p: ema * self.decay + (1. - self.decay) * p, self.variables, new_variables)
         return self.replace(variables=new_ema_variables)

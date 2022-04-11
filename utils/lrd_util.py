@@ -69,7 +69,7 @@ def scale_by_lrd(
 
   def update_fn(updates, state, params=None):
     del params
-    updates = jax.tree_multimap(lambda s, g: s * g, lrd, updates)
+    updates = jax.tree_map(lambda s, g: s * g, lrd, updates)
     return updates, state
 
   return base.GradientTransformation(init_fn, update_fn)

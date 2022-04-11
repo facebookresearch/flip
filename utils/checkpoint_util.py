@@ -55,8 +55,8 @@ def load_from_pretrain(state, pretrain_dir):
   params = flax.core.frozen_dict.freeze(params)
   
   # sanity
-  tu.tree_multimap(lambda x, y: (x.shape, y.shape), params, state_params)
-  verify = tu.tree_multimap(lambda x, y: (x.shape == y.shape), params, state_params)
+  tu.tree_map(lambda x, y: (x.shape, y.shape), params, state_params)
+  verify = tu.tree_map(lambda x, y: (x.shape == y.shape), params, state_params)
   verify = tu.tree_leaves(verify)
   assert jnp.all(jnp.array(verify)).item()
 
