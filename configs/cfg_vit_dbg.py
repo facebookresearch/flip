@@ -42,8 +42,9 @@ def get_config():
   config.model.transformer.dropout_rate = 0.0
   config.model.transformer.droppath_rate = 0.1
   config.model.transformer.num_layers = 2
+  config.model.classifier = 'tgap'  # 'token', 'tgap' (token + gap)
 
   # opt config
-  config.opt_mu_dtype = 'bfloat16'
+  config.opt_mu_dtype = 'float32'
 
   return config

@@ -41,6 +41,7 @@ def get_config():
   config.model = vit.get_l16_config()  # ViT-L/16
   config.model.transformer.dropout_rate = 0.0
   config.model.transformer.droppath_rate = 0.2
+  config.model.classifier = 'tgap'  # 'token', 'tgap' (token + gap)
 
   # opt config
   config.opt_mu_dtype = 'float32'  # bfloat16, float32
@@ -48,6 +49,5 @@ def get_config():
   # finetune
   config.num_epochs = 50.0
   config.learning_rate_decay = 0.75
-  config.classifier = 'tgap'  # 'token', 'tgap' (token + gap)
 
   return config
