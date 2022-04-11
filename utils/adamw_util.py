@@ -119,7 +119,7 @@ def _scale_by_adam(
     count_inc = numerics.safe_int32_increment(state.count)
     mu_hat = utils.cast_tree(_bias_correction(mu, b1, count_inc), mu_dtype)
     nu_hat = _bias_correction(nu, b2, count_inc)
-    updates = jax.tree_multimap(
+    updates = jax.tree_map(
         lambda m, v: m / (jnp.sqrt(v + eps_root) + eps), mu_hat, nu_hat)
     mu = utils.cast_tree(mu, mu_dtype)
     return updates, ScaleByAdamState(count=count_inc, mu=mu, nu=nu)

@@ -190,12 +190,31 @@ def solarize(image, threshold=128):
   return tf.where(image < threshold, image, 255 - image)
 
 
+def solarize_modified(image, threshold=128):
+  # For each pixel in the image, select the pixel
+  # if the value is less than the threshold.
+  # Otherwise, subtract 255 from the pixel.
+  threshold = tf.clip_by_value(threshold, 0, 255)
+  threshold = tf.cast(threshold, tf.uint8)
+  return tf.where(image < threshold, image, 255 - image)
+
+
 def solarize_add(image, addition=0, threshold=128):
   # For each pixel in the image less than threshold
   # we add 'addition' amount to it and then clip the
   # pixel value to be between 0 and 255. The value
   # of 'addition' is between -128 and 128.
   added_image = tf.cast(image, tf.int64) + addition
+  added_image = tf.cast(tf.clip_by_value(added_image, 0, 255), tf.uint8)
+  return tf.where(image < threshold, added_image, image)
+
+
+def solarize_add_modified(image, addition=0, threshold=128):
+  # For each pixel in the image less than threshold
+  # we add 'addition' amount to it and then clip the
+  # pixel value to be between 0 and 255. The value
+  # of 'addition' is between -128 and 128.
+  added_image = tf.cast(image, tf.int64) + tf.cast(addition, tf.int64)
   added_image = tf.cast(tf.clip_by_value(added_image, 0, 255), tf.uint8)
   return tf.where(image < threshold, added_image, image)
 
@@ -233,6 +252,16 @@ def posterize(image, bits):
   """Equivalent of PIL Posterize."""
   shift = 8 - bits
   return tf.bitwise.left_shift(tf.bitwise.right_shift(image, shift), shift)
+
+
+def posterize_modified(image, bits):
+  """Following timm."""
+  shift = tf.cast(8 - bits, tf.uint8)
+  output = tf.cond(bits >= 8,
+    lambda: image,
+    lambda: tf.bitwise.left_shift(tf.bitwise.right_shift(image, shift), shift)
+  )
+  return output
 
 
 def rotate(image, degrees, replace):
@@ -463,12 +492,19 @@ NAME_TO_FUNC = {
     'Invert': invert,
     'Rotate': rotate,
     'Posterize': posterize,
+    'PosterizeIncreasing': posterize_modified,  # new in timm, posterize_modified
     'Solarize': solarize,
+    'SolarizeIncreasing': solarize_modified,  # new in timm
     'SolarizeAdd': solarize_add,
+    'SolarizeAddModified': solarize_add_modified,
     'Color': color,
+    'ColorIncreasing': color,  # new in timm
     'Contrast': contrast,
+    'ContrastIncreasing': contrast,  # new in timm
     'Brightness': brightness,
+    'BrightnessIncreasing': brightness,  # new in timm
     'Sharpness': sharpness,
+    'SharpnessIncreasing': sharpness,  # new in timm
     'ShearX': shear_x,
     'ShearY': shear_y,
     'TranslateX': translate_x,
@@ -503,6 +539,20 @@ def _enhance_level_to_arg(level):
   return ((level/_MAX_LEVEL) * 1.8 + 0.1,)
 
 
+def _randomly_negate(v):
+    """With 50% prob, negate the value"""
+    return -v if tf.random_uniform([]) > 0.5 else v
+
+
+def _enhance_increasing_level_to_arg(level):  # new in timm
+  # the 'no change' level is 1.0, moving away from that towards 0. or 2.0 increases the enhancement blend
+  # range [0.1, 1.9]
+  level = (level/_MAX_LEVEL) * .9
+  level = 1.0 + _randomly_negate(level)
+  return level,
+
+
+
 def _shear_level_to_arg(level):
   level = (level/_MAX_LEVEL) * 0.3
   # Flip level to negative with 50% chance.
@@ -524,12 +574,19 @@ def level_to_arg(hparams):
       'Invert': lambda level: (),
       'Rotate': _rotate_level_to_arg,
       'Posterize': lambda level: (int((level/_MAX_LEVEL) * 4),),
+      'PosterizeIncreasing': lambda level: (4 - int((level/_MAX_LEVEL) * 4),),  # new in timm
       'Solarize': lambda level: (int((level/_MAX_LEVEL) * 256),),
+      'SolarizeIncreasing': lambda level: (256 - int((level/_MAX_LEVEL) * 256),),  # new in timm
       'SolarizeAdd': lambda level: (int((level/_MAX_LEVEL) * 110),),
+      'SolarizeAddModified': lambda level: (int((level/_MAX_LEVEL) * 110),),
       'Color': _enhance_level_to_arg,
+      'ColorIncreasing': _enhance_increasing_level_to_arg,  # new in timm
       'Contrast': _enhance_level_to_arg,
+      'ContrastIncreasing': _enhance_increasing_level_to_arg,  # new in timm
       'Brightness': _enhance_level_to_arg,
+      'BrightnessIncreasing': _enhance_increasing_level_to_arg,  # new in timm
       'Sharpness': _enhance_level_to_arg,
+      'SharpnessIncreasing': _enhance_increasing_level_to_arg,  # new in timm
       'ShearX': _shear_level_to_arg,
       'ShearY': _shear_level_to_arg,
       'Cutout': lambda level: (int((level/_MAX_LEVEL) * hparams.cutout_const),),
@@ -732,6 +789,67 @@ def distort_image_with_randaugment(image, num_layers, magnitude):
             # pylint:disable=g-long-lambda
             lambda selected_func=func, selected_args=args: selected_func(
                 image, *selected_args),
+            # pylint:enable=g-long-lambda
+            lambda: image)
+
+  # disable warnings; will enable afterwards
+  tf.logging.set_verbosity(tf.logging.INFO)
+
+  return image
+
+
+def distort_image_with_randaugment_v2(image, num_layers, magnitude):
+  """Applies the RandAugment policy to `image`.
+  kaiming: v2 following timm's implementation:
+  1. Using "-inc1": all "increasing" configs
+  2. Using "-mstd0.5": jitter magnitude
+  Returns:
+    The augmented version of `image`.
+  """
+  replace_value = [128] * 3
+  # tf.logging.info('Using RandAug.')
+
+  # disable warnings; will enable afterwards
+  tf.logging.set_verbosity(tf.logging.ERROR)
+
+  augmentation_hparams = HParams(
+      cutout_const=40, translate_const=100)
+  available_ops = [
+      'AutoContrast',
+      'Equalize',
+      'Invert',
+      'Rotate',
+      'PosterizeIncreasing',  # new in timm
+      'SolarizeIncreasing',  # new in timm
+      'SolarizeAddModified',  # modified for dtype
+      'ColorIncreasing',  # new in timm
+      'ContrastIncreasing',  # new in timm
+      'BrightnessIncreasing',  # new in timm
+      'SharpnessIncreasing',  # new in timm
+      'ShearX',
+      'ShearY',
+      'TranslateX',
+      'TranslateY',
+      # 'Cutout',  # removed
+      ]
+
+  for layer_num in range(num_layers):
+    op_to_select = tf.random_uniform(
+        [], maxval=len(available_ops), dtype=tf.int32)
+    # random_magnitude = float(magnitude)
+    random_magnitude = tf.random.normal([], mean=magnitude, stddev=0.5)
+    with tf.name_scope('randaug_layer_{}'.format(layer_num)):
+      for (i, op_name) in enumerate(available_ops):
+        # prob = tf.random_uniform([], minval=0.2, maxval=0.8, dtype=tf.float32)
+        func, _, args = _parse_policy_info(op_name, 1., random_magnitude,
+                                           replace_value, augmentation_hparams)
+        image = tf.cond(
+            tf.equal(i, op_to_select),
+            # pylint:disable=g-long-lambda
+            # lambda selected_func=func, selected_args=args: selected_func(
+            #     image, *selected_args),
+            lambda selected_func=func, selected_args=args: 
+              _apply_func_with_prob(selected_func, image, selected_args, prob=0.5),  # prob=0.5: new in timm
             # pylint:enable=g-long-lambda
             lambda: image)
 

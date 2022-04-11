@@ -15,6 +15,8 @@
 """ImageNet input pipeline.
 """
 
+import functools
+
 import jax
 import tensorflow as tf
 import tensorflow_datasets as tfds
@@ -23,7 +25,7 @@ from utils.transform_util import \
   decode_and_random_crop, \
   _decode_and_center_crop, normalize_image, color_jitter
 
-from utils.autoaug_util import distort_image_with_autoaugment, distort_image_with_randaugment
+from utils.autoaug_util import distort_image_with_autoaugment, distort_image_with_randaugment, distort_image_with_randaugment_v2
 from utils.randerase_util import random_erase
 
 from absl import logging
@@ -93,15 +95,16 @@ def preprocess_for_train(image_bytes, dtype=tf.float32, image_size=IMAGE_SIZE, a
   if aug.color_jit is not None:
     image = color_jitter(image / 255., *aug.color_jit) * 255.  # color_jitter accept [0, 1] images
 
-  if aug.autoaug == 'autoaug':
+  autoaug_funtions = {
+    'autoaug': functools.partial(distort_image_with_autoaugment, augmentation_name='v0'),
+    'randaug': functools.partial(distort_image_with_randaugment, num_layers=2, magnitude=9),
+    'randaugv2': functools.partial(distort_image_with_randaugment_v2, num_layers=2, magnitude=9),
+  }
+
+  if aug.autoaug in autoaug_funtions:
     image = tf.clip_by_value(image, 0.0, 255.0)
     image = tf.cast(image, dtype=tf.uint8)
-    image = distort_image_with_autoaugment(image, 'v0')
-    image = tf.cast(image, dtype=tf.float32)
-  elif aug.autoaug == 'randaug':
-    image = tf.clip_by_value(image, 0.0, 255.0)
-    image = tf.cast(image, dtype=tf.uint8)
-    image = distort_image_with_randaugment(image, num_layers=2, magnitude=9)
+    image = autoaug_funtions[aug.autoaug](image)
     image = tf.cast(image, dtype=tf.float32)
   elif aug.autoaug is None or aug.autoaug == 'None':
     pass
