@@ -1,5 +1,5 @@
-# VM_NAME=kmh-tpuvm-v3-128-1
-VM_NAME=kmh-tpuvm-v3-256-4
+VM_NAME=kmh-tpuvm-v3-128-1
+# VM_NAME=kmh-tpuvm-v3-256-4
 echo $VM_NAME
 
 REPO=https://71d519550fe3430ecbf39b70467e9210aed5da69:@github.com/KaimingHe/flax_dev.git
@@ -49,8 +49,10 @@ git rev-parse --short HEAD
 cd ~/flax_dev
 export TCMALLOC_LARGE_ALLOC_REPORT_THRESHOLD=8589934592
 export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets
+for i in {1..2}
+do
 python3 main.py \
-    --workdir=$WORKDIR \
+    --workdir=${WORKDIR}_`head /dev/urandom | tr -dc a-z0-9 | head -c4` \
     --config=configs/$CONFIG.py \
     --config.pretrain_dir=${PRETRAIN_DIR} \
     --config.batch_size=${batch} \
@@ -69,6 +71,8 @@ python3 main.py \
     --config.aug.randerase.on=False \
     --config.aug.autoaug=autoaug \
     --config.model.transformer.droppath_rate=${dp} \
+
+done
 " 2>&1 | tee $LOGDIR/finetune.log
 
 echo ${VM_NAME}

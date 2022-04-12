@@ -18,7 +18,7 @@ def apply_mix(xs, cfg):
   imgs_rev = get_reverse(imgs, batch_size)
   tgts_rev = get_reverse(tgts, batch_size)
 
-  if cfg.mixup and cfg.cutmix and cfg.switch_elementwise:
+  if cfg.mixup and cfg.cutmix and cfg.switch_mode == 'element':
     # element-wise mixup/cutmix switch (note lambda is always element-wise)
     use_mixup = (tf.random.uniform([imgs.shape[0]], minval=0, maxval=1., dtype=tf.float32) > 0.5)
     use_mixup = tf.cast(use_mixup, tf.float32)
@@ -30,8 +30,23 @@ def apply_mix(xs, cfg):
 
     use_mixup = tf.reshape(use_mixup, [-1] + [1] * (len(imgs.shape) - 1))
     imgs_mixed = imgs_mixup * use_mixup + imgs_cutmix * (1 - use_mixup)
-  elif cfg.mixup and cfg.cutmix and not cfg.switch_elementwise:
-    # host-wise mixup/cutmix switch (note lambda is always element-wise)
+
+  elif cfg.mixup and cfg.cutmix and cfg.switch_mode == 'mix_batch':
+    # (sub)batch-wise mixup/cutmix switch
+    use_mixup = (tf.random.uniform([1, imgs.shape[0] // batch_size], minval=0, maxval=1., dtype=tf.float32) > 0.5)
+    use_mixup = tf.cast(use_mixup, tf.float32)
+    use_mixup = tf.repeat(use_mixup, batch_size, axis=0)
+    use_mixup = tf.reshape(use_mixup, -1)
+
+    imgs_mixup, lmb_mixup = apply_mixup(imgs, imgs_rev, batch_size, cfg)
+    imgs_cutmix, lmb_cutmix = apply_cutmix(imgs, imgs_rev, batch_size, cfg)
+
+    lmb = lmb_mixup * use_mixup + lmb_cutmix * (1 - use_mixup)
+
+    use_mixup = tf.reshape(use_mixup, [-1] + [1] * (len(imgs.shape) - 1))
+    imgs_mixed = imgs_mixup * use_mixup + imgs_cutmix * (1 - use_mixup)
+  elif cfg.mixup and cfg.cutmix and cfg.switch_mode == 'local_batch':
+    # host-wise mixup/cutmix switch
     use_mixup = (tf.random.uniform([], minval=0, maxval=1., dtype=tf.float32) > 0.5)
     imgs_mixed, lmb = tf.cond(use_mixup,
       lambda: apply_mixup(imgs, imgs_rev, batch_size, cfg),
