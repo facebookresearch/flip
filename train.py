@@ -404,7 +404,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   writer = metric_writers.create_default_writer(
       logdir=workdir, just_logging=jax.process_index() != 0)
 
-  rng = random.PRNGKey(0)
+  rng = random.PRNGKey(config.seed_jax)  # used to be 0
 
   image_size = 224
 

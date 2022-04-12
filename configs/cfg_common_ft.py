@@ -128,4 +128,8 @@ def get_config():
   # utils
   config.pretrain_dir = ''
 
+  # seeds
+  config.seed_jax = 0
+  config.seed_tf = 0
+
   return config
