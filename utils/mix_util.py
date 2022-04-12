@@ -30,7 +30,6 @@ def apply_mix(xs, cfg):
 
     use_mixup = tf.reshape(use_mixup, [-1] + [1] * (len(imgs.shape) - 1))
     imgs_mixed = imgs_mixup * use_mixup + imgs_cutmix * (1 - use_mixup)
-
   elif cfg.mixup and cfg.cutmix and cfg.switch_mode == 'mix_batch':
     # (sub)batch-wise mixup/cutmix switch
     use_mixup = (tf.random.uniform([1, imgs.shape[0] // batch_size], minval=0, maxval=1., dtype=tf.float32) > 0.5)
