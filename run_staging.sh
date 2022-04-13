@@ -1,5 +1,5 @@
 # VM_NAME=kmh-tpuvm-v3-128-1
-VM_NAME=kmh-tpuvm-v3-256-4
+VM_NAME=kmh-tpuvm-v3-256-3
 echo $VM_NAME
 
 REPO=https://71d519550fe3430ecbf39b70467e9210aed5da69:@github.com/KaimingHe/flax_dev.git
@@ -20,7 +20,7 @@ source scripts/select_chkpt_${vitsize}.sh
 name=`basename ${PRETRAIN_DIR}`
 
 # finetune_pytorch_recipe (ftpy): lb0.1_b0.999_cropv4_exwd_initv2_headinit0.001_tgap_dp_mixup32_cutmix32_noerase_warmlr_minlr_autoaug
-JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_ftpy_b${batch}_lr${lr}_lrd${lrd}_dp${dp}_autoaug_shf512b_mixbatch_tfseed
+JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_ftpy_b${batch}_lr${lr}_lrd${lrd}_dp${dp}_autoaug_shf512b_mixbatch_tfseed_run2
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
 LOGDIR=/home/${USER}/logs/${JOBNAME}
@@ -49,9 +49,7 @@ git rev-parse --short HEAD
 cd ~/flax_dev
 export TCMALLOC_LARGE_ALLOC_REPORT_THRESHOLD=8589934592
 export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets
-# for i in {1..1}
-# do
-# _`head /dev/urandom | tr -dc a-z0-9 | head -c4`
+
 python3 main.py \
     --workdir=${WORKDIR} \
     --config=configs/$CONFIG.py \
@@ -72,9 +70,8 @@ python3 main.py \
     --config.aug.randerase.on=False \
     --config.aug.autoaug=autoaug \
     --config.model.transformer.droppath_rate=${dp} \
-    --config.aug.mix.switch_mode=mix_batch \
+    --config.aug.mix.switch_mode=mix_batch
 
-# done
 " 2>&1 | tee $LOGDIR/finetune.log
 
 echo ${VM_NAME}
