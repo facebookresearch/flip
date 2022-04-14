@@ -38,7 +38,7 @@ def get_config():
   config = cfg_common_ft.get_config()
 
   # model config
-  config.model = vit.get_l16_config()  # ViT-L/16
+  config.model.update(vit.get_l16_config())  # ViT-L/16
   config.model.transformer.dropout_rate = 0.0
   config.model.transformer.droppath_rate = 0.2
   config.model.classifier = 'tgap'  # 'token', 'tgap' (token + gap)

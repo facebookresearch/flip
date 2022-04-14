@@ -38,7 +38,7 @@ def get_config():
   config = cfg_common_ft.get_config()
 
   # model config
-  config.model = vit.get_h14_config()  # ViT-H/14
+  config.model.update(vit.get_h14_config())  # ViT-H/14
   config.model.transformer.dropout_rate = 0.0
   config.model.transformer.droppath_rate = 0.2
 

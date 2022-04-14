@@ -36,6 +36,8 @@ def load_from_pretrain(state, pretrain_dir):
   logging.info('Missing keys: {}'.format(missing_keys))
   logging.info('Ignored keys: {}'.format(ignored_keys))
 
+  assert len(missing_keys) == 2 or len(missing_keys) == 4
+
   named_params = {}
   for k in named_state_params.keys():
     if k in missing_keys:

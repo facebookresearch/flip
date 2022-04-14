@@ -5,7 +5,7 @@ rm -rf tmp
 export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets
 python3 main.py \
     --workdir=./tmp \
-    --config=configs/cfg_vit_dbg.py \
+    --config=configs/cfg_vit_large.py \
     --config.batch_size=128 \
     --config.log_every_steps=10 \
     --config.num_epochs=0.005 \
@@ -19,8 +19,8 @@ python3 main.py \
     --config.aug.mix.cutmix=True \
     --config.aug.mix.switch_mode=mix_batch \
     --config.aug.autoaug=randaugv2 \
-
-    # --config.pretrain_dir='gs://kmh-gcp/from_pytorch/checkpoint/kaiminghe/converted/2021-10-26-22-16-05-v3-128-mb4096-epo1600-PMAEp16-ViTLarge-lr1e-4-wd5e-2-warm40-mask0.75-pred8d512-exNB-msaLNmlpLNeLNpLNkBN0-1view-NOrelpos-abspos-clstoken-qkv-NOlayerscale-LNtgt-resume3_convert_pt2jax'
+    --config.model.transformer.seperate_qkv=True \
+    --config.pretrain_dir='gs://kmh-gcp/checkpoints/flax/20220413_000736_kmh-tpuvm-v3-256-4_cfg_mae_large_1600ep_maeDBG_batch4096_lr1e-4_vmap_normpix_sincos_initmaev2_cropv2_donate_olkNN_NOexClsDBG_masknoise_qkv'
 
     # --config.model.transformer.num_layers=12 \
     # --config.model.hidden_size=768 \

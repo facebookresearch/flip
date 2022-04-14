@@ -12,14 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from inspect import trace
+import functools
 from typing import Any, Callable, Optional, Tuple
 
 import flax.linen as nn
 import jax.numpy as jnp
 
-# from vit_jax import models_mixer
-# from vit_jax import models_resnet
+from utils import attention_util
+
 
 Array = Any
 PRNGKey = Any
@@ -149,6 +149,7 @@ class Encoder1DBlock(nn.Module):
   attention_dropout_rate: float = 0.1
   droppath_rate: float = 0.0
   layer_id: int = None
+  seperate_qkv: bool = False
 
   @nn.compact
   def __call__(self, inputs, *, deterministic):
@@ -165,9 +166,22 @@ class Encoder1DBlock(nn.Module):
     # Attention block.
     assert inputs.ndim == 3, f'Expected (batch, seq, hidden) got {inputs.shape}'
     x = nn.LayerNorm(dtype=self.dtype)(inputs)
-    x = nn.MultiHeadDotProductAttention(
+
+    # ----------------------------------------------------
+    # revised, QKV
+    # we do not need to specify init in finetune
+    MsaBlock = functools.partial(
+      attention_util.MultiHeadDotProductAttentionQKV,
+      out_kernel_init=msa_kernel_init)
+
+    # original
+    # MsaBlock = functools.partial(
+    #   nn.MultiHeadDotProductAttention,
+    #   kernel_init=msa_kernel_init,)
+    # ----------------------------------------------------
+
+    x = MsaBlock(
         dtype=self.dtype,
-        kernel_init=msa_kernel_init,
         broadcast_dropout=False,
         deterministic=deterministic,
         dropout_rate=self.attention_dropout_rate,
@@ -208,6 +222,7 @@ class Encoder(nn.Module):
   dropout_rate: float = 0.1
   attention_dropout_rate: float = 0.1
   droppath_rate: float = 0.0
+  seperate_qkv: bool = False
 
   @nn.compact
   def __call__(self, inputs, *, train, encoder_norm=True):
@@ -238,7 +253,8 @@ class Encoder(nn.Module):
           droppath_rate=self.droppath_rate * lyr / (self.num_layers - 1),
           name='encoderblock_{:02d}'.format(lyr),
           num_heads=self.num_heads,
-          layer_id=lyr)(
+          layer_id=lyr,
+          seperate_qkv=self.seperate_qkv)(
               x, deterministic=not train)
     encoded = nn.LayerNorm(name='encoder_norm')(x) if encoder_norm else x
 
