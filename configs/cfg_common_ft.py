@@ -112,6 +112,9 @@ def get_config():
 
   config.aug.mix.lambda_elementwise = False  # element-wise random lambda (otherwise batch-wise, using mix.batch_size)
 
+  # shuffle config
+  config.aug.shuffle_buffer_size = 16 * 1024  # following TF
+
   # rand erase config
   config.aug.randerase = ml_collections.ConfigDict()
   config.aug.randerase.on = False
