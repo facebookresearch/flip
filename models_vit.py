@@ -168,16 +168,17 @@ class Encoder1DBlock(nn.Module):
     x = nn.LayerNorm(dtype=self.dtype)(inputs)
 
     # ----------------------------------------------------
-    # revised, QKV
-    # we do not need to specify init in finetune
-    MsaBlock = functools.partial(
-      attention_util.MultiHeadDotProductAttentionQKV,
-      out_kernel_init=msa_kernel_init)
-
-    # original
-    # MsaBlock = functools.partial(
-    #   nn.MultiHeadDotProductAttention,
-    #   kernel_init=msa_kernel_init,)
+    if self.seperate_qkv:
+      # revised, QKV
+      # we do not need to specify init in finetune
+      MsaBlock = functools.partial(
+        attention_util.MultiHeadDotProductAttentionQKV,
+        out_kernel_init=msa_kernel_init)
+    else:
+      # original
+      MsaBlock = functools.partial(
+        nn.MultiHeadDotProductAttention,
+        kernel_init=msa_kernel_init,)
     # ----------------------------------------------------
 
     x = MsaBlock(
