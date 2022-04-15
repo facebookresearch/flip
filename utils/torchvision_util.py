@@ -3,6 +3,8 @@ import tensorflow as tf
 from PIL import Image
 import io
 from torchvision import transforms
+from timm.data.auto_augment import rand_augment_transform
+
 
 IMAGE_SIZE = 224
 CROP_PADDING = 32
@@ -16,7 +18,15 @@ def get_torchvision_aug(image_size, aug):
 
   if aug.color_jit is not None:
     transform_aug += [transforms.ColorJitter(*aug.color_jit)]
-          
+
+  aa_params = dict(translate_const=int(image_size * 0.45), img_mean=(124, 116, 104),)
+  if aug.autoaug == 'randaugv2':
+    auto_augment = 'rand-m9-mstd0.5-inc1'
+    transform_aug += [rand_augment_transform(auto_augment, aa_params)]
+  else:
+    raise NotImplementedError
+
+
   transform_aug += [
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])]
