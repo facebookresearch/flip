@@ -45,6 +45,8 @@ git checkout vit.ft.subtleties
 git pull
 git rev-parse --short HEAD
 
+pip3 install timm==0.3.2
+
 # pip3 list | grep 'jax\|flax\|tensorflow '
 
 cd ~/flax_dev

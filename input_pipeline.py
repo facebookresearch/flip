@@ -27,52 +27,13 @@ from utils.transform_util import \
 
 from utils.autoaug_util import distort_image_with_autoaugment, distort_image_with_randaugment, distort_image_with_randaugment_v2
 from utils.randerase_util import random_erase
+from utils.torchvision_util import get_torchvision_aug, preprocess_for_train_torchvision, preprocess_for_eval_torchvision
 
 from absl import logging
-from PIL import Image
-import io
-from torchvision import transforms
 
 import math
 
 IMAGE_SIZE = 224
-
-
-def get_torchvision_aug(image_size, aug):
-
-  transform_aug = [
-    transforms.RandomResizedCrop(image_size, scale=aug.area_range, ratio=aug.aspect_ratio_range, interpolation=transforms.InterpolationMode.BICUBIC),
-    transforms.RandomHorizontalFlip()]
-
-  if aug.color_jit is not None:
-    transform_aug += [transforms.ColorJitter(*aug.color_jit)]
-          
-  transform_aug += [
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])]
-
-  transform_aug = transforms.Compose(transform_aug)
-  return transform_aug
-
-
-def preprocess_for_train_torchvision(image_bytes, dtype=tf.float32, image_size=IMAGE_SIZE, transform_aug=None):
-  """Preprocesses the given image for training.
-
-  Args:
-    image_bytes: `Tensor` representing an image binary of arbitrary size.
-    dtype: data type of the image.
-    image_size: image size.
-
-  Returns:
-    A preprocessed image `Tensor`.
-  """
-  image = Image.open(io.BytesIO(image_bytes.numpy()))
-  image = image.convert('RGB')
-
-  image = transform_aug(image)
-  image = tf.constant(image.numpy(), dtype=dtype)  # [3, 224, 224]
-  image = tf.transpose(image, [1, 2, 0])  # [c, h, w] -> [h, w, c]
-  return image
 
 
 def preprocess_for_train(image_bytes, dtype=tf.float32, image_size=IMAGE_SIZE, aug=None):
@@ -200,8 +161,10 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
         image = preprocess_for_train(example['image'], dtype, image_size, aug=aug)
       label_one_hot = label_one_hot * (1 - aug.label_smoothing) + aug.label_smoothing / num_classes
     else:
-      assert not use_torchvision
-      image = preprocess_for_eval(example['image'], dtype, image_size)
+      if use_torchvision:
+        image = preprocess_for_eval_torchvision(example['image'], dtype, image_size)
+      else:
+        image = preprocess_for_eval(example['image'], dtype, image_size)
     return {'image': image, 'label': label, 'label_one_hot': label_one_hot}
 
   if use_torchvision:
@@ -217,9 +180,9 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
 
   # ---------------------------------------
   # debugging 
-  # x = next(iter(ds))
-  # decode_example(x)
-  # raise NotImplementedError
+  x = next(iter(ds))
+  decode_example(x)
+  raise NotImplementedError
   # ---------------------------------------
 
   ds = ds.map(ds_map_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
