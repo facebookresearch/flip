@@ -99,8 +99,8 @@ def get_torchvision_map_fn(decode_example):
 
 def get_torchvision_map_mix_fn(aug, num_classes):
   mix_func = timm.data.mixup.Mixup(
-    mixup_alpha=aug.mix.mixup_alpha,
-    cutmix_alpha=aug.mix.cutmix_alpha,
+    mixup_alpha=aug.mix.mixup_alpha if aug.mix.mixup else 0.0,
+    cutmix_alpha=aug.mix.cutmix_alpha if aug.mix.cutmix else 0.0,
     mode='batch',
     label_smoothing=aug.label_smoothing,
     num_classes=num_classes)
