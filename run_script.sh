@@ -15,7 +15,7 @@ python3 main.py \
     --config.aug.randerase.on=False \
     --config.aug.randerase.prob=0.25 \
     --config.rescale_head_init=0.001 \
-    --config.aug.mix.mixup=True \
+    --config.aug.mix.mixup=False \
     --config.aug.mix.cutmix=True \
     --config.aug.mix.switch_mode=mix_batch \
     --config.aug.autoaug=randaugv2 \
