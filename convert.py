@@ -94,7 +94,7 @@ def convert_model(config: ml_collections.ConfigDict, workdir: str, mode: str) ->
     convert_util.convert_from_pytorch(state, config.pretrain_dir)
   elif mode == 'j2p':
     logging.info('Converting from JAX checkpoints to PyTorch:')
-    convert_util.convert_to_pytorch(state, config.pretrain_dir)
+    convert_util.convert_to_pytorch(state, config.pretrain_dir, config)
 
   # Wait until computations are done before exiting
   jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()

@@ -67,7 +67,7 @@ def get_config():
   config.model = vit.get_b16_config()  # ViT-B/16
   config.model.transformer.dropout_rate = 0.0
   config.model.transformer.droppath_rate = 0.1
-  config.model.transformer.seperate_qkv = False
+  config.model.transformer.seperate_qkv = False  # seperate_qkv=True means using **one** qkv conv and then seperate it (JAX default is seperate_qkv=False)
 
   # optimizer config
   config.opt_type = 'adamw'
