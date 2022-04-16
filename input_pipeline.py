@@ -27,7 +27,7 @@ from utils.transform_util import \
 
 from utils.autoaug_util import distort_image_with_autoaugment, distort_image_with_randaugment, distort_image_with_randaugment_v2
 from utils.randerase_util import random_erase
-from utils.torchvision_util import get_torchvision_aug, preprocess_for_train_torchvision, preprocess_for_eval_torchvision
+from utils.torchvision_util import get_torchvision_aug, preprocess_for_train_torchvision, preprocess_for_eval_torchvision, get_torchvision_map_fn
 
 from absl import logging
 
@@ -168,13 +168,7 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
     return {'image': image, 'label': label, 'label_one_hot': label_one_hot}
 
   if use_torchvision:
-    # kaiming: reference: https://github.com/tensorflow/tensorflow/issues/38212
-    def py_func(image, label):
-      d = decode_example({'image': image, 'label': label})
-      return list(d.values())
-    def ds_map_fn(x):
-      flattened_output = tf.py_function(py_func, [x['image'], x['label']], [tf.float32, tf.int64, tf.float32])
-      return {"image": flattened_output[0], "label": flattened_output[1], "label_one_hot": flattened_output[2]}
+    ds_map_fn = get_torchvision_map_fn(decode_example)
   else:
     ds_map_fn = decode_example
 

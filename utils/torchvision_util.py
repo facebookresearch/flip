@@ -80,3 +80,14 @@ def preprocess_for_eval_torchvision(image_bytes, dtype=tf.float32, image_size=IM
   image = tf.constant(image.numpy(), dtype=dtype)  # [3, 224, 224]
   image = tf.transpose(image, [1, 2, 0])  # [c, h, w] -> [h, w, c]
   return image
+
+
+def get_torchvision_map_fn(decode_example):
+  # kaiming: reference: https://github.com/tensorflow/tensorflow/issues/38212
+  def py_func(image, label):
+    d = decode_example({'image': image, 'label': label})
+    return list(d.values())
+  def ds_map_fn(x):
+    flattened_output = tf.py_function(py_func, [x['image'], x['label']], [tf.float32, tf.int64, tf.float32])
+    return {"image": flattened_output[0], "label": flattened_output[1], "label_one_hot": flattened_output[2]}
+  return ds_map_fn

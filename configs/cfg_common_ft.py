@@ -112,6 +112,8 @@ def get_config():
 
   config.aug.mix.lambda_elementwise = False  # element-wise random lambda (otherwise batch-wise, using mix.batch_size)
 
+  config.aug.mix.torchvision = False
+
   # rand erase config
   config.aug.randerase = ml_collections.ConfigDict()
   config.aug.randerase.on = False
