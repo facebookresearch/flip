@@ -1,5 +1,5 @@
-# VM_NAME=kmh-tpuvm-v3-128-1
-VM_NAME=kmh-tpuvm-v3-256-4
+VM_NAME=kmh-tpuvm-v3-128-1
+# VM_NAME=kmh-tpuvm-v3-256-4
 echo $VM_NAME
 
 REPO=https://71d519550fe3430ecbf39b70467e9210aed5da69:@github.com/KaimingHe/flax_dev.git
@@ -21,7 +21,7 @@ source scripts/select_chkpt_${vitsize}.sh
 name=`basename ${PRETRAIN_DIR}`
 
 # finetune_pytorch_recipe (ftpy): lb0.1_b0.999_cropv4_exwd_initv2_headinit0.001_tgap_dp_mixup32_cutmix32_noerase_warmlr_minlr_autoaug
-JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_ftpy_b${batch}_lr${lr}_lrd${lrd}_dp${dp}_randaugv2_shf512b_mixbatch_seed${seed}_TV
+JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_ftpy_b${batch}_lr${lr}_lrd${lrd}_dp${dp}_randaugv2_shf512b_mixbatch_seed${seed}_TVmix
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
 LOGDIR=/home/${USER}/logs/${JOBNAME}
@@ -41,7 +41,7 @@ gcloud alpha compute tpus tpu-vm ssh ${VM_NAME} --zone europe-west4-a \
     --worker=all --command "
 cd ~/flax_dev
 git pull
-git checkout vit.ft.torchvision
+git checkout vit.ft.torchvision.mix
 git pull
 git rev-parse --short HEAD
 
@@ -77,7 +77,8 @@ python3 main.py \
     --config.seed_tf=${seed} \
     --config.seed_jax=${seed} \
     --config.model.transformer.seperate_qkv=False \
-    --config.aug.torchvision=True \
+    --config.aug.torchvision=False \
+    --config.aug.mix.torchvision=True \
 
 " 2>&1 | tee $LOGDIR/finetune.log
 

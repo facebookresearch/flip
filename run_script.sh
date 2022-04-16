@@ -20,8 +20,8 @@ python3 main.py \
     --config.aug.mix.switch_mode=mix_batch \
     --config.aug.autoaug=randaugv2 \
     --config.model.transformer.seperate_qkv=True \
-    --config.aug.torchvision=True \
-    --config.aug.mix.torchvision=False \
+    --config.aug.torchvision=False \
+    --config.aug.mix.torchvision=True \
 
     # --config.pretrain_dir='gs://kmh-gcp/checkpoints/flax/20220413_000736_kmh-tpuvm-v3-256-4_cfg_mae_large_1600ep_maeDBG_batch4096_lr1e-4_vmap_normpix_sincos_initmaev2_cropv2_donate_olkNN_NOexClsDBG_masknoise_qkv'
 
