@@ -1,6 +1,6 @@
 CONFIG=cfg_vit_large
-CHKPT_DIR='gs://kmh-gcp/checkpoints/flax/20220404_170716_kmh-tpuvm-v3-256-4_cfg_mae_large_1600ep_maeDBG_batch4096_vmap_normpix_sincos_initmaev2_cropv2'
-
+# CHKPT_DIR='gs://kmh-gcp/checkpoints/flax/20220404_170716_kmh-tpuvm-v3-256-4_cfg_mae_large_1600ep_maeDBG_batch4096_vmap_normpix_sincos_initmaev2_cropv2'
+CHKPT_DIR='gs://kmh-gcp/checkpoints/flax/20220415_011305_kmh-tpuvm-v3-256-3_cfg_mae_large_1600ep_maeDBG_batch4096_lr1.0e-4_vmap_normpix_sincos_initmaev2_cropv2ALTER_donate_olkNN_NOexClsDBG_masknoise_qkv_buf16x1024_noavelog_seed'
 
 rm -rf tmp
 
@@ -14,6 +14,8 @@ python3 main_convert.py \
     --config.num_epochs=0.005 \
     --config.model.classifier='token' \
     --config.pretrain_dir=${CHKPT_DIR} \
+    --config.model.transformer.seperate_qkv=True \
+
 
 
 # these are the template (run it in devfair)
