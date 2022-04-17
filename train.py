@@ -464,7 +464,9 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   state = create_train_state(rng, config, model, image_size, learning_rate_fn)
 
-  if config.pretrain_dir == '':
+  if config.resume_dir is not '':
+    state = restore_checkpoint(state, config.resume_dir)
+  elif config.pretrain_dir == '':
     state = restore_checkpoint(state, workdir)
   else:
     logging.info('Loading from pre-training:')
