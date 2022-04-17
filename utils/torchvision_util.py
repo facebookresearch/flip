@@ -9,6 +9,9 @@ from torchvision import transforms
 import timm
 
 
+from absl import logging
+
+
 IMAGE_SIZE = 224
 CROP_PADDING = 32
 
@@ -103,6 +106,8 @@ def get_torchvision_map_mix_fn(aug, num_classes):
     mode='batch',
     label_smoothing=aug.label_smoothing,
     num_classes=num_classes)
+
+  logging.info('Using timm mixup.')
 
   def apply_mix_func(batch):
     images = batch['image']
