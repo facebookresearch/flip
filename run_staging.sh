@@ -69,7 +69,7 @@ python3 main.py \
     --config.init_backend=tpu \
     --config.aug.mix.mixup=True \
     --config.aug.mix.cutmix=True \
-    --config.aug.mix.batch_size=-1 \
+    --config.aug.mix.batch_size=32 \
     --config.aug.randerase.on=False \
     --config.aug.autoaug=autoaug \
     --config.model.transformer.droppath_rate=${dp} \
