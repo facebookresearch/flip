@@ -74,7 +74,7 @@ python3 main.py \
     --config.aug.mix.switch_mode=mix_batch \
     --config.seed_tf=${seed} \
     --config.seed_jax=${seed} \
-    --config.model.transformer.seperate_qkv=False \
+    --config.model.transformer.seperate_qkv=True \
     --config.aug.shuffle_buffer_size=4096 \
 
 " 2>&1 | tee $LOGDIR/finetune.log
