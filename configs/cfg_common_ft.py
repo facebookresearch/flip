@@ -115,7 +115,7 @@ def get_config():
   config.aug.mix.torchvision = False
 
   # shuffle config
-  config.aug.shuffle_buffer_size = 16 * 1024  # following TF
+  config.aug.shuffle_buffer_size = 16 * 1024  # following TF: 16384 = 512 * 32 = 512 * (local) batch_size
 
   # rand erase config
   config.aug.randerase = ml_collections.ConfigDict()
