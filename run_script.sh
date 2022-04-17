@@ -17,7 +17,7 @@ python3 main.py \
     --config.rescale_head_init=0.001 \
     --config.aug.mix.mixup=False \
     --config.aug.mix.cutmix=True \
-    --config.aug.mix.switch_mode=mix_batch \
+    --config.aug.mix.switch_mode=host_batch \
     --config.aug.autoaug=randaugv2 \
     --config.model.transformer.seperate_qkv=True \
     --config.aug.torchvision=False \
