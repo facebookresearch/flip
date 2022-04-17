@@ -168,7 +168,8 @@ def distorted_bounding_box_crop(image_bytes,
 
 
 def _resize(image, image_size):
-  image = tf.image.resize(image, [image_size, image_size], method=tf.image.ResizeMethod.BICUBIC)
+  # image = tf.image.resize(image, [image_size, image_size], method=tf.image.ResizeMethod.BICUBIC)  # original impl
+  image = tf.compat.v1.image.resize_bicubic([image], [image_size, image_size], align_corners=True, half_pixel_centers=False)[0]
   return image
 
 
