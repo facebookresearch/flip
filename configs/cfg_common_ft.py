@@ -107,7 +107,7 @@ def get_config():
   config.aug.mix.cutmix = True
   config.aug.mix.cutmix_alpha = 1.0
 
-  config.aug.mix.switch_mode = 'host_batch'  # local_batch, mix_batch, element
+  config.aug.mix.switch_mode = 'host_batch'  # host_batch, mix_batch, element
   config.aug.mix.batch_size = 32  # the mix batch size to mimic timm; -1 is element-wise
 
   config.aug.mix.lambda_elementwise = False  # element-wise random lambda (otherwise batch-wise, using mix.batch_size)

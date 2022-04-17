@@ -7,9 +7,7 @@ import io
 from torchvision import transforms
 
 import timm
-from timm.data.auto_augment import rand_augment_transform
 
-from utils.timm_mix_util import Mixup
 
 IMAGE_SIZE = 224
 CROP_PADDING = 32
@@ -27,7 +25,7 @@ def get_torchvision_aug(image_size, aug):
   aa_params = dict(translate_const=int(image_size * 0.45), img_mean=(124, 116, 104),)
   if aug.autoaug == 'randaugv2':
     auto_augment = 'rand-m9-mstd0.5-inc1'
-    transform_aug += [rand_augment_transform(auto_augment, aa_params)]
+    transform_aug += [timm.data.auto_augment.rand_augment_transform(auto_augment, aa_params)]
   else:
     raise NotImplementedError
 
@@ -99,7 +97,7 @@ def get_torchvision_map_fn(decode_example):
 
 
 def get_torchvision_map_mix_fn(aug, num_classes):
-  mix_func = Mixup(
+  mix_func = timm.data.mixup.Mixup(
     mixup_alpha=aug.mix.mixup_alpha if aug.mix.mixup else 0.0,
     cutmix_alpha=aug.mix.cutmix_alpha if aug.mix.cutmix else 0.0,
     mode='batch',

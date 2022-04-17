@@ -44,7 +44,7 @@ def apply_mix(xs, cfg):
 
     use_mixup = tf.reshape(use_mixup, [-1] + [1] * (len(imgs.shape) - 1))
     imgs_mixed = imgs_mixup * use_mixup + imgs_cutmix * (1 - use_mixup)
-  elif cfg.mixup and cfg.cutmix and cfg.switch_mode == 'local_batch':
+  elif cfg.mixup and cfg.cutmix and cfg.switch_mode == 'host_batch':
     # host-wise mixup/cutmix switch
     use_mixup = (tf.random.uniform([], minval=0, maxval=1., dtype=tf.float32) > 0.5)
     imgs_mixed, lmb = tf.cond(use_mixup,

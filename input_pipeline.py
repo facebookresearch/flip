@@ -100,6 +100,22 @@ def preprocess_for_eval(image_bytes, dtype=tf.float32, image_size=IMAGE_SIZE):
   return image
 
 
+def get_preprocess_for_train_func(image_size, aug, use_torchvision):
+  if use_torchvision:
+    transform_aug = get_torchvision_aug(image_size, aug)
+    logging.info(transform_aug)
+    return functools.partial(preprocess_for_train_torchvision, transform_aug=transform_aug)
+  else:
+    return functools.partial(preprocess_for_train, aug=aug)
+
+
+def get_preprocess_for_eval_func(use_torchvision):
+  if use_torchvision:
+    return preprocess_for_eval_torchvision
+  else:
+    return preprocess_for_eval
+
+
 def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
                  image_size=IMAGE_SIZE, cache=False, aug=None):
   """Creates a split from the ImageNet dataset using TensorFlow Datasets.
@@ -145,26 +161,21 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
     ds = ds.repeat()
     ds = ds.shuffle(512 * batch_size, seed=0)  # batch_size = 1024 (faster in local)
 
-  use_torchvision = (aug is not None and aug.torchvision)
-  if use_torchvision:
-    transform_aug = get_torchvision_aug(image_size, aug)
-    logging.info(transform_aug)
+  use_torchvision = (aug and aug.torchvision)
+
+  preprocess_for_train_func = get_preprocess_for_train_func(image_size, aug, use_torchvision)
+  preprocess_for_eval_func = get_preprocess_for_eval_func(use_torchvision)
 
   # define the decode function
   def decode_example(example):
     label = example['label']
     label_one_hot = tf.one_hot(label, depth=num_classes, dtype=dtype)
     if train:
-      if use_torchvision:
-        image = preprocess_for_train_torchvision(example['image'], dtype, image_size, transform_aug=transform_aug)
-      else:
-        image = preprocess_for_train(example['image'], dtype, image_size, aug=aug)
+      image = preprocess_for_train_func(example['image'], dtype, image_size)
       label_one_hot = label_one_hot * (1 - aug.label_smoothing) + aug.label_smoothing / num_classes
     else:
-      if use_torchvision:
-        image = preprocess_for_eval_torchvision(example['image'], dtype, image_size)
-      else:
-        image = preprocess_for_eval(example['image'], dtype, image_size)
+      image = preprocess_for_eval_func(example['image'], dtype, image_size)
+
     return {'image': image, 'label': label, 'label_one_hot': label_one_hot}
 
   if use_torchvision:
