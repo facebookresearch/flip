@@ -130,6 +130,8 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
   Returns:
     A `tf.data.Dataset`.
   """
+  use_torchvision = (aug and aug.torchvision)
+
   if train:
     train_examples = dataset_builder.info.splits['train'].num_examples
     split_size = train_examples // jax.process_count()
@@ -149,9 +151,7 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
       'image': tfds.decode.SkipDecoding(),
   })
   options = tf.data.Options()
-  options.experimental_threading.private_threadpool_size = 48
-  if aug is not None and aug.torchvision:
-    options.experimental_threading.private_threadpool_size = 8
+  options.experimental_threading.private_threadpool_size = 48 if not use_torchvision else 8
   ds = ds.with_options(options)
 
   if cache:
@@ -160,8 +160,6 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
   if train:
     ds = ds.repeat()
     ds = ds.shuffle(512 * batch_size, seed=0)  # batch_size = 1024 (faster in local)
-
-  use_torchvision = (aug and aug.torchvision)
 
   preprocess_for_train_func = get_preprocess_for_train_func(image_size, aug, use_torchvision)
   preprocess_for_eval_func = get_preprocess_for_eval_func(use_torchvision)
