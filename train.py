@@ -51,7 +51,7 @@ from utils import opt_util
 from utils import mix_util
 from utils import checkpoint_util
 from utils import lrd_util
-
+from utils import torchvision_util
 
 import jax.profiler
 
@@ -262,9 +262,12 @@ def create_input_iter(dataset_builder, batch_size, image_size, dtype, train,
       dataset_builder, batch_size, image_size=image_size, dtype=dtype,
       train=train, cache=cache, aug=aug)
 
-  if aug is not None and (aug.mix.mixup or aug.mix.cutmix):
+  if aug and (aug.mix.mixup or aug.mix.cutmix) and (not aug.mix.torchvision):
     apply_mix = functools.partial(mix_util.apply_mix, cfg=aug.mix)
     ds = map(apply_mix, ds)
+  elif aug and (aug.mix.mixup or aug.mix.cutmix) and (aug.mix.torchvision):
+    num_classes = dataset_builder.info.features['label'].num_classes
+    ds = map(torchvision_util.get_torchvision_map_mix_fn(aug, num_classes), ds)
 
   # ------------------------------------------------
   # x = next(iter(ds))
@@ -548,7 +551,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
         train_metrics = []
         train_metrics_last_t = time.time()
 
-    if (step + 1) % steps_per_epoch == 0:
+    if (step + 1) % steps_per_epoch == 0 or step == 10:
       epoch = step // steps_per_epoch
 
       summary = run_eval(state, p_eval_step, eval_iter, steps_per_eval, epoch)
