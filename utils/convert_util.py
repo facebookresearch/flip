@@ -20,7 +20,7 @@ from utils import checkpoint_util
 
 
 def convert_to_pytorch(state, pretrain_dir, config):
-  seperate_qkv = config.model.transformer.seperate_qkv  # this means JAX and PyTorch models are consisent
+  torch_qkv = config.model.transformer.torch_qkv  # this means JAX and PyTorch models are consisent
 
   state = checkpoint_util.load_from_pretrain(state, pretrain_dir)  # restore from JAX checkpoint
   state_params = flax.core.frozen_dict.unfreeze(state.params)
@@ -39,10 +39,10 @@ def convert_to_pytorch(state, pretrain_dir, config):
   checkpoint = torch.load(os.path.join('./tmp', os.path.basename(pytorch_model_dir)), map_location='cpu')
   checkpoint = checkpoint['model']
   
-  checkpoint_revised = checkpoint if seperate_qkv else revise_split_qkv(checkpoint)
+  checkpoint_revised = checkpoint if torch_qkv else revise_split_qkv(checkpoint)
 
-  converted_checkpoint = convert_names_and_shapes_j2p(checkpoint_revised, named_params, seperate_qkv)
-  converted_checkpoint = converted_checkpoint if seperate_qkv else revise_merge_qkv(converted_checkpoint)
+  converted_checkpoint = convert_names_and_shapes_j2p(checkpoint_revised, named_params, torch_qkv)
+  converted_checkpoint = converted_checkpoint if torch_qkv else revise_merge_qkv(converted_checkpoint)
 
   new_keys = set(converted_checkpoint.keys()) - set(checkpoint.keys())
   logging.info('New keys: {}'.format(str(new_keys)))
@@ -143,13 +143,13 @@ def convert_names_and_shapes_p2j(checkpoint, named_params):
   return converted_named_params
 
 
-def convert_names_and_shapes_j2p(checkpoint, named_params, seperate_qkv):
+def convert_names_and_shapes_j2p(checkpoint, named_params, torch_qkv):
   converted_checkpoint = {}
   for name_pt in checkpoint:
     p_pt = checkpoint[name_pt].clone()
     shape_pt = tuple(p_pt.shape)
 
-    name_jx = convert_name(name_pt, seperate_qkv)
+    name_jx = convert_name(name_pt, torch_qkv)
     if name_jx in named_params:
       p_jx = named_params[name_jx]
       shape_jx = tuple(p_jx.shape)
@@ -225,8 +225,8 @@ def revise_split_qkv(checkpoint):
   return checkpoint_revised
 
 
-def convert_name(name, seperate_qkv):
-  if seperate_qkv:
+def convert_name(name, torch_qkv):
+  if torch_qkv:
     msa_prefix = 'MultiHeadDotProductAttentionQKV_0'
   else:
     msa_prefix = 'MultiHeadDotProductAttention_0'
@@ -272,11 +272,11 @@ def convert_name(name, seperate_qkv):
     elif 'attn.qkv.weight' in name:
       name_jx += msa_prefix + '.qkv.kernel'
     elif 'attn.q_bias' in name:
-      name_jx += msa_prefix + '.query.bias' if not seperate_qkv else msa_prefix + '.q_bias'
+      name_jx += msa_prefix + '.query.bias' if not torch_qkv else msa_prefix + '.q_bias'
     elif 'attn.k_bias' in name:
       name_jx += msa_prefix + '.key.bias'
     elif 'attn.v_bias' in name:
-      name_jx += msa_prefix + '.value.bias' if not seperate_qkv else msa_prefix + '.v_bias'
+      name_jx += msa_prefix + '.value.bias' if not torch_qkv else msa_prefix + '.v_bias'
     # MLP
     elif 'norm2.weight' in name:
       name_jx += 'LayerNorm_1.scale'

@@ -149,7 +149,7 @@ class Encoder1DBlock(nn.Module):
   attention_dropout_rate: float = 0.1
   droppath_rate: float = 0.0
   layer_id: int = None
-  seperate_qkv: bool = False
+  torch_qkv: bool = False
 
   @nn.compact
   def __call__(self, inputs, *, deterministic):
@@ -168,7 +168,7 @@ class Encoder1DBlock(nn.Module):
     x = nn.LayerNorm(dtype=self.dtype)(inputs)
 
     # ----------------------------------------------------
-    if self.seperate_qkv:
+    if self.torch_qkv:
       # revised, QKV
       # we do not need to specify init in finetune
       MsaBlock = functools.partial(
@@ -223,7 +223,7 @@ class Encoder(nn.Module):
   dropout_rate: float = 0.1
   attention_dropout_rate: float = 0.1
   droppath_rate: float = 0.0
-  seperate_qkv: bool = False
+  torch_qkv: bool = False
 
   @nn.compact
   def __call__(self, inputs, *, train, encoder_norm=True):
@@ -255,7 +255,7 @@ class Encoder(nn.Module):
           name='encoderblock_{:02d}'.format(lyr),
           num_heads=self.num_heads,
           layer_id=lyr,
-          seperate_qkv=self.seperate_qkv)(
+          torch_qkv=self.torch_qkv)(
               x, deterministic=not train)
     encoded = nn.LayerNorm(name='encoder_norm')(x) if encoder_norm else x
 

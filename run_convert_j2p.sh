@@ -14,7 +14,7 @@ python3 main_convert.py \
     --config.num_epochs=0.005 \
     --config.model.classifier='token' \
     --config.pretrain_dir=${CHKPT_DIR} \
-    --config.model.transformer.seperate_qkv=True \
+    --config.model.transformer.torch_qkv=True \
 
 
 
