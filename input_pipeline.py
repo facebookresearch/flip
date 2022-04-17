@@ -16,7 +16,6 @@
 """
 
 import functools
-from tensorflow.python.ops import random_ops
 
 import jax
 import tensorflow as tf
@@ -50,8 +49,7 @@ def preprocess_for_train(image_bytes, dtype=tf.float32, image_size=IMAGE_SIZE, a
   """
   crop_func = decode_and_random_crop[aug.crop_ver]
   image = crop_func(image_bytes, image_size, area_range=aug.area_range, aspect_ratio_range=aug.aspect_ratio_range)
-  # image = tf.reshape(image, [image_size, image_size, 3])
-  return image
+  image = tf.reshape(image, [image_size, image_size, 3])
   image = tf.image.random_flip_left_right(image)
 
   # advance augs
@@ -153,8 +151,7 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
       'image': tfds.decode.SkipDecoding(),
   })
   options = tf.data.Options()
-  options.threading.private_threadpool_size = 48 if not use_torchvision else 8
-  options.deterministic = True
+  options.experimental_threading.private_threadpool_size = 48 if not use_torchvision else 8
   ds = ds.with_options(options)
 
   if cache:
@@ -192,8 +189,7 @@ def create_split(dataset_builder, batch_size, train, dtype=tf.float32,
   # raise NotImplementedError
   # ---------------------------------------
 
-  # ds = ds.map(ds_map_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-  ds = ds.map(ds_map_fn, num_parallel_calls=1)
+  ds = ds.map(ds_map_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
 
   ds = ds.batch(batch_size, drop_remainder=train)  # we drop the remainder if eval
 

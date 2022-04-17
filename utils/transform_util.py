@@ -1,8 +1,6 @@
 import tensorflow as tf
 from tensorflow.python.ops import random_ops
 
-from absl import logging
-
 CROP_PADDING = 32
 MEAN_RGB = [0.485 * 255, 0.456 * 255, 0.406 * 255]
 STDDEV_RGB = [0.229 * 255, 0.224 * 255, 0.225 * 255]
@@ -258,12 +256,6 @@ def _decode_and_random_crop_v4(image_bytes, image_size,
   
   image = tf.io.decode_and_crop_jpeg(image_bytes, crop_window, channels=3)
   image = tf.image.resize(image, [image_size, image_size], tf.image.ResizeMethod.BICUBIC)
-
-  image = tf.reshape(image, [-1, 3])
-  image = tf.concat([
-    image,
-    tf.reshape(tf.cast(crop_window[:3], dtype=tf.float32), [-1, 3])
-    ], axis=0)
   return image
 
 
@@ -300,7 +292,15 @@ def _get_center_crop_window(img_shape, image_size=224):
   return crop_window
 
 
-def _decode_and_center_crop(image_bytes, image_size, **kwargs):
+
+decode_and_random_crop ={
+    'v1': _decode_and_random_crop,
+    'v3': _decode_and_random_crop_v3,
+    'v4': _decode_and_random_crop_v4,
+  }
+  
+
+def _decode_and_center_crop(image_bytes, image_size):
   """Crops to center of image with padding then scales image_size."""
   shape = tf.io.extract_jpeg_shape(image_bytes)
   image_height = shape[0]
@@ -319,14 +319,6 @@ def _decode_and_center_crop(image_bytes, image_size, **kwargs):
   image = _resize(image, image_size)
 
   return image
-
-
-decode_and_random_crop ={
-    'v1': _decode_and_random_crop,
-    'v3': _decode_and_random_crop_v3,
-    'v4': _decode_and_random_crop_v4,
-    'vc': _decode_and_center_crop,
-  }
 
 
 def normalize_image(image):
