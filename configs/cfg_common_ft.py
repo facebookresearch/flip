@@ -140,7 +140,7 @@ def get_config():
 
   # torchload
   config.torchload = ml_collections.ConfigDict()
-  config.torchload.on = False
+  config.torchload.on = True  # in this branch, only torchload is used
   config.torchload.data_dir = '/kmh_data/imagenet_full_size/061417'
 
   config.torchload.num_workers = 16
