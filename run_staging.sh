@@ -29,60 +29,48 @@ mkdir -p ${LOGDIR}
 
 # source run_init_remote.sh
 
-# check libraries
-# gcloud alpha compute tpus tpu-vm ssh ${VM_NAME} --zone europe-west4-a \
-#     --worker=0 --command "
-# pip3 list | grep jax
-# pip3 list | grep flax
-# pip3 list | grep tensorflow
-# "
-
+# check mount
 gcloud alpha compute tpus tpu-vm ssh ${VM_NAME} --zone europe-west4-a \
     --worker=all --command "
-cd ~/flax_dev
-git pull
-git checkout vit.ft
-git pull
-git rev-parse --short HEAD
+pip3 install torch==1.7.1
+pip3 install torchvision==0.8.2
 
-pip3 install timm==0.4.12
+# ls /kmh_data
 
-# pip3 list | grep 'jax\|flax\|tensorflow '
+"
 
-cd ~/flax_dev
-export TCMALLOC_LARGE_ALLOC_REPORT_THRESHOLD=8589934592
-export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets
+# cd ~/flax_dev
+# export TCMALLOC_LARGE_ALLOC_REPORT_THRESHOLD=8589934592
+# export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets
 
-python3 main.py \
-    --workdir=${WORKDIR} \
-    --config=configs/$CONFIG.py \
-    --config.pretrain_dir=${PRETRAIN_DIR} \
-    --config.batch_size=${batch} \
-    --config.learning_rate=${lr} \
-    --config.learning_rate_decay=${lrd} \
-    --config.log_every_steps=100 \
-    --config.num_epochs=${ep} \
-    --config.ema=False \
-    --config.save_every_epochs=10 \
-    --config.profile_memory=True \
-    --config.donate=True \
-    --config.init_backend=tpu \
-    --config.aug.mix.mixup=True \
-    --config.aug.mix.cutmix=True \
-    --config.aug.mix.batch_size=32 \
-    --config.aug.randerase.on=False \
-    --config.aug.autoaug=autoaug \
-    --config.model.transformer.droppath_rate=${dp} \
-    --config.aug.mix.switch_mode=host_batch \
-    --config.seed_tf=${seed} \
-    --config.seed_jax=${seed} \
-    --config.aug.shuffle_buffer_size=16384 \
-    --config.model.transformer.torch_qkv=False \
-    --config.aug.torchvision=False \
-    --config.aug.mix.torchvision=False \
+# python3 main.py \
+#     --workdir=${WORKDIR} \
+#     --config=configs/$CONFIG.py \
+#     --config.pretrain_dir=${PRETRAIN_DIR} \
+#     --config.batch_size=${batch} \
+#     --config.learning_rate=${lr} \
+#     --config.learning_rate_decay=${lrd} \
+#     --config.log_every_steps=100 \
+#     --config.num_epochs=${ep} \
+#     --config.ema=False \
+#     --config.save_every_epochs=10 \
+#     --config.profile_memory=True \
+#     --config.donate=True \
+#     --config.init_backend=tpu \
+#     --config.aug.mix.mixup=True \
+#     --config.aug.mix.cutmix=True \
+#     --config.aug.mix.batch_size=32 \
+#     --config.aug.randerase.on=False \
+#     --config.aug.autoaug=autoaug \
+#     --config.model.transformer.droppath_rate=${dp} \
+#     --config.aug.mix.switch_mode=host_batch \
+#     --config.seed_tf=${seed} \
+#     --config.seed_jax=${seed} \
+#     --config.aug.shuffle_buffer_size=16384 \
+#     --config.model.transformer.torch_qkv=False \
+#     --config.aug.torchvision=False \
+#     --config.aug.mix.torchvision=False \
 
-" 2>&1 | tee $LOGDIR/finetune.log
+# " 2>&1 | tee $LOGDIR/finetune.log
 
 echo ${VM_NAME}
-
-done

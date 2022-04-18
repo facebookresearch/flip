@@ -138,4 +138,9 @@ def get_config():
   config.seed_jax = 0
   config.seed_tf = 0
 
+  # torchload
+  config.torchload = ml_collections.ConfigDict()
+  config.torchload.on = False
+  config.torchload.data_dir = '/kmh_data/imagenet_full_size/061417'
+
   return config

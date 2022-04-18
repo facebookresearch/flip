@@ -52,6 +52,7 @@ from utils import mix_util
 from utils import checkpoint_util
 from utils import lrd_util
 from utils import torchvision_util
+from utils import torchloader_util
 
 import jax.profiler
 
@@ -424,6 +425,12 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
       input_dtype = tf.float16
   else:
     input_dtype = tf.float32
+
+  from IPython import embed; embed();
+  if (0 == 0): raise NotImplementedError
+  dataset_val = torchloader_util.build_dataset(is_train=False, config=config)
+  dataset_train = torchloader_util.build_dataset(is_train=True, config=config)
+
 
   dataset_builder = tfds.builder(config.dataset)
   train_iter = create_input_iter(
