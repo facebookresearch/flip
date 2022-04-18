@@ -21,7 +21,7 @@ source scripts/select_chkpt_${vitsize}.sh
 name=`basename ${PRETRAIN_DIR}`
 
 # finetune_pytorch_recipe (ftpy): lb0.1_b0.999_cropv4_exwd_initv2_headinit0.001_tgap_dp_mixup32_cutmix32_noerase_warmlr_minlr_autoaug
-JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_ftpy_b${batch}_lr${lr}_lrd${lrd}_dp${dp}_randaugv2Erase_shf512x32_hostbatch_seed${seed}_TorchLoader_DBGsave
+JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_ftpy_b${batch}_lr${lr}_lrd${lrd}_dp${dp}_randaugv2_shf512x32_hostbatch_seed${seed}_TorchLoader_DBGbest
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
 LOGDIR=/home/${USER}/logs/${JOBNAME}
@@ -58,7 +58,7 @@ python3 main.py \
     --config.aug.mix.mixup=True \
     --config.aug.mix.cutmix=True \
     --config.aug.mix.batch_size=32 \
-    --config.aug.randerase.on=True \
+    --config.aug.randerase.on=False \
     --config.aug.autoaug=randaugv2 \
     --config.model.transformer.droppath_rate=${dp} \
     --config.aug.mix.switch_mode=host_batch \

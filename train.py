@@ -571,6 +571,9 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   epoch_offset = (step_offset + 1) // steps_per_epoch
   step = epoch_offset * steps_per_epoch
+  assert step == int(state.step[0])  # sanity when loading
+
+  best_acc = 0.
   for epoch in range(epoch_offset, int(config.num_epochs)):
     data_loader_train.sampler.set_epoch(epoch)  # reset random seed
     
@@ -626,6 +629,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # ------------------------------------------------------------
     if True:
       summary = run_eval(state, p_eval_step, data_loader_val, local_batch_size, epoch, num_classes)
+      best_acc = max(best_acc, summary['test_acc1'])
 
       # to make it consistent with PyTorch log
       summary['step_tensorboard'] = epoch  # step for tensorboard (no need to minus 1)
@@ -645,70 +649,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   total_time = time.time() - start_time
   total_time_str = str(datetime.timedelta(seconds=int(total_time)))
   logging.info('Elapsed time: {}'.format(total_time_str))
-
-  if config.profile_memory:
-    profile_memory(workdir)
-
-  return state
-
-
-  for step, batch in zip(range(step_offset, num_steps), train_iter):
-    state, metrics = p_train_step(state, batch)
-    for h in hooks:
-      h(step)
-    if step == step_offset:
-      logging.info('Initial compilation completed.')
-      start_time = time.time()  # log the time after compilation
-
-    epoch_1000x = int(step * config.batch_size / 1281167 * 1000)  # normalize to IN1K epoch anyway
-
-    if config.get('log_every_steps'):
-      train_metrics.append(metrics)
-      if (step + 1) % config.log_every_steps == 0:
-
-        # if (step + 1) == config.log_every_steps and config.profile_memory:
-        #   profile_memory(workdir)
-        # Wait until computations are done before exiting
-        jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
-        train_metrics = common_utils.get_metrics(train_metrics)
-        summary = {
-            f'train_{k}': float(v)
-            for k, v in jax.tree_map(lambda x: x.mean(), train_metrics).items()
-        }
-        summary['steps_per_second'] = config.log_every_steps / (
-            time.time() - train_metrics_last_t)
-
-        # to make it consistent with PyTorch log
-        summary['loss'] = summary['train_loss']  # add extra name
-        summary['lr'] = summary.pop('train_learning_rate')  # rename
-        summary['class_acc'] = summary.pop('train_accuracy')  # this is [0, 1]
-        summary['step_tensorboard'] = epoch_1000x  # step for tensorboard
-
-        writer.write_scalars(step + 1, summary)
-        train_metrics = []
-        train_metrics_last_t = time.time()
-
-    if (step + 1) % steps_per_epoch == 0:
-      epoch = step // steps_per_epoch
-
-      summary = run_eval(state, p_eval_step, eval_iter, steps_per_eval, epoch)
-
-      # to make it consistent with PyTorch log
-      summary['step_tensorboard'] = epoch  # step for tensorboard (no need to minus 1)
-
-      writer.write_scalars(step + 1, summary)
-      writer.flush()
-
-    if (step + 1) % steps_per_checkpoint == 0 or step + 1 == num_steps:
-      state = sync_batch_stats(state)
-      save_checkpoint(state, workdir)
-
-  # Wait until computations are done before exiting
-  jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
-
-  total_time = time.time() - start_time
-  total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-  logging.info('Elapsed time: {}'.format(total_time_str))
+  logging.info('Best accuracy: {}'.format(best_acc))
 
   if config.profile_memory:
     profile_memory(workdir)
