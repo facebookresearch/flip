@@ -32,6 +32,12 @@ mkdir -p ${LOGDIR}
 gcloud alpha compute tpus tpu-vm ssh ${VM_NAME} --zone europe-west4-a \
     --worker=all --command "
 cd ~/flax_dev
+git pull
+git checkout vit.ft.torchloader
+git pull
+git rev-parse --short HEAD
+
+cd ~/flax_dev
 export TCMALLOC_LARGE_ALLOC_REPORT_THRESHOLD=8589934592
 export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets
 
