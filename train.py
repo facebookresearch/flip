@@ -86,7 +86,9 @@ def initialized(key, image_size, model, init_backend='tpu'):
   def init(*args):
     return model.init(*args, train=False)
   init = jax.jit(init, backend=init_backend)
+  logging.info('Initializing params...')
   variables = init({'params': key}, jnp.ones(input_shape, model.dtype))
+  logging.info('Initializing params done.')
   return variables
 
 
