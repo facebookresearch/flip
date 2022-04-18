@@ -12,7 +12,7 @@ python3 main.py \
     --config.profile_memory=True \
     --config.ema=False \
     --config.donate=True \
-    --config.aug.randerase.on=False \
+    --config.aug.randerase.on=True \
     --config.aug.randerase.prob=0.25 \
     --config.rescale_head_init=0.001 \
     --config.aug.mix.mixup=True \
