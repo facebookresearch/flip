@@ -576,7 +576,6 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # train one epoch
     # ------------------------------------------------------------
     for i, batch in enumerate(data_loader_train):
-      step = int(state.step[0])
       images, labels = batch
       
       if mixup_fn:
@@ -619,6 +618,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
           train_metrics = []
           train_metrics_last_t = time.time()
 
+      step += 1  
     # ------------------------------------------------------------
     # finished one epoch: eval
     # ------------------------------------------------------------
