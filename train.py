@@ -60,6 +60,9 @@ import numpy as np
 import os
 import math
 
+import torch
+import torch.utils.data
+
 
 NUM_CLASSES = 1000
 
@@ -426,38 +429,56 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   else:
     input_dtype = tf.float32
 
-  from IPython import embed; embed();
-  if (0 == 0): raise NotImplementedError
   dataset_val = torchloader_util.build_dataset(is_train=False, config=config)
   dataset_train = torchloader_util.build_dataset(is_train=True, config=config)
 
+  sampler_train = torch.utils.data.DistributedSampler(dataset_train, num_replicas=jax.process_count(), rank=jax.process_index(), shuffle=True)
+  sampler_val = torch.utils.data.DistributedSampler(dataset_val, num_replicas=jax.process_count(), rank=jax.process_index(), shuffle=True)
 
-  dataset_builder = tfds.builder(config.dataset)
-  train_iter = create_input_iter(
-      dataset_builder, local_batch_size, image_size, input_dtype, train=True,
-      cache=config.cache, aug=config.aug)
-  eval_iter = create_input_iter(
-      dataset_builder, local_batch_size, image_size, input_dtype, train=False,
-      cache=config.cache)
-
-  steps_per_epoch = (
-      dataset_builder.info.splits['train'].num_examples // config.batch_size
+  data_loader_train = torch.utils.data.DataLoader(
+      dataset_train, sampler=sampler_train,
+      batch_size=local_batch_size,
+      num_workers=config.torchload.num_workers,
+      pin_memory=True,
+      drop_last=True,
+  )
+  data_loader_val = torch.utils.data.DataLoader(
+      dataset_val, sampler=sampler_val,
+      batch_size=local_batch_size,
+      num_workers=config.torchload.num_workers,
+      pin_memory=True,
+      drop_last=False
   )
 
-  if config.num_train_steps == -1:
-    num_steps = int(steps_per_epoch * config.num_epochs)
-  else:
-    num_steps = config.num_train_steps
+  steps_per_epoch = len(data_loader_train)
+  assert steps_per_epoch == len(dataset_train) // config.batch_size
 
-  if config.steps_per_eval == -1:
-    num_validation_examples = dataset_builder.info.splits[
-        'validation'].num_examples
-    num_validation_examples_split = math.ceil(num_validation_examples / jax.process_count())
-    steps_per_eval = math.ceil(num_validation_examples_split / local_batch_size)
-  else:
-    steps_per_eval = config.steps_per_eval
+  # dataset_builder = tfds.builder(config.dataset)
+  # train_iter = create_input_iter(
+  #     dataset_builder, local_batch_size, image_size, input_dtype, train=True,
+  #     cache=config.cache, aug=config.aug)
+  # eval_iter = create_input_iter(
+  #     dataset_builder, local_batch_size, image_size, input_dtype, train=False,
+  #     cache=config.cache)
 
-  steps_per_checkpoint = int(steps_per_epoch * config.save_every_epochs)
+  # steps_per_epoch = (
+  #     dataset_builder.info.splits['train'].num_examples // config.batch_size
+  # )
+
+  # if config.num_train_steps == -1:
+  #   num_steps = int(steps_per_epoch * config.num_epochs)
+  # else:
+  #   num_steps = config.num_train_steps
+
+  # if config.steps_per_eval == -1:
+  #   num_validation_examples = dataset_builder.info.splits[
+  #       'validation'].num_examples
+  #   num_validation_examples_split = math.ceil(num_validation_examples / jax.process_count())
+  #   steps_per_eval = math.ceil(num_validation_examples_split / local_batch_size)
+  # else:
+  #   steps_per_eval = config.steps_per_eval
+
+  # steps_per_checkpoint = int(steps_per_epoch * config.save_every_epochs)
 
   abs_learning_rate = config.learning_rate * config.batch_size / 256.
 
@@ -521,6 +542,25 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   logging.info('Work dir: {}'.format(workdir))
   train_metrics_last_t = time.time()
   logging.info('Initial compilation, this might take some minutes...')
+
+  epoch_offset = (step_offset + 1) // steps_per_epoch
+  step = epoch_offset * steps_per_epoch
+  for epoch in range(epoch_offset, int(config.num_epochs)):
+    data_loader_train.sampler.set_epoch(epoch)
+    
+    for i, batch in enumerate(data_loader_train):
+      images, labels = batch
+
+      if config.get('log_every_steps'):
+        if (step + 1) % config.log_every_steps == 0:
+          logging.info('epoch: {}, step: {}, images.shape: {}'.format(epoch, step, images.shape))
+
+      step += 1
+  
+  # Wait until computations are done before exiting
+  jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
+  return
+
 
   for step, batch in zip(range(step_offset, num_steps), train_iter):
     state, metrics = p_train_step(state, batch)

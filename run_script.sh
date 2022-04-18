@@ -8,7 +8,7 @@ python3 main.py \
     --config=configs/cfg_vit_dbg.py \
     --config.batch_size=128 \
     --config.log_every_steps=10 \
-    --config.num_epochs=0.005 \
+    --config.num_epochs=1 \
     --config.profile_memory=True \
     --config.ema=False \
     --config.donate=True \
