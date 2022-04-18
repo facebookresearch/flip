@@ -519,14 +519,15 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   state = create_train_state(rng, config, model, image_size, learning_rate_fn)
 
-  if config.pretrain_dir == '':
-    state = restore_checkpoint(state, workdir)
-  else:
+  if config.pretrain_dir != '':
     logging.info('Loading from pre-training:')
     state = checkpoint_util.load_from_pretrain(state, config.pretrain_dir)
 
     # stds = jax.tree_util.tree_map(lambda x: np.array(x).std(), state.params)
     # logging.info('std: {}'.format(stds))
+  
+  # try to restore
+  state = restore_checkpoint(state, workdir)
 
   # step_offset > 0 if restarting from checkpoint
   step_offset = int(state.step)
