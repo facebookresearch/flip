@@ -64,6 +64,7 @@ import torch
 import torch.utils.data
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=DeprecationWarning) 
 
 NUM_CLASSES = 1000
 
@@ -630,10 +631,24 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
       writer.write_scalars(step + 1, summary)
       writer.flush()
-  
+
+    # ------------------------------------------------------------
+    # finished one epoch: eval
+    # ------------------------------------------------------------
+    if (epoch + 1) % config.save_every_epochs == 0 or epoch + 1 == int(config.num_epochs):
+      state = sync_batch_stats(state)
+      save_checkpoint(state, workdir)
+
   # Wait until computations are done before exiting
   jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
-  return
+  total_time = time.time() - start_time
+  total_time_str = str(datetime.timedelta(seconds=int(total_time)))
+  logging.info('Elapsed time: {}'.format(total_time_str))
+
+  if config.profile_memory:
+    profile_memory(workdir)
+
+  return state
 
 
   for step, batch in zip(range(step_offset, num_steps), train_iter):
