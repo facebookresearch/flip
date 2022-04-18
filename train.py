@@ -469,6 +469,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
       drop_last=False
   )
 
+  num_classes = len(dataset_train.classes)
+
   steps_per_epoch = len(data_loader_train)
   assert steps_per_epoch == len(dataset_train) // config.batch_size
 
@@ -550,9 +552,9 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
       axis_name='batch',
       donate_argnums=(0,) if config.donate else ()
       )
-  # p_eval_step = jax.pmap(
-  #     functools.partial(eval_step, ema_eval=(config.ema and config.ema_eval)),
-  #     axis_name='batch')
+  p_eval_step = jax.pmap(
+      functools.partial(eval_step, ema_eval=(config.ema and config.ema_eval)),
+      axis_name='batch')
 
   train_metrics = []
   hooks = []
@@ -572,12 +574,13 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # train one epoch
     # ------------------------------------------------------------
     for i, batch in enumerate(data_loader_train):
+      step = int(state.step[0])
       images, labels = batch
-
+      
       if mixup_fn:
         images, labels_one_hot = mixup_fn(images, labels)
       else:
-        raise NotImplementedError
+        labels_one_hot = torch.nn.functional.one_hot(labels, num_classes=num_classes)
 
       images = np.transpose(images, [0, 2, 3, 1])  # nchw->nhwc
       batch = {'image': images, 'label': labels, 'label_one_hot': labels_one_hot}
@@ -614,8 +617,17 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
           train_metrics = []
           train_metrics_last_t = time.time()
 
-      step += 1
-      assert step == int(state.step[0])  # sanity
+    # ------------------------------------------------------------
+    # finished one epoch: eval
+    # ------------------------------------------------------------
+    if True:
+      summary = run_eval(state, p_eval_step, data_loader_val, local_batch_size, epoch, num_classes)
+
+      # to make it consistent with PyTorch log
+      summary['step_tensorboard'] = epoch  # step for tensorboard (no need to minus 1)
+
+      writer.write_scalars(step + 1, summary)
+      writer.flush()
   
   # Wait until computations are done before exiting
   jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
@@ -686,14 +698,19 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   return state
 
 
-def run_eval(state, p_eval_step, eval_iter, steps_per_eval, epoch):
+def run_eval(state, p_eval_step, data_loader_val, local_batch_size, epoch, num_classes=1000):
   eval_metrics = []
   # sync batch statistics across replicas
   state = sync_batch_stats(state)
   tic = time.time()
-  for i in range(steps_per_eval):
-    eval_batch = next(eval_iter)
-    metrics = p_eval_step(state, eval_batch)
+  for batch in data_loader_val:
+    images, labels = batch
+    images = np.transpose(images, [0, 2, 3, 1])  # nchw->nhwc
+    labels_one_hot = torch.nn.functional.one_hot(labels, num_classes=num_classes)
+    batch = {'image': images, 'label': labels, 'label_one_hot': labels_one_hot}
+    batch = prepare_pt_data(batch, local_batch_size)
+
+    metrics = p_eval_step(state, batch)
     eval_metrics.append(metrics)
 
   eval_metrics = jax.tree_map(lambda x: x[0], eval_metrics)
@@ -707,7 +724,7 @@ def run_eval(state, p_eval_step, eval_iter, steps_per_eval, epoch):
   toc = time.time() - tic
   logging.info('Eval time: {}, {} steps, {} samples'.format(
     str(datetime.timedelta(seconds=int(toc))),
-    steps_per_eval,
+    len(data_loader_val),
     len(eval_metrics['test_acc1'])))
 
   summary = jax.tree_map(lambda x: x.mean(), eval_metrics)
