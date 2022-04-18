@@ -15,6 +15,7 @@ from torchvision import datasets, transforms
 
 from timm.data import create_transform
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from timm.data.mixup import Mixup
 
 from absl import logging
 
@@ -73,3 +74,19 @@ def build_transform(is_train, aug):
     t.append(transforms.ToTensor())
     t.append(transforms.Normalize(mean, std))
     return transforms.Compose(t)
+
+
+def get_mixup_fn(aug, num_classes=1000):
+    mixup_fn = None
+    mixup_active = aug.mix.mixup or aug.mix.cutmix
+    if mixup_active:
+        logging.info("Mixup is activated!")
+        mixup_fn = Mixup(
+            mixup_alpha=aug.mix.mixup_alpha,
+            cutmix_alpha=aug.mix.cutmix_alpha,
+            cutmix_minmax=None,
+            prob=1.0,
+            switch_prob=0.5,
+            mode='batch',
+            label_smoothing=aug.label_smoothing, num_classes=num_classes)
+    return mixup_fn

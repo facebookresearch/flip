@@ -453,6 +453,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   steps_per_epoch = len(data_loader_train)
   assert steps_per_epoch == len(dataset_train) // config.batch_size
 
+  mixup_fn = torchloader_util.get_mixup_fn(config.aug)
+  
   # dataset_builder = tfds.builder(config.dataset)
   # train_iter = create_input_iter(
   #     dataset_builder, local_batch_size, image_size, input_dtype, train=True,
@@ -550,6 +552,16 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     
     for i, batch in enumerate(data_loader_train):
       images, labels = batch
+
+      if mixup_fn:
+        images, labels_one_hot = mixup_fn(images, labels)
+      else:
+        raise NotImplementedError
+
+      images = jnp.array(images.numpy())
+      labels = jnp.array(labels.numpy())
+      labels_one_hot = jnp.array(labels_one_hot.numpy())
+      batch = {'image': images, 'label': labels, 'label_one_hot': labels_one_hot}
 
       if config.get('log_every_steps'):
         if (step + 1) % config.log_every_steps == 0:
