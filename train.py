@@ -260,6 +260,24 @@ def prepare_tf_data(xs, batch_size):
   return jax.tree_map(_prepare, xs)
 
 
+def prepare_pt_data(xs, batch_size):
+  """Convert a input batch from PyTorch Tensors to numpy arrays."""
+  local_device_count = jax.local_device_count()
+  def _prepare(x):
+    # Use _numpy() for zero-copy conversion between TF and NumPy.
+    x = x.numpy()  # pylint: disable=protected-access
+
+    if x.shape[0] != batch_size:
+      pads = -np.ones((batch_size - x.shape[0],) + x.shape[1:], dtype=x.dtype)
+      x = np.concatenate([x, pads], axis=0)
+
+    # reshape (host_batch_size, height, width, 3) to
+    # (local_devices, device_batch_size, height, width, 3)
+    return x.reshape((local_device_count, -1) + x.shape[1:])
+
+  return jax.tree_map(_prepare, xs)
+
+
 def create_input_iter(dataset_builder, batch_size, image_size, dtype, train,
                       cache, aug=None):
   ds = input_pipeline.create_split(
@@ -492,20 +510,19 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   learning_rate_fn = create_learning_rate_fn(
       config, abs_learning_rate, steps_per_epoch)
 
-  # state = create_train_state(rng, config, model, image_size, learning_rate_fn)
+  state = create_train_state(rng, config, model, image_size, learning_rate_fn)
 
-  # if config.pretrain_dir == '':
-  #   state = restore_checkpoint(state, workdir)
-  # else:
-  #   logging.info('Loading from pre-training:')
-  #   state = checkpoint_util.load_from_pretrain(state, config.pretrain_dir)
+  if config.pretrain_dir == '':
+    state = restore_checkpoint(state, workdir)
+  else:
+    logging.info('Loading from pre-training:')
+    state = checkpoint_util.load_from_pretrain(state, config.pretrain_dir)
 
     # stds = jax.tree_util.tree_map(lambda x: np.array(x).std(), state.params)
     # logging.info('std: {}'.format(stds))
 
   # step_offset > 0 if restarting from checkpoint
-  # step_offset = int(state.step)
-  step_offset = 0
+  step_offset = int(state.step)
 
   # --------------------------------------------------------------------------------
   # up til now, state.params are for one device
@@ -525,13 +542,13 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   # num_params = np.sum([np.prod(p.shape) for p in jax.tree_leaves(state.params)])
   # num_params_mem = num_params * 4 / 1024 / 1024
   # --------------------------------------------------------------------------------  
-  # state = jax_utils.replicate(state)
+  state = jax_utils.replicate(state)
 
-  # p_train_step = jax.pmap(
-  #     functools.partial(train_step, learning_rate_fn=learning_rate_fn, config=config),
-  #     axis_name='batch',
-  #     donate_argnums=(0,) if config.donate else ()
-  #     )
+  p_train_step = jax.pmap(
+      functools.partial(train_step, learning_rate_fn=learning_rate_fn, config=config),
+      axis_name='batch',
+      donate_argnums=(0,) if config.donate else ()
+      )
   # p_eval_step = jax.pmap(
   #     functools.partial(eval_step, ema_eval=(config.ema and config.ema_eval)),
   #     axis_name='batch')
@@ -558,14 +575,40 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
       else:
         raise NotImplementedError
 
-      images = jnp.array(images.numpy())
-      labels = jnp.array(labels.numpy())
-      labels_one_hot = jnp.array(labels_one_hot.numpy())
+      images = np.transpose(images, [0, 2, 3, 1])  # nchw->nhwc
       batch = {'image': images, 'label': labels, 'label_one_hot': labels_one_hot}
+      batch = prepare_pt_data(batch, local_batch_size)
+
+      state, metrics = p_train_step(state, batch)
+
+      epoch_1000x = int(step * config.batch_size / 1281167 * 1000)  # normalize to IN1K epoch anyway
+
+      if epoch == epoch_offset and i == 0:
+        logging.info('Initial compilation completed.')
+        start_time = time.time()  # log the time after compilation
 
       if config.get('log_every_steps'):
+        train_metrics.append(metrics)
         if (step + 1) % config.log_every_steps == 0:
-          logging.info('epoch: {}, step: {}, images.shape: {}'.format(epoch, step, images.shape))
+          # Wait until computations are done before exiting
+          jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
+          train_metrics = common_utils.get_metrics(train_metrics)
+          summary = {
+              f'train_{k}': float(v)
+              for k, v in jax.tree_map(lambda x: x.mean(), train_metrics).items()
+          }
+          summary['steps_per_second'] = config.log_every_steps / (
+              time.time() - train_metrics_last_t)
+
+          # to make it consistent with PyTorch log
+          summary['loss'] = summary['train_loss']  # add extra name
+          summary['lr'] = summary.pop('train_learning_rate')  # rename
+          summary['class_acc'] = summary.pop('train_accuracy')  # this is [0, 1]
+          summary['step_tensorboard'] = epoch_1000x  # step for tensorboard
+
+          writer.write_scalars(step + 1, summary)
+          train_metrics = []
+          train_metrics_last_t = time.time()
 
       step += 1
   
