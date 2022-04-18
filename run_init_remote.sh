@@ -16,6 +16,8 @@ pip3 install torchvision --upgrade
 pip3 install tensorflow-probability
 pip3 install tensorflow_addons
 
+pip3 install timm==0.4.12
+
 pip3 list | grep 'jax\|flax\|tensorflow '
 
 python3 -c 'import tensorflow as tf'
