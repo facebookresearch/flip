@@ -62,7 +62,8 @@ import math
 
 import torch
 import torch.utils.data
-
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
 
 NUM_CLASSES = 1000
 
@@ -565,8 +566,11 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   epoch_offset = (step_offset + 1) // steps_per_epoch
   step = epoch_offset * steps_per_epoch
   for epoch in range(epoch_offset, int(config.num_epochs)):
-    data_loader_train.sampler.set_epoch(epoch)
+    data_loader_train.sampler.set_epoch(epoch)  # reset random seed
     
+    # ------------------------------------------------------------
+    # train one epoch
+    # ------------------------------------------------------------
     for i, batch in enumerate(data_loader_train):
       images, labels = batch
 
@@ -611,6 +615,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
           train_metrics_last_t = time.time()
 
       step += 1
+      assert step == int(state.step[0])  # sanity
   
   # Wait until computations are done before exiting
   jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
