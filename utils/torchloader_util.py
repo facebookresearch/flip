@@ -10,7 +10,9 @@
 
 import os
 import PIL
+import functools
 
+import torch
 from torchvision import datasets, transforms
 
 from timm.data import create_transform
@@ -21,12 +23,33 @@ from absl import logging
 
 IMAGE_SIZE = 224
 
+AUTOAUGS = {'autoaug': 'v0', 'randaugv2': 'rand-m9-mstd0.5-inc1'}
 
-def build_dataset(is_train, config):
-    transform = build_transform(is_train, config.aug)
 
-    root = os.path.join(config.torchload.data_dir, 'train' if is_train else 'val')
-    dataset = datasets.ImageFolder(root, transform=transform)
+class ImageFolder(datasets.ImageFolder):
+    """ImageFolder with label smoothing pre-process
+    """
+    def __init__(self, label_smoothing, **kwargs):
+        super(ImageFolder, self).__init__(**kwargs)
+        self.label_smoothing = label_smoothing
+        self.num_classes = len(self.classes)
+
+    def __getitem__(self, index: int):
+        image, label = super(ImageFolder, self).__getitem__(index)
+        label_one_hot = torch.nn.functional.one_hot(torch.tensor(label), self.num_classes).float()
+        label_one_hot = label_one_hot * (1 - self.label_smoothing) + self.label_smoothing / self.num_classes
+        
+        image = image.permute([1, 2, 0])  # chw2hwc
+
+        return image, label, label_one_hot
+
+
+def build_dataset(is_train, data_dir, aug):
+    transform = build_transform(is_train, aug)
+    label_smoothing = aug.label_smoothing if is_train else 0.
+
+    root = os.path.join(data_dir, 'train' if is_train else 'val')
+    dataset = ImageFolder(root=root, transform=transform, label_smoothing=label_smoothing)
 
     logging.info(dataset)
 
@@ -41,8 +64,7 @@ def build_transform(is_train, aug):
     # train transform
     if is_train:
         color_jitter = 0.0 if aug.color_jit is None else aug.color_jit[0]
-        aa = {'autoaug': 'v0', 'randaugv2': 'rand-m9-mstd0.5-inc1'}
-        aa = aa[aug.autoaug]
+        aa = AUTOAUGS[aug.autoaug]
         re_prob = aug.randerase.prob if aug.randerase.on else 0.0
         # this should always dispatch to transforms_imagenet_train
         transform = create_transform(
@@ -53,7 +75,6 @@ def build_transform(is_train, aug):
             interpolation='bicubic',
             re_prob=re_prob,
             re_mode='pixel',
-            re_count=1,
             mean=mean,
             std=std,
         )
@@ -88,5 +109,6 @@ def get_mixup_fn(aug, num_classes=1000):
             prob=1.0,
             switch_prob=0.5,
             mode='batch',
-            label_smoothing=aug.label_smoothing, num_classes=num_classes)
+            label_smoothing=aug.label_smoothing,
+            num_classes=num_classes)
     return mixup_fn

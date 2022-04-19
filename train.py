@@ -452,8 +452,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   else:
     input_dtype = tf.float32
 
-  dataset_val = torchloader_util.build_dataset(is_train=False, config=config)
-  dataset_train = torchloader_util.build_dataset(is_train=True, config=config)
+  dataset_val = torchloader_util.build_dataset(is_train=False, data_dir=config.torchload.data_dir, aug=config.aug)
+  dataset_train = torchloader_util.build_dataset(is_train=True, data_dir=config.torchload.data_dir, aug=config.aug)
 
   sampler_train = torch.utils.data.DistributedSampler(dataset_train, num_replicas=jax.process_count(), rank=jax.process_index(), shuffle=True)
   sampler_val = torch.utils.data.DistributedSampler(dataset_val, num_replicas=jax.process_count(), rank=jax.process_index(), shuffle=False)
@@ -590,14 +590,11 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # train one epoch
     # ------------------------------------------------------------
     for i, batch in enumerate(data_loader_train):
-      images, labels = batch
+      images, labels, labels_one_hot = batch
       
       if mixup_fn:
         images, labels_one_hot = mixup_fn(images, labels)
-      else:
-        labels_one_hot = torch.nn.functional.one_hot(labels, num_classes=num_classes)
 
-      images = np.transpose(images, [0, 2, 3, 1])  # nchw->nhwc
       batch = {'image': images, 'label': labels, 'label_one_hot': labels_one_hot}
       batch = prepare_pt_data(batch, local_batch_size)
 
@@ -672,9 +669,7 @@ def run_eval(state, p_eval_step, data_loader_val, local_batch_size, epoch, num_c
   state = sync_batch_stats(state)
   tic = time.time()
   for batch in data_loader_val:
-    images, labels = batch
-    images = np.transpose(images, [0, 2, 3, 1])  # nchw->nhwc
-    labels_one_hot = torch.nn.functional.one_hot(labels, num_classes=num_classes)
+    images, labels, labels_one_hot = batch
     batch = {'image': images, 'label': labels, 'label_one_hot': labels_one_hot}
     batch = prepare_pt_data(batch, local_batch_size)
 
