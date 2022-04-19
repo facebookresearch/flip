@@ -456,7 +456,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   dataset_train = torchloader_util.build_dataset(is_train=True, config=config)
 
   sampler_train = torch.utils.data.DistributedSampler(dataset_train, num_replicas=jax.process_count(), rank=jax.process_index(), shuffle=True)
-  sampler_val = torch.utils.data.DistributedSampler(dataset_val, num_replicas=jax.process_count(), rank=jax.process_index(), shuffle=True)
+  sampler_val = torch.utils.data.DistributedSampler(dataset_val, num_replicas=jax.process_count(), rank=jax.process_index(), shuffle=False)
 
   data_loader_train = torch.utils.data.DataLoader(
       dataset_train, sampler=sampler_train,
@@ -519,7 +519,9 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   state = create_train_state(rng, config, model, image_size, learning_rate_fn)
 
-  if config.pretrain_dir != '':
+  if config.resume_dir != '':
+    state = restore_checkpoint(state, config.resume_dir)
+  elif config.pretrain_dir != '':
     logging.info('Loading from pre-training:')
     state = checkpoint_util.load_from_pretrain(state, config.pretrain_dir)
 
@@ -569,6 +571,12 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   logging.info('Work dir: {}'.format(workdir))
   train_metrics_last_t = time.time()
   logging.info('Initial compilation, this might take some minutes...')
+
+  if config.eval_only:
+    # run eval only and return
+    logging.info('Evaluating...')
+    run_eval(state, p_eval_step, data_loader_val, local_batch_size, -1, num_classes)
+    return
 
   epoch_offset = (step_offset + 1) // steps_per_epoch
   step = epoch_offset * steps_per_epoch
