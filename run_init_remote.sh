@@ -12,7 +12,7 @@ pip install --upgrade clu
 pip install --upgrade jax
 pip install --upgrade flax
 
-pip3 install torchvision --upgrade
+# pip3 install torchvision --upgrade
 pip3 install tensorflow-probability
 pip3 install tensorflow_addons
 
