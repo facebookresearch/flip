@@ -25,6 +25,7 @@ from clu import platform
 import jax
 from ml_collections import config_flags
 import tensorflow as tf
+import os
 
 import train
 
@@ -41,6 +42,9 @@ config_flags.DEFINE_config_file(
   
 
 def main(argv):
+  logging.info('Current commit: ')
+  os.system('git show -s --format=%h')
+  
   if len(argv) > 1:
     raise app.UsageError('Too many command-line arguments.')
 
