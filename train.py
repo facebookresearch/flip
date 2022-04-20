@@ -466,7 +466,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   data_loader_train = torch.utils.data.DataLoader(
       dataset_train, sampler=sampler_train,
       batch_size=local_batch_size,
-      num_workers=0,  # config.torchload.num_workers,
+      num_workers=config.torchload.num_workers,
       pin_memory=True,
       drop_last=True,
       collate_fn=collate_fn_train,
