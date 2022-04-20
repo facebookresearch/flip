@@ -19,6 +19,7 @@ The data is loaded using tensorflow_datasets.
 """
 
 import functools
+from threading import local
 import time, datetime
 from typing import Any
 
@@ -457,11 +458,6 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   sampler_train = torch.utils.data.DistributedSampler(dataset_train, num_replicas=jax.process_count(), rank=jax.process_index(), shuffle=True)
   sampler_val = torch.utils.data.DistributedSampler(dataset_val, num_replicas=jax.process_count(), rank=jax.process_index(), shuffle=False)
-
-
-  mixup_fn = torchloader_util.get_mixup_fn(config.aug)
-  collate_fn_train = functools.partial(torchloader_util.collate_and_reshape_fn, batch_size=local_batch_size, mixup_fn=mixup_fn)
-  collate_fn_val = functools.partial(torchloader_util.collate_and_reshape_fn, batch_size=local_batch_size, mixup_fn=None)
   
   data_loader_train = torch.utils.data.DataLoader(
       dataset_train, sampler=sampler_train,
@@ -469,7 +465,6 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
       num_workers=config.torchload.num_workers,
       pin_memory=True,
       drop_last=True,
-      collate_fn=collate_fn_train,
   )
   data_loader_val = torch.utils.data.DataLoader(
       dataset_val, sampler=sampler_val,
@@ -477,8 +472,9 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
       num_workers=config.torchload.num_workers,
       pin_memory=True,
       drop_last=False,
-      collate_fn=collate_fn_val,
   )
+
+  mixup_fn = torchloader_util.get_mixup_fn(config.aug)
 
   num_classes = len(dataset_train.classes)
 
@@ -580,7 +576,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   if config.eval_only:
     # run eval only and return
     logging.info('Evaluating...')
-    run_eval(state, p_eval_step, data_loader_val, -1)
+    run_eval(state, p_eval_step, data_loader_val, local_batch_size, epoch=-1)
     return
 
   epoch_offset = (step_offset + 1) // steps_per_epoch
@@ -595,7 +591,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # train one epoch
     # ------------------------------------------------------------
     for i, batch in enumerate(data_loader_train):
-
+      batch = parse_batch(batch, local_batch_size, mixup_fn)
       state, metrics = p_train_step(state, batch)
 
       epoch_1000x = int(step * config.batch_size / 1281167 * 1000)  # normalize to IN1K epoch anyway
@@ -632,7 +628,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # finished one epoch: eval
     # ------------------------------------------------------------
     if True:
-      summary = run_eval(state, p_eval_step, data_loader_val, epoch)
+      summary = run_eval(state, p_eval_step, data_loader_val, local_batch_size, epoch)
       best_acc = max(best_acc, summary['test_acc1'])
 
       # to make it consistent with PyTorch log
@@ -661,14 +657,27 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   return state
 
 
-def run_eval(state, p_eval_step, data_loader_val, epoch):
+def parse_batch(batch, local_batch_size, mixup_fn=None):
+  images, labels, labels_one_hot = batch
+  if mixup_fn is not None:
+    assert images.shape[1] == 3  # nchw
+    images, labels_one_hot = mixup_fn(images, labels)
+  images = images.permute([0, 2, 3, 1])  # nchw -> nhwc
+  batch = {'image': images, 'label': labels, 'label_one_hot': labels_one_hot}
+  batch = prepare_pt_data(batch, local_batch_size)  # to (local_devices, device_batch_size, height, width, 3)
+  return batch
+
+
+def run_eval(state, p_eval_step, data_loader_val, local_batch_size, epoch):
   eval_metrics = []
   # sync batch statistics across replicas
   state = sync_batch_stats(state)
   tic = time.time()
-  for batch in data_loader_val:
+  for _, batch in enumerate(data_loader_val):
+    batch = parse_batch(batch, local_batch_size, mixup_fn=None)
     metrics = p_eval_step(state, batch)
     eval_metrics.append(metrics)
+    # logging.info('{} / {}'.format(_, len(data_loader_val)))
 
   eval_metrics = jax.tree_map(lambda x: x[0], eval_metrics)
   eval_metrics = jax.device_get(eval_metrics)

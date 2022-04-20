@@ -132,33 +132,4 @@ def prepare_pt_data(xs, batch_size):
     # (local_devices, device_batch_size, height, width, 3)
     return x.reshape((local_device_count, -1) + x.shape[1:])
 
-  return jax.tree_map(_prepare, xs)
-
-
-def collate_and_reshape_fn(batch, batch_size, mixup_fn):
-    """Collate a batch and reshape it into (local_devices, device_batch_size, height, width, 3)"""
-    images, labels, labels_one_hot = _utils.collate.default_collate(batch)
-    assert images.shape[1] == 3  # nchw
-
-    if mixup_fn is not None:
-        images, labels_one_hot = mixup_fn(images, labels)
-
-    images = images.permute([0, 2, 3, 1])  # nchw -> nhwc
-    batch = {'image': images, 'label': labels, 'label_one_hot': labels_one_hot}
-    batch = prepare_pt_data(batch, batch_size)
-    return batch
-
-
-# class DataLoader(torch.utils.data.DataLoader):
-#     """DataLoader with post-processing"""
-#     def __init__(self, dataset, **kwargs):
-#         super(DataLoader, self).__init__(dataset, **kwargs)
-        
-#         self.collate_fn = self._new_collate_fn
-
-#     def _new_collate_fn(self, batch):
-#         images, labels, labels_one_hot = _utils.collate.default_collate(batch)
-#         batch = {'image': images, 'label': labels, 'label_one_hot': labels_one_hot}
-#         batch = prepare_pt_data(batch, self.batch_size)
-#         return batch
-        
+  return jax.tree_map(_prepare, xs)        

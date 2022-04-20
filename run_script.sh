@@ -23,7 +23,7 @@ python3 main.py \
     --config.aug.torchvision=False \
     --config.aug.mix.torchvision=False \
     --config.torchload.on=True \
-    --config.eval_only=False \
+    --config.eval_only=True \
 
     # --config.resume_dir='gs://kmh-gcp/checkpoints/flax/2021-10-26-22-16-05-v3-128-mb4096-epo1600-PMAEp16-ViTLarge-lr1e-4-wd5e-2-warm40-mask0.75-pred8d512-exNB-msaLNmlpLNeLNpLNkBN0-1view-NOrelpos-abspos-clstoken-qkv-NOlayerscale-LNtgt-resume3_convert_pt2jax_finetune/20220418_214713_kmh-tpuvm-v3-256-1_cfg_vit_large_50ep_ftpy_b1024_lr1e-3_lrd0.75_dp0.2_TVrandaugv2_shf512x32_hostbatch_seed0_torch171'
 
