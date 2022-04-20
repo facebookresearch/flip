@@ -32,7 +32,6 @@ mkdir -p ${LOGDIR}
 gcloud alpha compute tpus tpu-vm ssh ${VM_NAME} --zone europe-west4-a \
     --worker=all --command "
 cd $STAGEDIR
-pwd
 git config --global --add safe.directory $STAGEDIR
 
 echo Current commit: $(git show -s --format=%h)

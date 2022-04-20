@@ -42,7 +42,7 @@ config_flags.DEFINE_config_file(
   
 
 def main(argv):
-  if jax.process_index():
+  if jax.process_index() == 0:
     logging.info('Current commit: ')
     os.system('git show -s --format=%h')
   
