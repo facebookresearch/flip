@@ -453,6 +453,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     generator=rng_torch,
     worker_init_fn=seed_worker,
     persistent_workers=True,
+    timeout=60.,
   )
   data_loader_val = torch.utils.data.DataLoader(
     dataset_val, sampler=sampler_val,
@@ -461,6 +462,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     pin_memory=True,
     drop_last=False,
     persistent_workers=True,
+    timeout=60.,
   )
 
   mixup_fn = torchloader_util.get_mixup_fn(config.aug)
