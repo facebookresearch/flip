@@ -18,6 +18,7 @@ import torch
 from torchvision import datasets, transforms
 from torch.utils.data import _utils
 
+import timm
 from timm.data import create_transform
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.data.mixup import Mixup
@@ -132,4 +133,20 @@ def prepare_pt_data(xs, batch_size):
     # (local_devices, device_batch_size, height, width, 3)
     return x.reshape((local_device_count, -1) + x.shape[1:])
 
-  return jax.tree_map(_prepare, xs)        
+  return jax.tree_map(_prepare, xs)
+
+
+# overwrite timm
+def one_hot(x, num_classes, on_value=1., off_value=0., device='cpu'):
+    x = x.long().view(-1, 1)
+    return torch.full((x.size()[0], num_classes), off_value, device=device).scatter_(1, x, on_value)
+
+def mixup_target(target, num_classes, lam=1., smoothing=0.0, device='cpu'):
+    off_value = smoothing / num_classes
+    on_value = 1. - smoothing + off_value
+    y1 = one_hot(target, num_classes, on_value=on_value, off_value=off_value, device=device)
+    y2 = one_hot(target.flip(0), num_classes, on_value=on_value, off_value=off_value, device=device)
+    return y1 * lam + y2 * (1. - lam)
+
+timm.data.mixup.one_hot = one_hot
+timm.data.mixup.mixup_target = mixup_target

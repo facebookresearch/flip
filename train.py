@@ -42,24 +42,19 @@ from jax import random
 import ml_collections
 import optax
 import tensorflow as tf
-import tensorflow_datasets as tfds
 
-import input_pipeline
 import models_vit
 
 from utils import summary_util as summary_util  # must be after 'from clu import metric_writers'
 from utils import opt_util
-from utils import mix_util
 from utils import checkpoint_util
 from utils import lrd_util
-from utils import torchvision_util
 from utils import torchloader_util
 
 import jax.profiler
 
 import numpy as np
 import os
-import math
 
 import torch
 import torch.utils.data
@@ -248,24 +243,6 @@ def eval_step(state, batch, ema_eval=False):
   return metrics
 
 
-def prepare_tf_data(xs, batch_size):
-  """Convert a input batch from tf Tensors to numpy arrays."""
-  local_device_count = jax.local_device_count()
-  def _prepare(x):
-    # Use _numpy() for zero-copy conversion between TF and NumPy.
-    x = x._numpy()  # pylint: disable=protected-access
-
-    if x.shape[0] != batch_size:
-      pads = -np.ones((batch_size - x.shape[0],) + x.shape[1:], dtype=x.dtype)
-      x = np.concatenate([x, pads], axis=0)
-
-    # reshape (host_batch_size, height, width, 3) to
-    # (local_devices, device_batch_size, height, width, 3)
-    return x.reshape((local_device_count, -1) + x.shape[1:])
-
-  return jax.tree_map(_prepare, xs)
-
-
 def prepare_pt_data(xs, batch_size):
   """Convert a input batch from PyTorch Tensors to numpy arrays."""
   local_device_count = jax.local_device_count()
@@ -282,29 +259,6 @@ def prepare_pt_data(xs, batch_size):
     return x.reshape((local_device_count, -1) + x.shape[1:])
 
   return jax.tree_map(_prepare, xs)
-
-
-def create_input_iter(dataset_builder, batch_size, image_size, dtype, train,
-                      cache, aug=None):
-  ds = input_pipeline.create_split(
-      dataset_builder, batch_size, image_size=image_size, dtype=dtype,
-      train=train, cache=cache, aug=aug)
-
-  if aug and (aug.mix.mixup or aug.mix.cutmix) and (not aug.mix.torchvision):
-    apply_mix = functools.partial(mix_util.apply_mix, cfg=aug.mix)
-    ds = map(apply_mix, ds)
-  elif aug and (aug.mix.mixup or aug.mix.cutmix) and (aug.mix.torchvision):
-    num_classes = dataset_builder.info.features['label'].num_classes
-    ds = map(torchvision_util.get_torchvision_map_mix_fn(aug, num_classes), ds)
-
-  # ------------------------------------------------
-  # x = next(iter(ds))
-  # raise NotImplementedError
-  # ------------------------------------------------
-
-  ds = map(functools.partial(prepare_tf_data, batch_size=batch_size), ds)
-  it = jax_utils.prefetch_to_device(ds, 2)
-  return it
 
 
 class TrainState(train_state.TrainState):
@@ -476,41 +430,11 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   mixup_fn = torchloader_util.get_mixup_fn(config.aug)
 
-  num_classes = len(dataset_train.classes)
-
   steps_per_epoch = len(data_loader_train)
   assert steps_per_epoch == len(dataset_train) // config.batch_size
   
-  # dataset_builder = tfds.builder(config.dataset)
-  # train_iter = create_input_iter(
-  #     dataset_builder, local_batch_size, image_size, input_dtype, train=True,
-  #     cache=config.cache, aug=config.aug)
-  # eval_iter = create_input_iter(
-  #     dataset_builder, local_batch_size, image_size, input_dtype, train=False,
-  #     cache=config.cache)
-
-  # steps_per_epoch = (
-  #     dataset_builder.info.splits['train'].num_examples // config.batch_size
-  # )
-
-  # if config.num_train_steps == -1:
-  #   num_steps = int(steps_per_epoch * config.num_epochs)
-  # else:
-  #   num_steps = config.num_train_steps
-
-  # if config.steps_per_eval == -1:
-  #   num_validation_examples = dataset_builder.info.splits[
-  #       'validation'].num_examples
-  #   num_validation_examples_split = math.ceil(num_validation_examples / jax.process_count())
-  #   steps_per_eval = math.ceil(num_validation_examples_split / local_batch_size)
-  # else:
-  #   steps_per_eval = config.steps_per_eval
-
-  # steps_per_checkpoint = int(steps_per_epoch * config.save_every_epochs)
-
   abs_learning_rate = config.learning_rate * config.batch_size / 256.
 
-  # model_cls = getattr(models, config.model)
   model_cls = models_vit.VisionTransformer
   model = create_model(
       model_cls=model_cls, half_precision=config.half_precision, **config.model)
