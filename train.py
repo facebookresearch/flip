@@ -375,10 +375,18 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
 
 
 def seed_worker(worker_id):
-    worker_seed = torch.initial_seed() % 2**32
+    worker_seed = torch.initial_seed() % 2**32 + jax.process_index()
     np.random.seed(worker_seed)
     _random.seed(worker_seed)
-    print("id {}: seed {}".format(worker_id, worker_seed))
+
+
+def set_seed_torch(seed):
+  rng_torch = torch.Generator()
+  rng_torch.manual_seed(seed)
+  torch.manual_seed(seed)
+  np.random.seed(seed)
+  _random.seed(seed)
+  return rng_torch
 
 
 def train_and_evaluate(config: ml_collections.ConfigDict,
@@ -395,14 +403,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   # ------------------------------------
   # Set random seed
   # ------------------------------------
-  rng_pt = torch.Generator()
-  rng_pt.manual_seed(config.seed_pt)
-  torch.manual_seed(config.seed_pt)
-  np.random.seed(config.seed_pt)
-  _random.seed(config.seed_pt)
-
+  rng_torch = set_seed_torch(config.seed_pt)
   tf.random.set_seed(config.seed_tf + jax.process_index())
-
   rng = random.PRNGKey(config.seed_jax)  # used to be 0
   # ------------------------------------
 
@@ -437,7 +439,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
       num_workers=config.torchload.num_workers,
       pin_memory=True,
       drop_last=True,
-      generator=rng_pt,
+      generator=rng_torch,
       worker_init_fn=seed_worker,
   )
   data_loader_val = torch.utils.data.DataLoader(
