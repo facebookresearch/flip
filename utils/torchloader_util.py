@@ -10,10 +10,13 @@
 
 import os
 import PIL
-import functools
+
+import numpy as np
+import jax
 
 import torch
 from torchvision import datasets, transforms
+from torch.utils.data import _utils
 
 from timm.data import create_transform
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
@@ -112,3 +115,44 @@ def get_mixup_fn(aug, num_classes=1000):
             label_smoothing=aug.label_smoothing,
             num_classes=num_classes)
     return mixup_fn
+
+
+def prepare_pt_data(xs, batch_size):
+  """Convert a input batch from PyTorch Tensors to numpy arrays."""
+  local_device_count = jax.local_device_count()
+  def _prepare(x):
+    # Use _numpy() for zero-copy conversion between TF and NumPy.
+    x = x.numpy()  # pylint: disable=protected-access
+
+    if x.shape[0] != batch_size:
+      pads = -np.ones((batch_size - x.shape[0],) + x.shape[1:], dtype=x.dtype)
+      x = np.concatenate([x, pads], axis=0)
+
+    # reshape (host_batch_size, height, width, 3) to
+    # (local_devices, device_batch_size, height, width, 3)
+    return x.reshape((local_device_count, -1) + x.shape[1:])
+
+  return jax.tree_map(_prepare, xs)
+
+
+def collate_and_reshape_fn(batch, batch_size):
+    """Collate a batch and reshape it into (local_devices, device_batch_size, height, width, 3)"""
+    images, labels, labels_one_hot = _utils.collate.default_collate(batch)
+    batch = {'image': images, 'label': labels, 'label_one_hot': labels_one_hot}
+    batch = prepare_pt_data(batch, batch_size)
+    return batch
+
+
+# class DataLoader(torch.utils.data.DataLoader):
+#     """DataLoader with post-processing"""
+#     def __init__(self, dataset, **kwargs):
+#         super(DataLoader, self).__init__(dataset, **kwargs)
+        
+#         self.collate_fn = self._new_collate_fn
+
+#     def _new_collate_fn(self, batch):
+#         images, labels, labels_one_hot = _utils.collate.default_collate(batch)
+#         batch = {'image': images, 'label': labels, 'label_one_hot': labels_one_hot}
+#         batch = prepare_pt_data(batch, self.batch_size)
+#         return batch
+        

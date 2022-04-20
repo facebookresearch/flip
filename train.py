@@ -458,19 +458,23 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   sampler_train = torch.utils.data.DistributedSampler(dataset_train, num_replicas=jax.process_count(), rank=jax.process_index(), shuffle=True)
   sampler_val = torch.utils.data.DistributedSampler(dataset_val, num_replicas=jax.process_count(), rank=jax.process_index(), shuffle=False)
 
+
+  collate_fn = functools.partial(torchloader_util.collate_and_reshape_fn, batch_size=local_batch_size)
   data_loader_train = torch.utils.data.DataLoader(
       dataset_train, sampler=sampler_train,
       batch_size=local_batch_size,
-      num_workers=config.torchload.num_workers,
+      num_workers=0,  # config.torchload.num_workers,
       pin_memory=True,
       drop_last=True,
+      collate_fn=collate_fn,
   )
   data_loader_val = torch.utils.data.DataLoader(
       dataset_val, sampler=sampler_val,
       batch_size=local_batch_size,
       num_workers=config.torchload.num_workers,
       pin_memory=True,
-      drop_last=False
+      drop_last=False,
+      collate_fn=collate_fn,
   )
 
   num_classes = len(dataset_train.classes)
@@ -590,13 +594,14 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # train one epoch
     # ------------------------------------------------------------
     for i, batch in enumerate(data_loader_train):
-      images, labels, labels_one_hot = batch
+      break
+      # images, labels, labels_one_hot = batch
       
-      if mixup_fn:
-        images, labels_one_hot = mixup_fn(images, labels)
+      # if mixup_fn:
+      #   images, labels_one_hot = mixup_fn(images, labels)
 
-      batch = {'image': images, 'label': labels, 'label_one_hot': labels_one_hot}
-      batch = prepare_pt_data(batch, local_batch_size)
+      # batch = {'image': images, 'label': labels, 'label_one_hot': labels_one_hot}
+      # batch = prepare_pt_data(batch, local_batch_size)
 
       state, metrics = p_train_step(state, batch)
 
@@ -668,13 +673,14 @@ def run_eval(state, p_eval_step, data_loader_val, local_batch_size, epoch, num_c
   # sync batch statistics across replicas
   state = sync_batch_stats(state)
   tic = time.time()
-  for batch in data_loader_val:
-    images, labels, labels_one_hot = batch
-    batch = {'image': images, 'label': labels, 'label_one_hot': labels_one_hot}
-    batch = prepare_pt_data(batch, local_batch_size)
+  for i, batch in enumerate(data_loader_val):
+    # images, labels, labels_one_hot = batch
+    # batch = {'image': images, 'label': labels, 'label_one_hot': labels_one_hot}
+    # batch = prepare_pt_data(batch, local_batch_size)
 
     metrics = p_eval_step(state, batch)
     eval_metrics.append(metrics)
+    logging.info('{} / {}'.format(i, len(data_loader_val)))
 
   eval_metrics = jax.tree_map(lambda x: x[0], eval_metrics)
   eval_metrics = jax.device_get(eval_metrics)
