@@ -1,5 +1,5 @@
 # VM_NAME=kmh-tpuvm-v3-128-1
-VM_NAME=kmh-tpuvm-v3-256-4
+VM_NAME=kmh-tpuvm-v3-256-3
 echo $VM_NAME
 
 # ------------------------------------------------
@@ -9,6 +9,8 @@ now=`date '+%y%m%d%H%M%S'`
 export salt=`head /dev/urandom | tr -dc a-z0-9 | head -c8`
 export STAGEDIR=/kmh_data/staging/${now}-${salt}-code
 
+sudo chmod 777 $STAGEDIR
+
 echo 'Copying files...'
 rsync -a . $STAGEDIR --exclude=tmp
 echo 'Done copying.'
@@ -17,7 +19,7 @@ cd $STAGEDIR
 echo 'Current dir: '`pwd`
 # ------------------------------------------------
 
-for seed in 3 4 5 6
+for ep in 30 40 60 80
 do
 source run_remote.sh
 

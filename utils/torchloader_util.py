@@ -41,8 +41,6 @@ class ImageFolder(datasets.ImageFolder):
         image, label = super(ImageFolder, self).__getitem__(index)
         label_one_hot = torch.nn.functional.one_hot(torch.tensor(label), self.num_classes).float()
         label_one_hot = label_one_hot * (1 - self.label_smoothing) + self.label_smoothing / self.num_classes
-        
-        # image = image.permute([1, 2, 0])  # chw2hwc
 
         return image, label, label_one_hot
 
