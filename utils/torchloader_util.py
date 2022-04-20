@@ -73,6 +73,8 @@ def build_transform(is_train, aug):
         transform = create_transform(
             input_size=IMAGE_SIZE,
             is_training=True,
+            scale=aug.area_range,
+            ratio=aug.aspect_ratio_range,
             color_jitter=color_jitter,
             auto_augment=aa,
             interpolation='bicubic',
