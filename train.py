@@ -666,10 +666,9 @@ def run_eval(state, p_eval_step, data_loader_val, epoch):
   # sync batch statistics across replicas
   state = sync_batch_stats(state)
   tic = time.time()
-  for i, batch in enumerate(data_loader_val):
+  for batch in data_loader_val:
     metrics = p_eval_step(state, batch)
     eval_metrics.append(metrics)
-    logging.info('{} / {}'.format(i, len(data_loader_val)))
 
   eval_metrics = jax.tree_map(lambda x: x[0], eval_metrics)
   eval_metrics = jax.device_get(eval_metrics)
