@@ -1,17 +1,13 @@
-# VM_NAME=kmh-tpuvm-v3-128-1
-VM_NAME=kmh-tpuvm-v3-256-4
-echo $VM_NAME
-
 echo 'code dir: '$STAGEDIR
 
 # REPO=https://71d519550fe3430ecbf39b70467e9210aed5da69:@github.com/KaimingHe/flax_dev.git
 # BRANCH=main
 
-# seed=0
+seed=0
 batch=1024
 lr=1e-3
 lrd=0.75
-ep=50
+# ep=50
 dp=0.2
 
 vitsize=large

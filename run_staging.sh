@@ -1,3 +1,7 @@
+# VM_NAME=kmh-tpuvm-v3-128-1
+VM_NAME=kmh-tpuvm-v3-256-3
+echo $VM_NAME
+
 # ------------------------------------------------
 # copy all files to staging
 # ------------------------------------------------
@@ -13,7 +17,7 @@ cd $STAGEDIR
 echo 'Current dir: '`pwd`
 # ------------------------------------------------
 
-for seed in 1 2 3 4
+for ep in 50
 do
 source run_remote.sh
 
