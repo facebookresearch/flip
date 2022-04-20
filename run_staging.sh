@@ -1,5 +1,5 @@
 # VM_NAME=kmh-tpuvm-v3-128-1
-VM_NAME=kmh-tpuvm-v3-256-3
+VM_NAME=kmh-tpuvm-v3-256-4
 echo $VM_NAME
 
 REPO=https://71d519550fe3430ecbf39b70467e9210aed5da69:@github.com/KaimingHe/flax_dev.git
@@ -21,7 +21,7 @@ source scripts/select_chkpt_${vitsize}.sh
 name=`basename ${PRETRAIN_DIR}`
 
 # finetune_pytorch_recipe (ftpy): lb0.1_b0.999_cropv4_exwd_initv2_headinit0.001_tgap_dp_mixup32_cutmix32_noerase_warmlr_minlr_autoaug
-JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_ftpy_b${batch}_lr${lr}_lrd${lrd}_dp${dp}_randaugv2Erase_shf512x32_hostbatch_seed${seed}_TorchLoader_DBGrefact3
+JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_ftpy_b${batch}_lr${lr}_lrd${lrd}_dp${dp}_randaugv2Erase_seed${seed}_TorchLoader_DBGrefact3
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
 LOGDIR=/home/${USER}/logs/${JOBNAME}
@@ -57,17 +57,12 @@ python3 main.py \
     --config.init_backend=tpu \
     --config.aug.mix.mixup=True \
     --config.aug.mix.cutmix=True \
-    --config.aug.mix.batch_size=32 \
     --config.aug.randerase.on=True \
     --config.aug.autoaug=randaugv2 \
     --config.model.transformer.droppath_rate=${dp} \
-    --config.aug.mix.switch_mode=host_batch \
     --config.seed_tf=${seed} \
     --config.seed_jax=${seed} \
-    --config.aug.shuffle_buffer_size=16384 \
     --config.model.transformer.torch_qkv=False \
-    --config.aug.torchvision=False \
-    --config.aug.mix.torchvision=False \
 
 " 2>&1 | tee $LOGDIR/finetune.log
 

@@ -32,8 +32,7 @@ from flax import optim
 from flax import struct
 from flax.training import checkpoints
 from flax.training import common_utils
-# from flax.training import train_state
-import utils.train_state as train_state
+from flax.training import train_state
 import utils.adamw_util as adamw_util
 import jax
 from jax import lax
@@ -279,7 +278,7 @@ def save_checkpoint(state, workdir):
     # get train state from the first replica
     state = jax.device_get(jax.tree_map(lambda x: x[0], state))
     step = int(state.step)
-    checkpoints.save_checkpoint(workdir, state, step, keep=3)
+    checkpoints.save_checkpoint(workdir, state, step, keep=5)
 
 
 def profile_memory(workdir):

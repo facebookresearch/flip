@@ -16,7 +16,6 @@ import jax
 
 import torch
 from torchvision import datasets, transforms
-from torch.utils.data import _utils
 
 import timm
 from timm.data import create_transform
