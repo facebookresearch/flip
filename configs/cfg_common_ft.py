@@ -113,7 +113,6 @@ def get_config():
   config.aug.mix.lambda_elementwise = False  # element-wise random lambda (otherwise batch-wise, using mix.batch_size)
 
   config.aug.mix.torchvision = False
-  config.aug.mix.mode = 'batch'  # batch, pair, elem: for timm mixup only
 
   # shuffle config
   config.aug.shuffle_buffer_size = 16 * 1024  # following TF: 16384 = 512 * 32 = 512 * (local) batch_size
