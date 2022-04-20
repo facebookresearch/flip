@@ -63,21 +63,6 @@ warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning) 
 warnings.filterwarnings("ignore", category=FutureWarning) 
 
-NUM_CLASSES = 1000
-
-
-def create_model(*, model_cls, half_precision, **kwargs):
-  assert not half_precision
-  # platform = jax.local_devices()[0].platform
-  # if half_precision:
-  #   if platform == 'tpu':
-  #     model_dtype = jnp.bfloat16
-  #   else:
-  #     model_dtype = jnp.float16
-  # else:
-  #   model_dtype = jnp.float32
-  return model_cls(num_classes=NUM_CLASSES, **kwargs)
-
 
 def initialized(key, image_size, model, init_backend='tpu'):
   input_shape = (1, image_size, image_size, 3)
@@ -310,10 +295,7 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
   """Create initial training state."""
   dynamic_scale = None
   platform = jax.local_devices()[0].platform
-  if config.half_precision and platform == 'gpu':
-    dynamic_scale = optim.DynamicScale()
-  else:
-    dynamic_scale = None
+  dynamic_scale = None
 
   # split rng for init and for state
   rng_init, rng_state = jax.random.split(rng)
@@ -417,16 +399,6 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     raise ValueError('Batch size must be divisible by the number of devices')
   local_batch_size = config.batch_size // jax.process_count()
 
-  platform = jax.local_devices()[0].platform
-
-  if config.half_precision:
-    if platform == 'tpu':
-      input_dtype = tf.bfloat16
-    else:
-      input_dtype = tf.float16
-  else:
-    input_dtype = tf.float32
-
   dataset_val = torchloader_util.build_dataset(is_train=False, data_dir=config.torchload.data_dir, aug=config.aug)
   dataset_train = torchloader_util.build_dataset(is_train=True, data_dir=config.torchload.data_dir, aug=config.aug)
 
@@ -473,8 +445,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   abs_learning_rate = config.learning_rate * config.batch_size / 256.
 
   model_cls = models_vit.VisionTransformer
-  model = create_model(
-      model_cls=model_cls, half_precision=config.half_precision, **config.model)
+  model = model_cls(num_classes=len(dataset_train.classes), **config.model)
 
   learning_rate_fn = create_learning_rate_fn(
       config, abs_learning_rate, steps_per_epoch)
@@ -609,8 +580,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
   total_time = time.time() - start_time
   total_time_str = str(datetime.timedelta(seconds=int(total_time)))
+  logging.info('Best accuracy: {}. Last accuracy: {}'.format(best_acc, summary['test_acc1']))
   logging.info('Elapsed time: {}'.format(total_time_str))
-  logging.info('Best accuracy: {}'.format(best_acc))
 
   if config.profile_memory:
     profile_memory(workdir)
