@@ -42,8 +42,9 @@ config_flags.DEFINE_config_file(
   
 
 def main(argv):
-  logging.info('Current commit: ')
-  os.system('git show -s --format=%h')
+  if jax.process_index():
+    logging.info('Current commit: ')
+    os.system('git show -s --format=%h')
   
   if len(argv) > 1:
     raise app.UsageError('Too many command-line arguments.')
