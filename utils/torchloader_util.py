@@ -42,7 +42,7 @@ class ImageFolder(datasets.ImageFolder):
         label_one_hot = torch.nn.functional.one_hot(torch.tensor(label), self.num_classes).float()
         label_one_hot = label_one_hot * (1 - self.label_smoothing) + self.label_smoothing / self.num_classes
         
-        image = image.permute([1, 2, 0])  # chw2hwc
+        # image = image.permute([1, 2, 0])  # chw2hwc
 
         return image, label, label_one_hot
 
@@ -135,9 +135,15 @@ def prepare_pt_data(xs, batch_size):
   return jax.tree_map(_prepare, xs)
 
 
-def collate_and_reshape_fn(batch, batch_size):
+def collate_and_reshape_fn(batch, batch_size, mixup_fn):
     """Collate a batch and reshape it into (local_devices, device_batch_size, height, width, 3)"""
     images, labels, labels_one_hot = _utils.collate.default_collate(batch)
+    assert images.shape[1] == 3  # nchw
+
+    if mixup_fn is not None:
+        images, labels_one_hot = mixup_fn(images, labels)
+
+    images = images.permute([0, 2, 3, 1])  # nchw -> nhwc
     batch = {'image': images, 'label': labels, 'label_one_hot': labels_one_hot}
     batch = prepare_pt_data(batch, batch_size)
     return batch
