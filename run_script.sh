@@ -19,7 +19,6 @@ python3 main.py \
     --config.aug.mix.cutmix=True \
     --config.aug.autoaug=autoaug \
     --config.model.transformer.torch_qkv=False \
-    --config.torchload.on=True \
     --config.eval_only=False \
 
     # --config.aug.area_range=0.9,1 \

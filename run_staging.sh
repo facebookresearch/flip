@@ -21,7 +21,7 @@ source scripts/select_chkpt_${vitsize}.sh
 name=`basename ${PRETRAIN_DIR}`
 
 # finetune_pytorch_recipe (ftpy): lb0.1_b0.999_cropv4_exwd_initv2_headinit0.001_tgap_dp_mixup32_cutmix32_noerase_warmlr_minlr_autoaug
-JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_ftpy_b${batch}_lr${lr}_lrd${lrd}_dp${dp}_randaugv2Erase_seed${seed}_TorchLoader_DBGrefact3
+JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_ftpy_b${batch}_lr${lr}_lrd${lrd}_dp${dp}_randaugv2Erase_seed${seed}pt_TorchLoader_DBGrefact5log1
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
 LOGDIR=/home/${USER}/logs/${JOBNAME}
@@ -62,6 +62,7 @@ python3 main.py \
     --config.model.transformer.droppath_rate=${dp} \
     --config.seed_tf=${seed} \
     --config.seed_jax=${seed} \
+    --config.seed_pt=${seed} \
     --config.model.transformer.torch_qkv=False \
 
 " 2>&1 | tee $LOGDIR/finetune.log

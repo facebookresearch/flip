@@ -63,8 +63,6 @@ def main(argv):
   if jax.local_devices()[0].platform != 'tpu':
     logging.error('Not using TPU. Exit.')
     exit()
-
-  tf.random.set_seed(FLAGS.config.seed_tf + jax.process_index())
   
   train.train_and_evaluate(FLAGS.config, FLAGS.workdir)
 

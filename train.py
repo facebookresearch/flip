@@ -54,6 +54,7 @@ import jax.profiler
 
 import numpy as np
 import os
+import random as _random
 
 import torch
 import torch.utils.data
@@ -373,6 +374,13 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
   return state
 
 
+def seed_worker(worker_id):
+    worker_seed = torch.initial_seed() % 2**32
+    np.random.seed(worker_seed)
+    _random.seed(worker_seed)
+    print("id {}: seed {}".format(worker_id, worker_seed))
+
+
 def train_and_evaluate(config: ml_collections.ConfigDict,
                        workdir: str) -> TrainState:
   """Execute model training and evaluation loop.
@@ -384,11 +392,22 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   Returns:
     Final TrainState.
   """
+  # ------------------------------------
+  # Set random seed
+  # ------------------------------------
+  rng_pt = torch.Generator()
+  rng_pt.manual_seed(config.seed_pt)
+  torch.manual_seed(config.seed_pt)
+  np.random.seed(config.seed_pt)
+  _random.seed(config.seed_pt)
+
+  tf.random.set_seed(config.seed_tf + jax.process_index())
+
+  rng = random.PRNGKey(config.seed_jax)  # used to be 0
+  # ------------------------------------
 
   writer = metric_writers.create_default_writer(
       logdir=workdir, just_logging=jax.process_index() != 0)
-
-  rng = random.PRNGKey(config.seed_jax)  # used to be 0
 
   image_size = 224
 
@@ -418,6 +437,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
       num_workers=config.torchload.num_workers,
       pin_memory=True,
       drop_last=True,
+      generator=rng_pt,
+      worker_init_fn=seed_worker,
   )
   data_loader_val = torch.utils.data.DataLoader(
       dataset_val, sampler=sampler_val,
@@ -524,8 +545,9 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
         start_time = time.time()  # log the time after compilation
 
       if config.get('log_every_steps'):
-        train_metrics.append(metrics)
+        # train_metrics.append(metrics)
         if (step + 1) % config.log_every_steps == 0:
+          train_metrics.append(metrics)
           # Wait until computations are done before exiting
           jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
           train_metrics = common_utils.get_metrics(train_metrics)
