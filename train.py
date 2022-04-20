@@ -430,24 +430,35 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   dataset_val = torchloader_util.build_dataset(is_train=False, data_dir=config.torchload.data_dir, aug=config.aug)
   dataset_train = torchloader_util.build_dataset(is_train=True, data_dir=config.torchload.data_dir, aug=config.aug)
 
-  sampler_train = torch.utils.data.DistributedSampler(dataset_train, num_replicas=jax.process_count(), rank=jax.process_index(), shuffle=True)
-  sampler_val = torch.utils.data.DistributedSampler(dataset_val, num_replicas=jax.process_count(), rank=jax.process_index(), shuffle=False)
+  sampler_train = torch.utils.data.DistributedSampler(
+    dataset_train,
+    num_replicas=jax.process_count(),
+    rank=jax.process_index(),
+    shuffle=True,
+    seed=config.seed_pt,
+  )
+  sampler_val = torch.utils.data.DistributedSampler(
+    dataset_val,
+    num_replicas=jax.process_count(),
+    rank=jax.process_index(),
+    shuffle=False,
+  )
   
   data_loader_train = torch.utils.data.DataLoader(
-      dataset_train, sampler=sampler_train,
-      batch_size=local_batch_size,
-      num_workers=config.torchload.num_workers,
-      pin_memory=True,
-      drop_last=True,
-      generator=rng_torch,
-      worker_init_fn=seed_worker,
+    dataset_train, sampler=sampler_train,
+    batch_size=local_batch_size,
+    num_workers=config.torchload.num_workers,
+    pin_memory=True,
+    drop_last=True,
+    generator=rng_torch,
+    worker_init_fn=seed_worker,
   )
   data_loader_val = torch.utils.data.DataLoader(
-      dataset_val, sampler=sampler_val,
-      batch_size=local_batch_size,
-      num_workers=config.torchload.num_workers,
-      pin_memory=True,
-      drop_last=False,
+    dataset_val, sampler=sampler_val,
+    batch_size=local_batch_size,
+    num_workers=config.torchload.num_workers,
+    pin_memory=True,
+    drop_last=False,
   )
 
   mixup_fn = torchloader_util.get_mixup_fn(config.aug)
