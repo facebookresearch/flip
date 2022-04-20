@@ -558,9 +558,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
         start_time = time.time()  # log the time after compilation
 
       if config.get('log_every_steps'):
-        # train_metrics.append(metrics)
+        train_metrics.append(metrics)
         if (step + 1) % config.log_every_steps == 0:
-          train_metrics.append(metrics)
           # Wait until computations are done before exiting
           jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
           train_metrics = common_utils.get_metrics(train_metrics)
