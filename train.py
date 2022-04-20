@@ -452,33 +452,38 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   else:
     input_dtype = tf.float32
 
-  dataset_val = torchloader_util.build_dataset(is_train=False, config=config)
-  dataset_train = torchloader_util.build_dataset(is_train=True, config=config)
+  dataset_val = torchloader_util.build_dataset(is_train=False, data_dir=config.torchload.data_dir, aug=config.aug)
+  dataset_train = torchloader_util.build_dataset(is_train=True, data_dir=config.torchload.data_dir, aug=config.aug)
 
   sampler_train = torch.utils.data.DistributedSampler(dataset_train, num_replicas=jax.process_count(), rank=jax.process_index(), shuffle=True)
   sampler_val = torch.utils.data.DistributedSampler(dataset_val, num_replicas=jax.process_count(), rank=jax.process_index(), shuffle=False)
 
+
+  mixup_fn = torchloader_util.get_mixup_fn(config.aug)
+  collate_fn_train = functools.partial(torchloader_util.collate_and_reshape_fn, batch_size=local_batch_size, mixup_fn=mixup_fn)
+  collate_fn_val = functools.partial(torchloader_util.collate_and_reshape_fn, batch_size=local_batch_size, mixup_fn=None)
+  
   data_loader_train = torch.utils.data.DataLoader(
       dataset_train, sampler=sampler_train,
       batch_size=local_batch_size,
       num_workers=config.torchload.num_workers,
       pin_memory=True,
       drop_last=True,
+      collate_fn=collate_fn_train,
   )
   data_loader_val = torch.utils.data.DataLoader(
       dataset_val, sampler=sampler_val,
       batch_size=local_batch_size,
       num_workers=config.torchload.num_workers,
       pin_memory=True,
-      drop_last=False
+      drop_last=False,
+      collate_fn=collate_fn_val,
   )
 
   num_classes = len(dataset_train.classes)
 
   steps_per_epoch = len(data_loader_train)
   assert steps_per_epoch == len(dataset_train) // config.batch_size
-
-  mixup_fn = torchloader_util.get_mixup_fn(config.aug)
   
   # dataset_builder = tfds.builder(config.dataset)
   # train_iter = create_input_iter(
@@ -575,7 +580,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   if config.eval_only:
     # run eval only and return
     logging.info('Evaluating...')
-    run_eval(state, p_eval_step, data_loader_val, local_batch_size, -1, num_classes)
+    run_eval(state, p_eval_step, data_loader_val, -1)
     return
 
   epoch_offset = (step_offset + 1) // steps_per_epoch
@@ -590,16 +595,6 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # train one epoch
     # ------------------------------------------------------------
     for i, batch in enumerate(data_loader_train):
-      images, labels = batch
-      
-      if mixup_fn:
-        images, labels_one_hot = mixup_fn(images, labels)
-      else:
-        labels_one_hot = torch.nn.functional.one_hot(labels, num_classes=num_classes)
-
-      images = np.transpose(images, [0, 2, 3, 1])  # nchw->nhwc
-      batch = {'image': images, 'label': labels, 'label_one_hot': labels_one_hot}
-      batch = prepare_pt_data(batch, local_batch_size)
 
       state, metrics = p_train_step(state, batch)
 
@@ -637,7 +632,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # finished one epoch: eval
     # ------------------------------------------------------------
     if True:
-      summary = run_eval(state, p_eval_step, data_loader_val, local_batch_size, epoch, num_classes)
+      summary = run_eval(state, p_eval_step, data_loader_val, epoch)
       best_acc = max(best_acc, summary['test_acc1'])
 
       # to make it consistent with PyTorch log
@@ -666,18 +661,12 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   return state
 
 
-def run_eval(state, p_eval_step, data_loader_val, local_batch_size, epoch, num_classes=1000):
+def run_eval(state, p_eval_step, data_loader_val, epoch):
   eval_metrics = []
   # sync batch statistics across replicas
   state = sync_batch_stats(state)
   tic = time.time()
   for batch in data_loader_val:
-    images, labels = batch
-    images = np.transpose(images, [0, 2, 3, 1])  # nchw->nhwc
-    labels_one_hot = torch.nn.functional.one_hot(labels, num_classes=num_classes)
-    batch = {'image': images, 'label': labels, 'label_one_hot': labels_one_hot}
-    batch = prepare_pt_data(batch, local_batch_size)
-
     metrics = p_eval_step(state, batch)
     eval_metrics.append(metrics)
 
