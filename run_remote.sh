@@ -2,19 +2,20 @@ echo 'code dir: '$STAGEDIR
 
 seed=0
 batch=1024
-lr=1e-3
+# lr=1e-3
 lrd=0.75
-# ep=50
-dp=0.3
+ep=50
+dp=0.2
 
-vitsize=huge
+vitsize=large
 CONFIG=cfg_vit_${vitsize}
 source scripts/select_chkpt_${vitsize}.sh
 
 name=`basename ${PRETRAIN_DIR}`
 
 # finetune_pytorch_recipe (ftpy): lb0.1_b0.999_cropv4_exwd_initv2_headinit0.001_tgap_dp_mixup32_cutmix32_noerase_warmlr_minlr_autoaug
-JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_ftpy_b${batch}_lr${lr}_lrd${lrd}_dp${dp}_randaugv2erase_seed${seed}pt_TorchLoader_DBGrefact6timeout
+# finetune_torch_loader (fttl): randaugv2erase_TorchLoader
+JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_fttl_b${batch}_lr${lr}_lrd${lrd}_dp${dp}_s${seed}
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
 LOGDIR=/kmh_data/logs/${JOBNAME}
