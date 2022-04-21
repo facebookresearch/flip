@@ -8,9 +8,9 @@ batch=1024
 lr=1e-3
 lrd=0.75
 ep=50
-dp=0.3
+dp=0.2
 
-vitsize=huge
+vitsize=large
 CONFIG=cfg_vit_${vitsize}
 source scripts/select_chkpt_${vitsize}.sh
 
@@ -57,7 +57,7 @@ python3 main.py \
     --config.seed_tf=${seed} \
     --config.seed_jax=${seed} \
     --config.seed_pt=${seed} \
-    --config.model.transformer.torch_qkv=False \
+    --config.model.transformer.torch_qkv=True \
 
 " 2>&1 | tee $LOGDIR/finetune.log
 
