@@ -28,14 +28,6 @@ import numpy as np
 import os
 
 
-NUM_CLASSES = 1000
-
-
-def create_model(*, model_cls, half_precision, **kwargs):
-  assert not half_precision
-  return model_cls(num_classes=NUM_CLASSES, **kwargs)
-
-
 def initialized(key, image_size, model, init_backend='tpu'):
   input_shape = (1, image_size, image_size, 3)
   def init(*args):
@@ -82,9 +74,10 @@ def convert_model(config: ml_collections.ConfigDict, workdir: str, mode: str) ->
   rng = random.PRNGKey(0)
 
   image_size = 224
+  num_classes = 1000
 
   model_cls = models_vit.VisionTransformer
-  model = create_model(model_cls=model_cls, half_precision=config.half_precision, **config.model)
+  model = model_cls(num_classes=num_classes, **config.model)
 
   logging.info('Creating TrainState:')
   state = create_train_state(rng, config, model, image_size)

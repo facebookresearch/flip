@@ -55,6 +55,5 @@ def get_config():
   # train on a larger pod slice.
   config.batch_size = 1024
   config.cache = True
-  config.half_precision = True
 
   return config

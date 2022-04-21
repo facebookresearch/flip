@@ -61,7 +61,6 @@ def get_config():
   # train on a larger pod slice.
   config.batch_size = 4096
   config.cache = True
-  config.half_precision = False  # kaiming: TODO, support it
 
   # model config
   config.model = vit.get_b16_config()  # ViT-B/16
@@ -87,8 +86,6 @@ def get_config():
   # aug config
   config.aug = ml_collections.ConfigDict()
 
-  config.aug.torchvision = False
-
   config.aug.area_range = (0.08, 1)
   config.aug.aspect_ratio_range = (3. / 4, 4. / 3.)
   config.aug.crop_ver = 'v4'  # v1, v3
@@ -107,15 +104,7 @@ def get_config():
   config.aug.mix.cutmix = True
   config.aug.mix.cutmix_alpha = 1.0
 
-  config.aug.mix.switch_mode = 'host_batch'  # host_batch, mix_batch, element
-  config.aug.mix.batch_size = 32  # the mix batch size to mimic timm; -1 is element-wise
-
-  config.aug.mix.lambda_elementwise = False  # element-wise random lambda (otherwise batch-wise, using mix.batch_size)
-
-  config.aug.mix.torchvision = False
-
-  # shuffle config
-  config.aug.shuffle_buffer_size = 16 * 1024  # following TF: 16384 = 512 * 32 = 512 * (local) batch_size
+  config.aug.mix.mode = 'batch'  # batch, pair, elem: for timm mixup only
 
   # rand erase config
   config.aug.randerase = ml_collections.ConfigDict()
@@ -133,9 +122,18 @@ def get_config():
 
   # utils
   config.pretrain_dir = ''
+  config.resume_dir = ''
+
+  config.eval_only = False
 
   # seeds
   config.seed_jax = 0
   config.seed_tf = 0
+  config.seed_pt = 0
+
+  # torchload
+  config.torchload = ml_collections.ConfigDict()
+  config.torchload.data_dir = '/kmh_data/imagenet_full_size/061417'
+  config.torchload.num_workers = 32
 
   return config
