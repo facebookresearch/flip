@@ -17,8 +17,9 @@ name=`basename ${PRETRAIN_DIR}`
 JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_ftpy_b${batch}_lr${lr}_lrd${lrd}_dp${dp}_randaugv2erase_seed${seed}pt_TorchLoader_DBGrefact6timeout
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
-LOGDIR=/home/${USER}/logs/${JOBNAME}
+LOGDIR=/kmh_data/logs/${JOBNAME}
 mkdir -p ${LOGDIR}
+chmod 777 ${LOGDIR}
 
 # source run_init_remote.sh
 
@@ -31,6 +32,8 @@ echo Current commit: $(git show -s --format=%h)
 
 export TCMALLOC_LARGE_ALLOC_REPORT_THRESHOLD=8589934592
 export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets
+
+source run_get_ssh_id.sh
 
 python3 main.py \
     --workdir=${WORKDIR} \
@@ -54,8 +57,8 @@ python3 main.py \
     --config.seed_tf=${seed} \
     --config.seed_jax=${seed} \
     --config.seed_pt=${seed} \
-    --config.model.transformer.torch_qkv=True \
-
+    --config.model.transformer.torch_qkv=False \
+2>&1 | tee $LOGDIR/finetune_\$SSH_ID.log
 " 2>&1 | tee $LOGDIR/finetune.log
 
 echo ${VM_NAME}
