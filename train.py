@@ -553,7 +553,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
   total_time = time.time() - start_time
   total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-  logging.info('Best accuracy: {}. Last accuracy: {}'.format(best_acc, summary['test_acc1']))
+  logging.info('Best accuracy: {}, last accuracy: {}'.format(best_acc, summary['test_acc1']))
   logging.info('Elapsed time: {}'.format(total_time_str))
 
   if config.profile_memory:
