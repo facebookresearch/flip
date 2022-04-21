@@ -147,19 +147,13 @@ def train_step(state, batch, learning_rate_fn, config):
     return loss, (new_variables, logits)
 
   step = state.step
-  dynamic_scale = state.dynamic_scale
   lr = learning_rate_fn(step)
 
-  if dynamic_scale:
-    grad_fn = dynamic_scale.value_and_grad(
-        loss_fn, has_aux=True, axis_name='batch')
-    dynamic_scale, is_fin, aux, grads = grad_fn(state.params)
-    # dynamic loss takes care of averaging gradients across replicas
-  else:
-    grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
-    aux, grads = grad_fn(state.params)
-    # Re-use same axis_name as in the call to `pmap(...train_step...)` below.
-    grads = lax.pmean(grads, axis_name='batch')
+  grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
+  aux, grads = grad_fn(state.params)
+  # Re-use same axis_name as in the call to `pmap(...train_step...)` below.
+  grads = lax.pmean(grads, axis_name='batch')
+
   new_variables, logits = aux[1]
   metrics = compute_metrics(logits, batch['label'], batch['label_one_hot'])
   metrics['learning_rate'] = lr
@@ -194,20 +188,6 @@ def train_step(state, batch, learning_rate_fn, config):
     ema_state=new_ema_state
   )
   # ----------------------------------------------------------------------------
-
-  if dynamic_scale:
-    # if is_fin == False the gradients contain Inf/NaNs and optimizer state and
-    # params should be restored (= skip this step).
-    new_state = new_state.replace(
-        opt_state=jax.tree_map(
-            functools.partial(jnp.where, is_fin),
-            new_state.opt_state,
-            state.opt_state),
-        params=jax.tree_map(
-            functools.partial(jnp.where, is_fin),
-            new_state.params,
-            state.params))
-    metrics['scale'] = dynamic_scale.scale
 
   return new_state, metrics
 
@@ -249,8 +229,6 @@ def prepare_pt_data(xs, batch_size):
 class TrainState(train_state.TrainState):
   rng: Any
   variables: flax.core.FrozenDict[str, Any]
-  # dynamic_scale: flax.optim.DynamicScale
-  dynamic_scale: Any
   ema_tx: optax.GradientTransformation = struct.field(pytree_node=False)
   ema_state: optax.EmaState
 
@@ -293,10 +271,6 @@ def sync_batch_stats(state):
 def create_train_state(rng, config: ml_collections.ConfigDict,
                        model, image_size, learning_rate_fn):
   """Create initial training state."""
-  dynamic_scale = None
-  platform = jax.local_devices()[0].platform
-  dynamic_scale = None
-
   # split rng for init and for state
   rng_init, rng_state = jax.random.split(rng)
 
@@ -350,7 +324,6 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
       tx=tx,
       rng=rng_state,
       variables=variables_states,
-      dynamic_scale=dynamic_scale,
       ema_tx=ema_tx,
       ema_state=ema_state)
   return state

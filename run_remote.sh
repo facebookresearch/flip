@@ -3,14 +3,14 @@ echo 'code dir: '$STAGEDIR
 # REPO=https://71d519550fe3430ecbf39b70467e9210aed5da69:@github.com/KaimingHe/flax_dev.git
 # BRANCH=main
 
-seed=0
+# seed=0
 batch=1024
 lr=1e-3
 lrd=0.75
-# ep=50
-dp=0.2
+ep=50
+dp=0.3
 
-vitsize=large
+vitsize=huge
 CONFIG=cfg_vit_${vitsize}
 source scripts/select_chkpt_${vitsize}.sh
 

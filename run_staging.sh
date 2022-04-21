@@ -19,7 +19,7 @@ cd $STAGEDIR
 echo 'Current dir: '`pwd`
 # ------------------------------------------------
 
-for ep in 30 40 60 80
+for seed in 0
 do
 source run_remote.sh
 
