@@ -1,5 +1,5 @@
 # VM_NAME=kmh-tpuvm-v3-128-1
-VM_NAME=kmh-tpuvm-v3-256-4
+VM_NAME=kmh-tpuvm-v3-256-3
 echo $VM_NAME
 
 # ------------------------------------------------

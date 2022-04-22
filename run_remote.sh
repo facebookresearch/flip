@@ -6,7 +6,7 @@ lr=1e-3
 lrd=0.75
 ep=50
 dp=0.2
-# ema=0.999
+ema=0.9999
 
 vitsize=large
 CONFIG=cfg_vit_${vitsize}
