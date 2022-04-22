@@ -200,10 +200,10 @@ def eval_step(state, batch, ema_eval=False):
   metrics['perf/test_acc1'] = metrics['test_acc1']  # for comparing with pytorch
   metrics['test_loss'] = metrics.pop('loss')  # rename
 
-  # if ema_eval:
-  #   logits = state.apply_fn(state.ema_state.ema, batch['image'], train=False, mutable=False)
-  #   metrics_ema = compute_metrics(logits, batch['label'], batch['label_one_hot'])
-  #   metrics['test_acc1_ema'] = metrics_ema.pop('accuracy') * 100  # rename
+  if ema_eval:
+    logits = state.apply_fn(state.ema_state.ema, batch['image'], train=False, mutable=False)
+    metrics_ema = compute_eval_metrics(logits, batch['label'], batch['label_one_hot'])
+    metrics['test_acc1_ema'] = metrics_ema.pop('accuracy') * 100  # rename
 
   return metrics
 
