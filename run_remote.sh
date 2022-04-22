@@ -1,8 +1,8 @@
 echo 'code dir: '$STAGEDIR
 
-seed=0
+# seed=0
 batch=1024
-# lr=1e-3
+lr=1e-3
 lrd=0.75
 ep=50
 dp=0.2
@@ -30,6 +30,7 @@ cd $STAGEDIR
 git config --global --add safe.directory $STAGEDIR
 
 echo Current commit: $(git show -s --format=%h)
+echo Current dir: $(pwd)
 
 export TCMALLOC_LARGE_ALLOC_REPORT_THRESHOLD=8589934592
 export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets
