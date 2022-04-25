@@ -25,7 +25,8 @@
 # PRETRAIN_DIR='gs://kmh-gcp/checkpoints/flax/20220417_063852_kmh-tpuvm-v3-256-3_cfg_mae_large_1600ep_maeDBG_batch4096_lr1.0e-4_vmap_normpix_sincos_initmaev2_cropv2ALTER_donate_olkNN_NOexClsDBG_buf16x1024_seed'
 # PRETRAIN_DIR='gs://kmh-gcp/checkpoints/flax/20220421_070850_kmh-tpuvm-v3-256-1_cfg_mae_large_maetf_1600ep_b4096_lr1.0e-4_staging'
 # PRETRAIN_DIR='gs://kmh-gcp/checkpoints/flax/20220423_072315_kmh-tpuvm-v3-256-3_cfg_mae_large_maetf_1600ep_b4096_lr1.0e-4_TorchLoader_wseed100_dbg_save50_resume_sanity'
-PRETRAIN_DIR='gs://kmh-gcp/checkpoints/flax/20220423_054117_kmh-tpuvm-v3-256-4_cfg_mae_large_maetf_1600ep_b4096_lr1.0e-4_TorchLoader_wseed100_dbg_save50'
+# PRETRAIN_DIR='gs://kmh-gcp/checkpoints/flax/20220423_054117_kmh-tpuvm-v3-256-4_cfg_mae_large_maetf_1600ep_b4096_lr1.0e-4_TorchLoader_wseed100_dbg_save50'
+PRETRAIN_DIR='gs://kmh-gcp/checkpoints/flax/20220422_170904_kmh-tpuvm-v3-256-1_cfg_mae_large_maetf_1600ep_b4096_lr1.0e-4_staging'
 
 # debugging, 200ep
 # PRETRAIN_DIR='gs://kmh-gcp/checkpoints/flax/20220402_015256_kmh-tpuvm-v3-256-4_cfg_mae_large_200ep_maeDBG_batch4096_vmap_normpix_sincos_initmaev2_randuniform_normimpl_cropv3_qkvinit_patchinit'

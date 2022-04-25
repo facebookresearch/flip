@@ -1,0 +1,26 @@
+[1mdiff --git a/run_staging.sh b/run_staging.sh[m
+[1mindex 6bbc2ab7..4e20456f 100644[m
+[1m--- a/run_staging.sh[m
+[1m+++ b/run_staging.sh[m
+[36m@@ -1,5 +1,5 @@[m
+ # VM_NAME=kmh-tpuvm-v3-128-1[m
+[31m-VM_NAME=kmh-tpuvm-v3-256-4[m
+[32m+[m[32mVM_NAME=kmh-tpuvm-v3-256-1[m
+ echo $VM_NAME[m
+ [m
+ # ------------------------------------------------[m
+[1mdiff --git a/scripts/select_chkpt_large.sh b/scripts/select_chkpt_large.sh[m
+[1mindex a228c2ba..7c91da1d 100644[m
+[1m--- a/scripts/select_chkpt_large.sh[m
+[1m+++ b/scripts/select_chkpt_large.sh[m
+[36m@@ -25,7 +25,8 @@[m
+ # PRETRAIN_DIR='gs://kmh-gcp/checkpoints/flax/20220417_063852_kmh-tpuvm-v3-256-3_cfg_mae_large_1600ep_maeDBG_batch4096_lr1.0e-4_vmap_normpix_sincos_initmaev2_cropv2ALTER_donate_olkNN_NOexClsDBG_buf16x1024_seed'[m
+ # PRETRAIN_DIR='gs://kmh-gcp/checkpoints/flax/20220421_070850_kmh-tpuvm-v3-256-1_cfg_mae_large_maetf_1600ep_b4096_lr1.0e-4_staging'[m
+ # PRETRAIN_DIR='gs://kmh-gcp/checkpoints/flax/20220423_072315_kmh-tpuvm-v3-256-3_cfg_mae_large_maetf_1600ep_b4096_lr1.0e-4_TorchLoader_wseed100_dbg_save50_resume_sanity'[m
+[31m-PRETRAIN_DIR='gs://kmh-gcp/checkpoints/flax/20220423_054117_kmh-tpuvm-v3-256-4_cfg_mae_large_maetf_1600ep_b4096_lr1.0e-4_TorchLoader_wseed100_dbg_save50'[m
+[32m+[m[32m# PRETRAIN_DIR='gs://kmh-gcp/checkpoints/flax/20220423_054117_kmh-tpuvm-v3-256-4_cfg_mae_large_maetf_1600ep_b4096_lr1.0e-4_TorchLoader_wseed100_dbg_save50'[m
+[32m+[m[32mPRETRAIN_DIR='gs://kmh-gcp/checkpoints/flax/20220422_170904_kmh-tpuvm-v3-256-1_cfg_mae_large_maetf_1600ep_b4096_lr1.0e-4_staging'[m
+ [m
+ # debugging, 200ep[m
+ # PRETRAIN_DIR='gs://kmh-gcp/checkpoints/flax/20220402_015256_kmh-tpuvm-v3-256-4_cfg_mae_large_200ep_maeDBG_batch4096_vmap_normpix_sincos_initmaev2_randuniform_normimpl_cropv3_qkvinit_patchinit'[m
+\ No newline at end of file[m
