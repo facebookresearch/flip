@@ -3,8 +3,8 @@ gcloud alpha compute tpus tpu-vm ssh ${VM_NAME} --zone europe-west4-a \
 pip install 'jax[tpu]==0.3.4' -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
 pip install --upgrade clu
 
-pip install --upgrade jax
-pip install --upgrade flax
+# pip install --upgrade jax
+# pip install --upgrade flax
 
 # pip3 install torchvision --upgrade
 pip3 install tensorflow-probability
