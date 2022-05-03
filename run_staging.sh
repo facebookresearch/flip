@@ -1,5 +1,5 @@
 # VM_NAME=kmh-tpuvm-v3-128-1
-VM_NAME=kmh-tpuvm-v3-256-4
+VM_NAME=kmh-tpuvm-v3-256-1
 echo $VM_NAME
 
 # ------------------------------------------------
@@ -13,13 +13,13 @@ echo 'Copying files...'
 rsync -a . $STAGEDIR --exclude=tmp
 echo 'Done copying.'
 
-sudo chmod 777 $STAGEDIR
+chmod 777 $STAGEDIR
 
 cd $STAGEDIR
 echo 'Current dir: '`pwd`
 # ------------------------------------------------
 
-for seed in 0 1 2 3
+for seed in 0
 do
 source run_remote.sh
 
