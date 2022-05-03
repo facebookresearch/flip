@@ -6,7 +6,7 @@ pip install --upgrade clu
 pip install flax==0.4.1
 
 # pip3 install torchvision --upgrade
-pip3 install tensorflow-probabilityq
+pip3 install tensorflow-probability
 pip3 install tensorflow_addons
 
 pip3 install torch==1.7.1
