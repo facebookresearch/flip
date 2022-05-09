@@ -5,10 +5,10 @@ batch=1024
 lr=1e-3
 lrd=0.75
 ep=50
-dp=0.3
+dp=0.2
 ema=0.9999
 
-vitsize=huge
+vitsize=large
 CONFIG=cfg_vit_${vitsize}
 source scripts/select_chkpt_${vitsize}.sh
 
