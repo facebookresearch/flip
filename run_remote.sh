@@ -63,7 +63,7 @@ python3 main.py \
     --config.ema=True \
     --config.ema_eval=True \
     --config.ema_decay=${ema} \
-    --config.model.classifier=gap \
+    --config.model.classifier=tgap \
 2>&1 | tee $LOGDIR/finetune_\$SSH_ID.log
 " 2>&1 | tee $LOGDIR/finetune.log
 
