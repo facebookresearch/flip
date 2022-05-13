@@ -18,6 +18,8 @@ from typing import Any, Callable, Optional, Tuple
 import flax.linen as nn
 import jax.numpy as jnp
 
+import t5x.layers
+
 from utils import attention_util
 
 
@@ -109,20 +111,25 @@ class MlpBlock(nn.Module):
   def __call__(self, inputs, *, deterministic):
     """Applies Transformer MlpBlock module."""
     actual_out_dim = inputs.shape[-1] if self.out_dim is None else self.out_dim
-    x = nn.Dense(
+    x = t5x.layers.DenseGeneral(
         features=self.mlp_dim,
         dtype=self.dtype,
         kernel_init=self.kernel_init,
-        bias_init=self.bias_init)(  # pytype: disable=wrong-arg-types
-            inputs)
+        # bias_init=self.bias_init,
+        kernel_axes=('embed', 'mlp'),
+        name='Dense_0',
+    )(inputs)
     x = nn.gelu(x)
     x = nn.Dropout(rate=self.dropout_rate)(x, deterministic=deterministic)
-    output = nn.Dense(
+    x = t5x.layers.with_sharding_constraint(x, ('batch', 'length', 'mlp'))
+    output = t5x.layers.DenseGeneral(
         features=actual_out_dim,
         dtype=self.dtype,
         kernel_init=self.kernel_init,
-        bias_init=self.bias_init)(  # pytype: disable=wrong-arg-types
-            x)
+        kernel_axes=('mlp', 'embed'),
+        name='Dense_1',
+        # bias_init=self.bias_init,
+    )(x)
     output = nn.Dropout(
         rate=self.dropout_rate)(
             output, deterministic=deterministic)
