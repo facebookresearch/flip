@@ -350,7 +350,9 @@ class DenseGeneral(nn.Module):
   dtype: DType = jnp.float32
   kernel_init: Initializer = nn.initializers.variance_scaling(
       1.0, 'fan_in', 'truncated_normal')
+  bias_init: Initializer = nn.initializers.zeros
   kernel_axes: Tuple[str, ...] = ()
+  use_bias: bool = True
 
   @nn.compact
   def __call__(self, inputs: Array) -> Array:
@@ -381,7 +383,19 @@ class DenseGeneral(nn.Module):
     kernel = jnp.reshape(kernel, kernel_shape)
 
     contract_ind = tuple(range(0, len(axis)))
-    return lax.dot_general(inputs, kernel, ((axis, contract_ind), ((), ())))
+    y = lax.dot_general(inputs, kernel, ((axis, contract_ind), ((), ())))
+
+    if self.use_bias:
+      bias = param_with_axes(
+          'bias',
+          self.bias_init,
+          (self.features,),
+          jnp.float32,
+          axes=(self.kernel_axes[-1],))
+      bias = jnp.asarray(bias, self.dtype)
+      y += jnp.reshape(bias, (1,) * (y.ndim - 1) + (-1,))
+
+    return y
 
 
 def _convert_to_activation_function(
