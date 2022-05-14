@@ -96,6 +96,8 @@ def dot_product_attention(query: Array,
     query = query.astype(jnp.float32)
     key = key.astype(jnp.float32)
 
+  depth = query.shape[-1]
+  query = query / jnp.sqrt(depth).astype(dtype)
   # `attn_weights`: [batch, num_heads, q_length, kv_length]
   attn_weights = jnp.einsum('bqhd,bkhd->bhqk', query, key)
 
@@ -108,6 +110,7 @@ def dot_product_attention(query: Array,
 
   # Apply attention dropout.
   if not deterministic and dropout_rate > 0.:
+    raise NotImplementedError
     keep_prob = 1.0 - dropout_rate
     # T5 broadcasts along the "length" dim, but unclear which one that
     # corresponds to in positional dimensions here, assuming query dim.
@@ -142,11 +145,12 @@ class MultiHeadDotProductAttention(nn.Module):
   """
 
   num_heads: int
-  head_dim: int
   dtype: DType = jnp.float32
+  qkv_features: Optional[int] = None
+  out_features: Optional[int] = None
   dropout_rate: float = 0.
-  kernel_init: Initializer = nn.initializers.variance_scaling(
-      1.0, 'fan_in', 'normal')
+  kernel_init: Initializer = nn.initializers.variance_scaling(1.0, 'fan_in', 'normal')
+  bias_init: Initializer = nn.initializers.zeros
   float32_logits: bool = False  # computes logits in float32 for stability.
 
   @nn.compact
@@ -186,22 +190,28 @@ class MultiHeadDotProductAttention(nn.Module):
     Returns:
       output of shape `[batch, length, q_features]`.
     """
+    features = self.out_features or inputs_q.shape[-1]
+    qkv_features = self.qkv_features or inputs_q.shape[-1]
+    assert qkv_features % self.num_heads == 0, (
+        'Memory dimension must be divisible by number of heads.')
+    head_dim = qkv_features // self.num_heads
+
     projection = functools.partial(
         DenseGeneral,
         axis=-1,
-        features=(self.num_heads, self.head_dim),
+        features=(self.num_heads, head_dim),
         kernel_axes=('embed', 'joined_kv'),
         dtype=self.dtype)
 
     # NOTE: T5 does not explicitly rescale the attention logits by
     #       1/sqrt(depth_kq)!  This is folded into the initializers of the
     #       linear transformations, which is equivalent under Adafactor.
-    depth_scaling = jnp.sqrt(self.head_dim).astype(self.dtype)
-    query_init = lambda *args: self.kernel_init(*args) / depth_scaling
+    # depth_scaling = jnp.sqrt(self.head_dim).astype(self.dtype)
+    # query_init = lambda *args: self.kernel_init(*args) / depth_scaling
 
     # Project inputs_q to multi-headed q/k/v
     # dimensions are then [batch, length, num_heads, head_dim]
-    query = projection(kernel_init=query_init, name='query')(inputs_q)
+    query = projection(kernel_init=self.kernel_init, name='query')(inputs_q)
     key = projection(kernel_init=self.kernel_init, name='key')(inputs_kv)
     value = projection(kernel_init=self.kernel_init, name='value')(inputs_kv)
 
@@ -210,6 +220,7 @@ class MultiHeadDotProductAttention(nn.Module):
     value = with_sharding_constraint(value, ('batch', 'length', 'heads', 'kv'))
 
     if decode:
+      raise NotImplementedError
       # Detect if we're initializing by absence of existing cache data.
       is_initialized = self.has_variable('cache', 'cached_key')
       # The key and value have dimension [batch, length, num_heads, head_dim],
@@ -281,6 +292,7 @@ class MultiHeadDotProductAttention(nn.Module):
 
     # Convert the boolean attention mask to an attention bias.
     if mask is not None:
+      raise NotImplementedError
       # attention mask in the form of attention bias
       attention_bias = lax.select(
           mask > 0,
@@ -291,6 +303,7 @@ class MultiHeadDotProductAttention(nn.Module):
 
     # Add provided bias term (e.g. relative position embedding).
     if bias is not None:
+      raise NotImplementedError
       attention_bias = combine_biases(attention_bias, bias)
 
     dropout_rng = None
@@ -389,12 +402,12 @@ class DenseGeneral(nn.Module):
       bias = param_with_axes(
           'bias',
           self.bias_init,
-          (self.features,),
+          kernel_param_shape[-1],
           jnp.float32,
           axes=(self.kernel_axes[-1],))
       bias = jnp.asarray(bias, self.dtype)
-      y += jnp.reshape(bias, (1,) * (y.ndim - 1) + (-1,))
-
+      bias = jnp.reshape(bias, (1,) * (y.ndim - len(features)) + features)
+      y += bias
     return y
 
 

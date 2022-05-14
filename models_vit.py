@@ -178,23 +178,25 @@ class Encoder1DBlock(nn.Module):
     if self.torch_qkv:
       # revised, QKV
       # we do not need to specify init in finetune
-      MsaBlock = functools.partial(
-        attention_util.MultiHeadDotProductAttentionQKV,
-        out_kernel_init=msa_kernel_init)
+      raise NotImplementedError
+      # MsaBlock = functools.partial(
+      #   attention_util.MultiHeadDotProductAttentionQKV,
+      #   out_kernel_init=msa_kernel_init)
     else:
       # original
       MsaBlock = functools.partial(
-        nn.MultiHeadDotProductAttention,
-        kernel_init=msa_kernel_init,)
+        t5x.layers.MultiHeadDotProductAttention,
+        kernel_init=msa_kernel_init,
+      )
     # ----------------------------------------------------
 
     x = MsaBlock(
         dtype=self.dtype,
-        broadcast_dropout=False,
-        deterministic=deterministic,
+        # broadcast_dropout=False,
+        # deterministic=deterministic,
         dropout_rate=self.attention_dropout_rate,
-        num_heads=self.num_heads)(
-            x, x)
+        num_heads=self.num_heads,
+    )(x, x)
     x = nn.Dropout(rate=self.dropout_rate)(x, deterministic=deterministic)
     # droppath
     x = nn.Dropout(rate=self.droppath_rate, broadcast_dims=(1, 2), name='droppath_msa')(x, deterministic=deterministic)

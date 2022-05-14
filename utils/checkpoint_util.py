@@ -3,6 +3,7 @@ from typing import Tuple, Any
 from absl import logging
 
 import tree as nest
+import numpy as np
 
 import jax
 import flax
@@ -43,8 +44,11 @@ def load_from_pretrain(state, pretrain_dir):
     if k in missing_keys:
       named_params[k] = named_state_params[k]
     elif k in load_keys:
-      assert named_state_params[k].shape == named_load_params[k].shape, \
+      assert np.prod(named_state_params[k].shape) == np.prod(named_load_params[k].shape), \
         'Not matching: {}, {}, {}'.format(k, named_state_params[k].shape, named_load_params[k].shape)
+      if named_state_params[k].shape != named_load_params[k].shape:
+        logging.info('Reshaping: {}, {}, {}'.format(k, named_state_params[k].shape, named_load_params[k].shape))
+        named_load_params[k] = named_load_params[k].reshape(named_state_params[k].shape)      
       named_params[k] = named_load_params[k]
     else:
       assert False, 'Error: {}'.format(k)
