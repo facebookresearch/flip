@@ -111,24 +111,24 @@ class MlpBlock(nn.Module):
   def __call__(self, inputs, *, deterministic):
     """Applies Transformer MlpBlock module."""
     actual_out_dim = inputs.shape[-1] if self.out_dim is None else self.out_dim
-    x = t5x.layers.DenseGeneral(
+    x = t5x.layers.Dense(
         features=self.mlp_dim,
         dtype=self.dtype,
         kernel_init=self.kernel_init,
-        # bias_init=self.bias_init,
+        bias_init=self.bias_init,
         kernel_axes=('embed', 'mlp'),
         name='Dense_0',
     )(inputs)
     x = nn.gelu(x)
     x = nn.Dropout(rate=self.dropout_rate)(x, deterministic=deterministic)
     x = t5x.layers.with_sharding_constraint(x, ('batch', 'length', 'mlp'))
-    output = t5x.layers.DenseGeneral(
+    output = t5x.layers.Dense(
         features=actual_out_dim,
         dtype=self.dtype,
         kernel_init=self.kernel_init,
+        bias_init=self.bias_init,
         kernel_axes=('mlp', 'embed'),
         name='Dense_1',
-        # bias_init=self.bias_init,
     )(x)
     output = nn.Dropout(
         rate=self.dropout_rate)(
@@ -350,7 +350,7 @@ class VisionTransformer(nn.Module):
       #   name='head',
       #   kernel_init=head_kernel_init
       # )(x)
-      x = t5x.layers.DenseGeneral(
+      x = t5x.layers.Dense(
           features=self.num_classes,
           kernel_init=head_kernel_init,
           kernel_axes=('embed', 'classes'),

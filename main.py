@@ -45,6 +45,8 @@ def main(argv):
   if jax.process_index() == 0:
     logging.info('Current commit: ')
     os.system('git show -s --format=%h')
+    logging.info('Current dir: ')
+    os.system('pwd')
   
   if len(argv) > 1:
     raise app.UsageError('Too many command-line arguments.')

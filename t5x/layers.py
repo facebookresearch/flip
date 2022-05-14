@@ -23,7 +23,6 @@ from typing import Any, Callable, Iterable, Optional, Sequence, Tuple, Union
 
 from flax import linen as nn
 from flax.linen import partitioning as nn_partitioning
-from flax.linen.module import Module
 import jax
 from jax import lax
 from jax import random
@@ -43,6 +42,8 @@ DType = jnp.dtype
 PRNGKey = jnp.ndarray
 Shape = Iterable[int]
 Activation = Callable[..., Array]
+PrecisionLike = Union[None, str, lax.Precision, Tuple[str, str],
+                      Tuple[lax.Precision, lax.Precision]]
 # Parameter initializers.
 Initializer = Callable[[PRNGKey, Shape, DType], Array]
 
@@ -346,7 +347,7 @@ def _canonicalize_tuple(x):
 # DenseGeneral for attention layers.
 #------------------------------------------------------------------------------
 class DenseGeneral(nn.Module):
-  """A linear transformation (without bias) with flexible axes.
+  """A linear transformation with flexible axes.
 
     Attributes:
       features: tuple with numbers of output features.
@@ -355,13 +356,13 @@ class DenseGeneral(nn.Module):
       kernel_init: initializer function for the weight matrix.
   """
   features: Union[Iterable[int], int]
-  axis: Union[Iterable[int], int] = -1
+  use_bias: bool = True
   dtype: DType = jnp.float32
   kernel_init: Initializer = nn.initializers.variance_scaling(
       1.0, 'fan_in', 'truncated_normal')
   bias_init: Initializer = nn.initializers.zeros
   kernel_axes: Tuple[str, ...] = ()
-  use_bias: bool = True
+  axis: Union[Iterable[int], int] = -1
 
   @nn.compact
   def __call__(self, inputs: Array) -> Array:
@@ -404,6 +405,67 @@ class DenseGeneral(nn.Module):
       bias = jnp.asarray(bias, self.dtype)
       bias = jnp.reshape(bias, (1,) * (y.ndim - len(features)) + features)
       y += bias
+    return y
+
+
+class Dense(nn.Module):
+  """A linear transformation applied over the last dimension of the input.
+
+  Attributes:
+    features: the number of output features.
+    use_bias: whether to add a bias to the output (default: True).
+    dtype: the dtype of the computation (default: float32).
+    param_dtype: the dtype passed to parameter initializers (default: float32).
+    precision: numerical precision of the computation see `jax.lax.Precision`
+      for details.
+    kernel_init: initializer function for the weight matrix.
+    bias_init: initializer function for the bias.
+  """
+  features: int
+  use_bias: bool = True
+  dtype: DType = jnp.float32
+  param_dtype: DType = jnp.float32
+  precision: PrecisionLike = None
+  kernel_init: Callable[[PRNGKey, Shape, DType], Array] = nn.linear.default_kernel_init
+  bias_init: Callable[[PRNGKey, Shape, DType], Array] = nn.initializers.zeros
+  kernel_axes: Tuple[str, ...] = ()
+
+  @nn.compact
+  def __call__(self, inputs: Array) -> Array:
+    """Applies a linear transformation to the inputs along the last dimension.
+
+    Args:
+      inputs: The nd-array to be transformed.
+
+    Returns:
+      The transformed input.
+    """
+    inputs = jnp.asarray(inputs, self.dtype)
+    # kernel = self.param('kernel',
+    #                     self.kernel_init,
+    #                     (inputs.shape[-1], self.features),
+    #                     self.param_dtype)
+    kernel = param_with_axes(
+        'kernel',
+        self.kernel_init,
+        (inputs.shape[-1], self.features),
+        self.param_dtype,
+        axes=self.kernel_axes)
+    kernel = jnp.asarray(kernel, self.dtype)
+    y = lax.dot_general(inputs, kernel,
+                        (((inputs.ndim - 1,), (0,)), ((), ())),
+                        precision=self.precision)
+    if self.use_bias:
+    #   bias = self.param('bias', self.bias_init, (self.features,),
+    #                     self.param_dtype)
+      bias = param_with_axes(
+          'bias',
+          self.bias_init,
+          (self.features,),
+          self.param_dtype,
+          axes=(self.kernel_axes[-1],))
+      bias = jnp.asarray(bias, self.dtype)
+      y += jnp.reshape(bias, (1,) * (y.ndim - 1) + (-1,))
     return y
 
 
@@ -571,19 +633,8 @@ class LayerNorm(nn.Module):
         self.bias_init, self.scale_init,
         self.axes)
 
-    # -------------
-    x = jnp.asarray(x, jnp.float32)
-    features = x.shape[-1]
-    mean2 = jnp.mean(lax.square(x), axis=-1, keepdims=True)
-    y = jnp.asarray(x * lax.rsqrt(mean2 + self.epsilon), self.dtype)
-    scale = param_with_axes(
-        'scale', self.scale_init, (features,), jnp.float32, axes=('embed',))
 
-    scale = jnp.asarray(scale, self.dtype)
-    return y * scale
-
-
-def _normalize(mdl: Module, x: Array, mean: Array, var: Array,
+def _normalize(mdl: nn.Module, x: Array, mean: Array, var: Array,
                reduction_axes: Axes, feature_axes: Axes,
                dtype: DType, param_dtype: DType,
                epsilon: float,
