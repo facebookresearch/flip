@@ -91,7 +91,6 @@ class AddPositionEmbs(nn.Module):
     assert inputs.ndim == 3, ('Number of dimensions should be 3,'
                               ' but it is: %d' % inputs.ndim)
     pos_emb_shape = (1, inputs.shape[1], inputs.shape[2])
-    # pe = self.param('pos_embedding', self.posemb_init, pos_emb_shape)
     pe = t5x.layers.param_with_axes(
         'pos_embedding',
         self.posemb_init,
@@ -302,7 +301,16 @@ class VisionTransformer(nn.Module):
 
     n, h, w, c = x.shape
     # We can merge s2d+emb into a single conv; it's the same.
-    x = nn.Conv(
+    # x = nn.Conv(
+    #     features=self.hidden_size,
+    #     kernel_size=self.patches.size,
+    #     strides=self.patches.size,
+    #     padding='VALID',
+    #     name='embedding',
+    #     kernel_init=patch_kernel_init,
+    #     bias_init=patch_bias_init,
+    #     )(x)
+    x = t5x.layers.Conv(
         features=self.hidden_size,
         kernel_size=self.patches.size,
         strides=self.patches.size,
@@ -310,6 +318,7 @@ class VisionTransformer(nn.Module):
         name='embedding',
         kernel_init=patch_kernel_init,
         bias_init=patch_bias_init,
+        kernel_axes=('', '', '', 'embed'),
         )(x)
 
     # Here, x is a grid of embeddings.
@@ -320,7 +329,6 @@ class VisionTransformer(nn.Module):
 
     # If we want to add a class token, add it here.
     if self.classifier in {'token', 'tgap'}:
-      # cls = self.param('cls', clstoken_init, (1, 1, c))
       cls = t5x.layers.param_with_axes('cls', clstoken_init, (1, 1, c), jnp.float32, axes=('', '', 'embed'))
       cls = jnp.tile(cls, [n, 1, 1])
       x = jnp.concatenate([cls, x], axis=1)

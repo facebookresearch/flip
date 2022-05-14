@@ -441,10 +441,6 @@ class Dense(nn.Module):
       The transformed input.
     """
     inputs = jnp.asarray(inputs, self.dtype)
-    # kernel = self.param('kernel',
-    #                     self.kernel_init,
-    #                     (inputs.shape[-1], self.features),
-    #                     self.param_dtype)
     kernel = param_with_axes(
         'kernel',
         self.kernel_init,
@@ -456,8 +452,6 @@ class Dense(nn.Module):
                         (((inputs.ndim - 1,), (0,)), ((), ())),
                         precision=self.precision)
     if self.use_bias:
-    #   bias = self.param('bias', self.bias_init, (self.features,),
-    #                     self.param_dtype)
       bias = param_with_axes(
           'bias',
           self.bias_init,
@@ -469,143 +463,156 @@ class Dense(nn.Module):
     return y
 
 
-def _convert_to_activation_function(
-    fn_or_string: Union[str, Callable]) -> Callable:
-  """Convert a string to an activation function."""
-  if fn_or_string == 'linear':
-    return lambda x: x
-  elif isinstance(fn_or_string, str):
-    return getattr(nn, fn_or_string)
-  elif callable(fn_or_string):
-    return fn_or_string
-  else:
-    raise ValueError("don't know how to convert %s to an activation function" %
-                     (fn_or_string,))
-
-
-class MlpBlock(nn.Module):
-  """Transformer MLP / feed-forward block.
-
-  Attributes:
-    intermediate_dim: Shared dimension of hidden layers.
-    activations: Type of activations for each layer.  Each element is either
-      'linear', a string function name in flax.linen, or a function.
-    kernel_init: Kernel function, passed to the dense layers.
-    deterministic: Whether the dropout layers should be deterministic.
-    intermediate_dropout_rate: Dropout rate used after the intermediate layers.
-    dtype: Type for the dense layer.
+#------------------------------------------------------------------------------
+# Conv layers
+#------------------------------------------------------------------------------
+class Conv(nn.Conv):
+  """Conv with axis names:
+  Copied from flax.linen.linear, replace self.param
   """
-  intermediate_dim: int = 2048
-  activations: Sequence[Union[str, Callable]] = ('relu',)
-  kernel_init: Initializer = nn.initializers.variance_scaling(
-      1.0, 'fan_in', 'truncated_normal')
-  intermediate_dropout_rate: float = 0.1
-  dtype: Any = jnp.float32
-
+  kernel_axes: Tuple[str, ...] = ()
   @nn.compact
-  def __call__(self, inputs, decode: bool = False, deterministic: bool = False):
-    """Applies Transformer MlpBlock module."""
-    # Iterate over specified MLP input activation functions.
-    # e.g. ('relu',) or ('gelu', 'linear') for gated-gelu.
-    activations = []
-    for idx, act_fn in enumerate(self.activations):
-      dense_name = 'wi' if len(self.activations) == 1 else f'wi_{idx}'
-      x = DenseGeneral(
-          self.intermediate_dim,
-          dtype=self.dtype,
-          kernel_init=self.kernel_init,
-          kernel_axes=('embed', 'mlp'),
-          name=dense_name)(
-              inputs)
-      x = _convert_to_activation_function(act_fn)(x)
-      activations.append(x)
-
-    # Take elementwise product of above intermediate activations.
-    x = functools.reduce(operator.mul, activations)
-    # Apply dropout and final dense output projection.
-    x = nn.Dropout(
-        rate=self.intermediate_dropout_rate, broadcast_dims=(-2,))(
-            x, deterministic=deterministic)  # Broadcast along length.
-    x = with_sharding_constraint(x, ('batch', 'length', 'mlp'))
-    output = DenseGeneral(
-        inputs.shape[-1],
-        dtype=self.dtype,
-        kernel_init=self.kernel_init,
-        kernel_axes=('mlp', 'embed'),
-        name='wo')(
-            x)
-    return output
-
-
-class Embed(nn.Module):
-  """A parameterized function from integers [0, n) to d-dimensional vectors.
-
-  Attributes:
-    num_embeddings: number of embeddings.
-    features: number of feature dimensions for each embedding.
-    dtype: the dtype of the embedding vectors (default: float32).
-    embedding_init: embedding initializer.
-    one_hot: performs the gather with a one-hot contraction rather than a true
-      gather. This is currently needed for SPMD partitioning.
-  """
-  num_embeddings: int
-  features: int
-  cast_input_dtype: Optional[DType] = None
-  dtype: DType = jnp.float32
-  attend_dtype: Optional[DType] = None
-  embedding_init: Initializer = default_embed_init
-  one_hot: bool = False
-  embedding: Array = dataclasses.field(init=False)
-
-  def setup(self):
-    self.embedding = param_with_axes(
-        'embedding',
-        self.embedding_init, (self.num_embeddings, self.features),
-        jnp.float32,
-        axes=('vocab', 'embed'))
-
   def __call__(self, inputs: Array) -> Array:
-    """Embeds the inputs along the last dimension.
+    """Applies a (potentially unshared) convolution to the inputs.
 
     Args:
-      inputs: input data, all dimensions are considered batch dimensions.
+      inputs: input data with dimensions (batch, spatial_dims..., features).
+        This is the channels-last convention, i.e. NHWC for a 2d convolution
+        and NDHWC for a 3D convolution. Note: this is different from the input
+        convention used by `lax.conv_general_dilated`, which puts the spatial
+        dimensions last.
 
     Returns:
-      Output which is embedded input data.  The output shape follows the input,
-      with an additional `features` dimension appended.
+      The convolved data.
     """
-    if self.cast_input_dtype:
-      inputs = inputs.astype(self.cast_input_dtype)
-    if not jnp.issubdtype(inputs.dtype, jnp.integer):
-      raise ValueError('Input type must be an integer or unsigned integer.')
-    if self.one_hot:
-      iota = lax.iota(jnp.int32, self.num_embeddings)
-      one_hot = jnp.array(inputs[..., jnp.newaxis] == iota, dtype=self.dtype)
-      output = jnp.dot(one_hot, jnp.asarray(self.embedding, self.dtype))
+
+    inputs = jnp.asarray(inputs, self.dtype)
+
+    if isinstance(self.kernel_size, int):
+      raise TypeError('The kernel size must be specified as a'
+                      ' tuple/list of integers (eg.: [3, 3]).')
     else:
-      output = jnp.asarray(self.embedding, self.dtype)[inputs]
-      output = with_sharding_constraint(output, ('batch', 'length', 'embed'))
-    return output
+      kernel_size = tuple(self.kernel_size)
 
-  def attend(self, query: Array) -> Array:
-    """Attend over the embedding using a query array.
+    def maybe_broadcast(x: Optional[Union[int, Sequence[int]]]) -> (
+        Tuple[int, ...]):
+      if x is None:
+        # backward compatibility with using None as sentinel for
+        # broadcast 1
+        x = 1
+      if isinstance(x, int):
+        return (x,) * len(kernel_size)
+      return tuple(x)
 
-    Args:
-      query: array with last dimension equal the feature depth `features` of the
-        embedding.
+    is_single_input = False
+    if inputs.ndim == len(kernel_size) + 1:
+      is_single_input = True
+      inputs = jnp.expand_dims(inputs, axis=0)
 
-    Returns:
-      An array with final dim `num_embeddings` corresponding to the batched
-      inner-product of the array of query vectors against each embedding.
-      Commonly used for weight-sharing between embeddings and logit transform
-      in NLP models.
-    """
-    dtype = self.attend_dtype if self.attend_dtype is not None else self.dtype
-    return jnp.dot(query, jnp.asarray(self.embedding, dtype).T)
+    # self.strides or (1,) * (inputs.ndim - 2)
+    strides = maybe_broadcast(self.strides)
+    input_dilation = maybe_broadcast(self.input_dilation)
+    kernel_dilation = maybe_broadcast(self.kernel_dilation)
+
+    padding_lax: Union[str, Sequence[Tuple[int, int]]]
+    if self.padding == 'CIRCULAR':
+      kernel_size_dilated = [
+          (k - 1) * d + 1 for k, d in zip(kernel_size, kernel_dilation)
+      ]
+      zero_pad: nn.linear.List[Tuple[int, int]] = [(0, 0)]
+      pads = (zero_pad + [((k - 1) // 2, k // 2) for k in kernel_size_dilated] +
+              [(0, 0)])
+      inputs = jnp.pad(inputs, pads, mode='wrap')
+      padding_lax = 'VALID'
+    else:
+      padding_lax = self.padding
+
+    dimension_numbers = nn.linear._conv_dimension_numbers(inputs.shape)
+    in_features = inputs.shape[-1]
+
+    if self.shared_weights:
+      # One shared convolutional kernel for all pixels in the output.
+      assert in_features % self.feature_group_count == 0
+      kernel_shape = kernel_size + (
+          in_features // self.feature_group_count, self.features)
+
+    else:
+      if self.feature_group_count != 1:
+        raise NotImplementedError(
+            f'`lax.conv_general_dilated_local` does not support '
+            f'`feature_group_count != 1`, got `{self.feature_group_count}`.'
+        )
+
+      # Need to know the spatial output shape of a standard convolution to
+      # create the unshared convolution kernel.
+      conv_output_shape = nn.linear.eval_shape(
+          lambda lhs, rhs: lax.conv_general_dilated(  # pylint: disable=g-long-lambda
+              lhs=lhs,
+              rhs=rhs,
+              window_strides=strides,
+              padding=padding_lax,
+              dimension_numbers=dimension_numbers
+          ),
+          inputs,
+          nn.linear.ShapedArray(kernel_size + (in_features, self.features), inputs.dtype)
+      ).shape
+
+      # One (unshared) convolutional kernel per each pixel in the output.
+      kernel_shape = conv_output_shape[1:-1] + (np.prod(kernel_size) *
+                                                in_features, self.features)
+
+    kernel = param_with_axes('kernel', self.kernel_init, kernel_shape,
+                        self.param_dtype, axes=self.kernel_axes)
+    # kernel = self.param('kernel', self.kernel_init, kernel_shape,
+    #                     self.param_dtype)
+    kernel = jnp.asarray(kernel, self.dtype)
+
+    if self.shared_weights:
+      y = lax.conv_general_dilated(
+          inputs,
+          kernel,
+          strides,
+          padding_lax,
+          lhs_dilation=input_dilation,
+          rhs_dilation=kernel_dilation,
+          dimension_numbers=dimension_numbers,
+          feature_group_count=self.feature_group_count,
+          precision=self.precision
+      )
+    else:
+      y = lax.conv_general_dilated_local(
+          lhs=inputs,
+          rhs=kernel,
+          window_strides=strides,
+          padding=padding_lax,
+          filter_shape=kernel_size,
+          lhs_dilation=input_dilation,
+          rhs_dilation=kernel_dilation,
+          dimension_numbers=dimension_numbers,
+          precision=self.precision
+      )
+
+    if self.use_bias:
+      if self.shared_weights:
+        # One bias weight per output channel, shared between pixels.
+        bias_shape = (self.features,)
+      else:
+        # One bias weight per output entry, unshared betwen pixels.
+        bias_shape = y.shape[1:]
+
+      # bias = self.param('bias', self.bias_init, bias_shape, self.param_dtype)
+      bias = param_with_axes('bias', self.bias_init, bias_shape, self.param_dtype, axes=(self.kernel_axes[-1],))
+      bias = jnp.asarray(bias, self.dtype)
+      bias = bias.reshape((1,) * (y.ndim - bias.ndim) + bias.shape)
+      y += bias
+
+    if is_single_input:
+      y = jnp.squeeze(y, axis=0)
+    return y
 
 
 #------------------------------------------------------------------------------
-# normalization
+# Normalization layers
 #------------------------------------------------------------------------------
 class LayerNorm(nn.Module):
   """Layer normalization with axis names."""
