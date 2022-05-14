@@ -91,7 +91,13 @@ class AddPositionEmbs(nn.Module):
     assert inputs.ndim == 3, ('Number of dimensions should be 3,'
                               ' but it is: %d' % inputs.ndim)
     pos_emb_shape = (1, inputs.shape[1], inputs.shape[2])
-    pe = self.param('pos_embedding', self.posemb_init, pos_emb_shape)
+    # pe = self.param('pos_embedding', self.posemb_init, pos_emb_shape)
+    pe = t5x.layers.param_with_axes(
+        'pos_embedding',
+        self.posemb_init,
+        pos_emb_shape,
+        jnp.float32,
+        axes=('not_used', 'length', 'embed'))
     return inputs + pe
 
 
