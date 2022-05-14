@@ -172,7 +172,6 @@ class Encoder1DBlock(nn.Module):
 
     # Attention block.
     assert inputs.ndim == 3, f'Expected (batch, seq, hidden) got {inputs.shape}'
-    # x = nn.LayerNorm(dtype=self.dtype)(inputs)
     x = t5x.layers.LayerNorm(dtype=self.dtype, axes=('embed',))(inputs)
 
     # ----------------------------------------------------
@@ -210,7 +209,6 @@ class Encoder1DBlock(nn.Module):
 
     # MLP block.
     y = t5x.layers.LayerNorm(dtype=self.dtype, axes=('embed',))(x)
-    # y = nn.LayerNorm(dtype=self.dtype)(x)
     y = MlpBlock(
         mlp_dim=self.mlp_dim, dtype=self.dtype, dropout_rate=self.dropout_rate,
         kernel_init=mlp_kernel_init,
@@ -273,7 +271,7 @@ class Encoder(nn.Module):
           layer_id=lyr,
           torch_qkv=self.torch_qkv)(
               x, deterministic=not train)
-    encoded = nn.LayerNorm(name='encoder_norm')(x) if encoder_norm else x
+    encoded = t5x.layers.LayerNorm(name='encoder_norm', axes=('embed',))(x) if encoder_norm else x
 
     return encoded
 
@@ -330,33 +328,33 @@ class VisionTransformer(nn.Module):
     elif self.classifier == 'tgap':
       x = x[:, 1:]
       x = jnp.mean(x, axis=list(range(1, x.ndim - 1)))  # (1,) or (1,2)
-      x = nn.LayerNorm(name='fc_norm')(x)
+      # x = nn.LayerNorm(name='fc_norm')(x)
+      x = t5x.layers.LayerNorm(name='fc_norm', axes=('embed',))(x)
     elif self.classifier == 'gap':
       x = jnp.mean(x, axis=list(range(1, x.ndim - 1)))  # (1,) or (1,2)
-      x = nn.LayerNorm(name='fc_norm')(x)
+      # x = nn.LayerNorm(name='fc_norm')(x)
+      x = t5x.layers.LayerNorm(name='fc_norm', axes=('embed',))(x)
     else:
       raise ValueError(f'Invalid classifier={self.classifier}')
 
     if self.representation_size is not None:
-      x = nn.Dense(features=self.representation_size, name='pre_logits')(x)
-      x = nn.tanh(x)
+      raise NotImplementedError 
+      # x = nn.Dense(features=self.representation_size, name='pre_logits')(x)
+      # x = nn.tanh(x)
     else:
       x = IdentityLayer(name='pre_logits')(x)
     
-    # ------------------------------------------------
-    # debugging BN or state
-    # x = nn.BatchNorm(
-    #   use_running_average=not train,
-    #   momentum=0.9,
-    #   epsilon=1e-5,
-    #   name='bn_debug'
-    # )(x)
-    # ------------------------------------------------
-
     if self.num_classes:
-      x = nn.Dense(
-        features=self.num_classes,
-        name='head',
-        kernel_init=head_kernel_init
+      # x = nn.Dense(
+      #   features=self.num_classes,
+      #   name='head',
+      #   kernel_init=head_kernel_init
+      # )(x)
+      x = t5x.layers.DenseGeneral(
+          features=self.num_classes,
+          kernel_init=head_kernel_init,
+          kernel_axes=('embed', 'classes'),
+          name='head',
       )(x)
+
     return x
