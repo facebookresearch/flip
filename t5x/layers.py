@@ -23,6 +23,7 @@ from typing import Any, Callable, Iterable, Optional, Sequence, Tuple, Union
 
 from flax import linen as nn
 from flax.linen import partitioning as nn_partitioning
+from flax.linen.module import Module
 import jax
 from jax import lax
 from jax import random
@@ -37,6 +38,7 @@ with_sharding_constraint = nn_partitioning.with_sharding_constraint
 
 # Type annotations
 Array = jnp.ndarray
+Axes = Union[int, Iterable[int]]
 DType = jnp.dtype
 PRNGKey = jnp.ndarray
 Shape = Iterable[int]
@@ -202,12 +204,6 @@ class MultiHeadDotProductAttention(nn.Module):
         features=(self.num_heads, head_dim),
         kernel_axes=('embed', 'joined_kv'),
         dtype=self.dtype)
-
-    # NOTE: T5 does not explicitly rescale the attention logits by
-    #       1/sqrt(depth_kq)!  This is folded into the initializers of the
-    #       linear transformations, which is equivalent under Adafactor.
-    # depth_scaling = jnp.sqrt(self.head_dim).astype(self.dtype)
-    # query_init = lambda *args: self.kernel_init(*args) / depth_scaling
 
     # Project inputs_q to multi-headed q/k/v
     # dimensions are then [batch, length, num_heads, head_dim]
@@ -547,17 +543,35 @@ class Embed(nn.Module):
 
 
 #------------------------------------------------------------------------------
-# T5 Layernorm - no subtraction of mean or bias.
+# normalization
 #------------------------------------------------------------------------------
 class LayerNorm(nn.Module):
-  """T5 Layer normalization operating on the last axis of the input data."""
+  """Layer normalization with axis names."""
   epsilon: float = 1e-6
   dtype: Any = jnp.float32
+  param_dtype: DType = jnp.float32
+  use_bias: bool = True
+  use_scale: bool = True
   scale_init: Initializer = nn.initializers.ones
+  bias_init: Initializer = nn.initializers.zeros
+  axes: Tuple[str, ...] = ()
 
   @nn.compact
   def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
     """Applies layer normalization on the input."""
+    reduction_axes = (-1,)
+    feature_axes = (-1,)
+
+    mean, var = nn.normalization._compute_stats(x, reduction_axes, None, None)
+
+    return _normalize(
+        self, x, mean, var, reduction_axes, feature_axes,
+        self.dtype, self.param_dtype, self.epsilon,
+        self.use_bias, self.use_scale,
+        self.bias_init, self.scale_init,
+        self.axes)
+
+    # -------------
     x = jnp.asarray(x, jnp.float32)
     features = x.shape[-1]
     mean2 = jnp.mean(lax.square(x), axis=-1, keepdims=True)
@@ -567,3 +581,71 @@ class LayerNorm(nn.Module):
 
     scale = jnp.asarray(scale, self.dtype)
     return y * scale
+
+
+def _normalize(mdl: Module, x: Array, mean: Array, var: Array,
+               reduction_axes: Axes, feature_axes: Axes,
+               dtype: DType, param_dtype: DType,
+               epsilon: float,
+               use_bias: bool, use_scale: bool,
+               bias_init: Callable[[PRNGKey, Shape, DType], Array],
+               scale_init: Callable[[PRNGKey, Shape, DType], Array],
+               axes: Tuple[str, ...] = ()):
+  """"Normalizes the input of a normalization layer and optionally applies a learned scale and bias.
+
+  Arguments:
+    mdl: Module to apply the normalization in (normalization params will reside
+      in this module).
+    x: The input.
+    mean: Mean to use for normalization.
+    var: Variance to use for normalization.
+    reduction_axes: The axes in ``x`` to reduce.
+    feature_axes: Axes containing features. A separate bias and scale is learned
+      for each specified feature.
+    dtype: Dtype of the returned result.
+    param_dtype: Dtype of the parameters.
+    epsilon: Normalization epsilon.
+    use_bias: If true, add a bias term to the output.
+    use_scale: If true, scale the output.
+    bias_init: Initialization function for the bias term.
+    scale_init: Initialization function for the scaling function.
+
+  Returns:
+    The normalized input.
+  """
+  reduction_axes = nn.normalization._canonicalize_axes(x.ndim, reduction_axes)
+  feature_axes = nn.normalization._canonicalize_axes(x.ndim, feature_axes)
+  stats_shape = list(x.shape)
+  for axis in reduction_axes:
+    stats_shape[axis] = 1
+  mean = mean.reshape(stats_shape)
+  var = var.reshape(stats_shape)
+  feature_shape = [1] * x.ndim
+  reduced_feature_shape = []
+  for ax in feature_axes:
+    feature_shape[ax] = x.shape[ax]
+    reduced_feature_shape.append(x.shape[ax])
+  y = x - mean
+  mul = lax.rsqrt(var + epsilon)
+  if use_scale:
+    scale = param_with_axes(
+        'scale',
+        scale_init,
+        reduced_feature_shape,
+        param_dtype,
+        axes=axes).reshape(feature_shape)
+    # scale = mdl.param('scale', scale_init, reduced_feature_shape,
+    #                   param_dtype).reshape(feature_shape)
+    mul *= scale
+  y *= mul
+  if use_bias:
+    bias = param_with_axes(
+        'bias',
+        bias_init,
+        reduced_feature_shape,
+        param_dtype,
+        axes=axes).reshape(feature_shape)
+    # bias = mdl.param('bias', bias_init, reduced_feature_shape,
+    #                  param_dtype).reshape(feature_shape)
+    y += bias
+  return jnp.asarray(y, dtype)

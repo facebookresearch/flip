@@ -172,7 +172,8 @@ class Encoder1DBlock(nn.Module):
 
     # Attention block.
     assert inputs.ndim == 3, f'Expected (batch, seq, hidden) got {inputs.shape}'
-    x = nn.LayerNorm(dtype=self.dtype)(inputs)
+    # x = nn.LayerNorm(dtype=self.dtype)(inputs)
+    x = t5x.layers.LayerNorm(dtype=self.dtype, axes=('embed',))(inputs)
 
     # ----------------------------------------------------
     if self.torch_qkv:
@@ -183,17 +184,22 @@ class Encoder1DBlock(nn.Module):
       #   attention_util.MultiHeadDotProductAttentionQKV,
       #   out_kernel_init=msa_kernel_init)
     else:
-      # original
+      # t5x
       MsaBlock = functools.partial(
         t5x.layers.MultiHeadDotProductAttention,
         kernel_init=msa_kernel_init,
       )
+      # original
+      # MsaBlock = functools.partial(
+      #   nn.MultiHeadDotProductAttention,
+      #   kernel_init=msa_kernel_init,
+      #   broadcast_dropout=False,
+      #   deterministic=deterministic,
+      # )
     # ----------------------------------------------------
 
     x = MsaBlock(
         dtype=self.dtype,
-        # broadcast_dropout=False,
-        # deterministic=deterministic,
         dropout_rate=self.attention_dropout_rate,
         num_heads=self.num_heads,
     )(x, x)
@@ -203,7 +209,8 @@ class Encoder1DBlock(nn.Module):
     x = x + inputs
 
     # MLP block.
-    y = nn.LayerNorm(dtype=self.dtype)(x)
+    y = t5x.layers.LayerNorm(dtype=self.dtype, axes=('embed',))(x)
+    # y = nn.LayerNorm(dtype=self.dtype)(x)
     y = MlpBlock(
         mlp_dim=self.mlp_dim, dtype=self.dtype, dropout_rate=self.dropout_rate,
         kernel_init=mlp_kernel_init,
