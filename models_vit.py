@@ -97,7 +97,7 @@ class AddPositionEmbs(nn.Module):
         self.posemb_init,
         pos_emb_shape,
         jnp.float32,
-        axes=('not_used', 'length', 'embed'))
+        axes=('', 'length', 'embed'))
     return inputs + pe
 
 
@@ -320,7 +320,13 @@ class VisionTransformer(nn.Module):
 
     # If we want to add a class token, add it here.
     if self.classifier in {'token', 'tgap'}:
-      cls = self.param('cls', clstoken_init, (1, 1, c))
+      # cls = self.param('cls', clstoken_init, (1, 1, c))
+      cls = t5x.layers.param_with_axes(
+          'cls',
+          clstoken_init,
+          (1, 1, c),
+          jnp.float32,
+          axes=('', '', ''))  # we do not partition this?
       cls = jnp.tile(cls, [n, 1, 1])
       x = jnp.concatenate([cls, x], axis=1)
 
