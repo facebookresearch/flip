@@ -38,7 +38,36 @@ def initialized(key, image_size, model, init_backend='tpu'):
   return variables
 
 
+def create_optimizer(config, params, learning_rate_fn):
+  # optional: exclude some wd
+  if config.exclude_wd:
+    mask = jax.tree_util.tree_map(lambda x, y: bool(x and y), 
+      opt_util.filter_parameters(params, opt_util.filter_bias_and_norm),
+      opt_util.filter_parameters(params, opt_util.filter_cls_and_posembed)
+    )
+  else:
+    mask = None
+
+  tx = getattr(adamw_util, config.opt_type)  # optax.adamw
+  tx = tx(learning_rate=learning_rate_fn, **config.opt, mask=mask, mu_dtype=getattr(jnp, config.opt_mu_dtype))
+
+  if config.learning_rate_decay < 1.:
+    raise NotImplementedError
+    lrd_func = lrd_util.lrd_func(config.model.transformer.num_layers, config.learning_rate_decay)
+    lrd = lrd_util.filter_parameters(params, lrd_func)
+    # logging.info('Apply lrd: {}'.format(lrd))
+    tx = optax._src.combine.chain(tx, lrd_util.scale_by_lrd(lrd))
+
+  tx = optax.GradientTransformation(init=jax.jit(tx.init, backend=config.init_backend), update=tx.update)  # put to cpu
+  return tx
+
+
 def create_train_state(rng, config: ml_collections.ConfigDict,
+                       model, image_size, learning_rate_fn):
+  return __create_train_state(rng, config, model, image_size, learning_rate_fn)
+
+
+def __create_train_state(rng, config: ml_collections.ConfigDict,
                        model, image_size, learning_rate_fn):
   """Create initial training state."""
   # split rng for init and for state
@@ -60,29 +89,10 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
   # stds = jax.tree_util.tree_map(lambda x: np.array(x).std(), params)
   # logging.info('std: {}'.format(stds))
 
-  # optional: exclude some wd
-  if config.exclude_wd:
-    mask = jax.tree_util.tree_map(lambda x, y: bool(x and y), 
-      opt_util.filter_parameters(params, opt_util.filter_bias_and_norm),
-      opt_util.filter_parameters(params, opt_util.filter_cls_and_posembed)
-    )
-  else:
-    mask = None
-  # logging.info('Apply weight decay: {}'.format(mask))
-
-  # tx = getattr(optax, config.opt_type)  # optax.adamw
-  tx = getattr(adamw_util, config.opt_type)  # optax.adamw
-  tx = tx(learning_rate=learning_rate_fn, **config.opt, mask=mask, mu_dtype=getattr(jnp, config.opt_mu_dtype))
-
-  if config.learning_rate_decay < 1.:
-    lrd_func = lrd_util.lrd_func(config.model.transformer.num_layers, config.learning_rate_decay)
-    lrd = lrd_util.filter_parameters(params, lrd_func)
-    # logging.info('Apply lrd: {}'.format(lrd))
-    tx = optax._src.combine.chain(tx, lrd_util.scale_by_lrd(lrd))
-
-  tx = optax.GradientTransformation(init=jax.jit(tx.init, backend=config.init_backend), update=tx.update)  # put to cpu
+  tx = create_optimizer(config, params, learning_rate_fn)
 
   if config.ema:
+    raise NotImplementedError
     ema_tx = optax.ema(decay=config.ema_decay, debias=False)
     ema_state = ema_tx.init(flax.core.frozen_dict.FrozenDict({'params': params, **variables_states}))
   else:
