@@ -41,6 +41,8 @@ def _layerwise_lr_decay(
         layer_idx = num_layers
     elif layer_name.startswith('head.'):
         layer_idx = num_layers
+    elif layer_name.startswith('bn_debug.'):
+        layer_idx = num_layers
     else:
         raise NotImplementedError('lrd not defined: {}'.format(layer_name))
 

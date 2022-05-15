@@ -359,6 +359,16 @@ class VisionTransformer(nn.Module):
     else:
       x = IdentityLayer(name='pre_logits')(x)
     
+    # ------------------------------------------------
+    # debugging BN or state
+    x = nn.BatchNorm(
+      use_running_average=not train,
+      momentum=0.9,
+      epsilon=1e-5,
+      name='bn_debug'
+    )(x)
+    # ------------------------------------------------
+
     if self.num_classes:
       # x = nn.Dense(
       #   features=self.num_classes,

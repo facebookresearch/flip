@@ -427,6 +427,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   learning_rate_fn = create_learning_rate_fn(
       config, abs_learning_rate, steps_per_epoch)
 
+  create_train_state_fun = functools.partial(create_train_state, config=config, model=model, image_size=image_size, learning_rate_fn=learning_rate_fn)
+  # state_shape = jax.eval_shape(create_train_state_fun, rng=rng,)
   state = create_train_state(rng, config, model, image_size, learning_rate_fn)
 
   if config.resume_dir != '':
