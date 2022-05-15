@@ -32,6 +32,7 @@ import numpy as np
 
 # from flax.linen.partitioning import param_with_axes, with_sharding_constraint
 param_with_axes = nn_partitioning.param_with_axes
+variable_with_axes = nn_partitioning.variable_with_axes
 with_sharding_constraint = nn_partitioning.with_sharding_constraint
 
 

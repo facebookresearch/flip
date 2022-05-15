@@ -50,7 +50,7 @@ from utils import lrd_util
 from utils import torchloader_util
 from utils import adamw_util
 
-from t5x.ux.train_state_initializer import create_train_state
+from t5x.train_state_initializer import create_train_state
 
 import jax.profiler
 
@@ -116,7 +116,7 @@ def create_learning_rate_fn(
   return schedule_fn
 
 
-def train_step(state, batch, learning_rate_fn, config):
+def train_step(state, batch, model, learning_rate_fn, config):
   """Perform a single training step."""
   _, new_rng = jax.random.split(state.rng)
   # Bind the rng key to the device id (which is unique across hosts)
@@ -125,17 +125,17 @@ def train_step(state, batch, learning_rate_fn, config):
   dropout_rng = jax.random.fold_in(state.rng, jax.lax.axis_index('batch'))
   def loss_fn(params):
     """loss function used for training."""
-    mutable = [k for k in state.variables]
-    outcome = state.apply_fn(
-        {'params': params, **state.variables},
+    mutable = [k for k in state.flax_mutables]
+    outcome = model.apply(
+        {'params': params, **state.flax_mutables},
         inputs=batch['image'],
         mutable=mutable,
         rngs=dict(dropout=dropout_rng),
         train=True)
-    logits, new_variables = outcome
+    logits, new_mutables = outcome
 
     loss = cross_entropy_loss(logits, batch['label_one_hot'])
-    return loss, (new_variables, logits)
+    return loss, (new_mutables, logits)
 
   step = state.step
   lr = learning_rate_fn(step)
@@ -145,56 +145,54 @@ def train_step(state, batch, learning_rate_fn, config):
   # Re-use same axis_name as in the call to `pmap(...train_step...)` below.
   grads = lax.pmean(grads, axis_name='batch')
 
-  new_variables, logits = aux[1]
+  new_mutables, logits = aux[1]
   metrics = compute_metrics(logits, batch['label'], batch['label_one_hot'])
   metrics['learning_rate'] = lr
 
-  # ----------------------------------------------------------------------------
-  # original
-  # new_state = state.apply_gradients(grads=grads, variables=new_variables, rng=new_rng)
-  # if new_state.ema is not None:
-  #   new_ema = new_state.ema.update(flax.core.FrozenDict({'params': new_state.params, **new_variables}))
-  #   new_state = new_state.replace(ema=new_ema)
-  # ----------------------------------------------------------------------------
-
+  new_state = state.apply_gradient(
+    grads,
+    learning_rate=None,  # TODO: learning_rate is not used; fix it
+    flax_mutables=new_mutables)
+  new_state = new_state.replace(rng=new_rng)
   # ----------------------------------------------------------------------------
   # modified impl.
-  updates, new_opt_state = state.tx.update(grads, state.opt_state, state.params)
-  new_params = optax.apply_updates(state.params, updates)
+  # updates, new_opt_state = state.tx.update(grads, state.opt_state, state.params)
+  # new_params = optax.apply_updates(state.params, updates)
 
-  if config.ema:
-    _, new_ema_state = state.ema_tx.update(
-      updates=flax.core.frozen_dict.FrozenDict({'params': new_params, **new_variables}),
-      state=state.ema_state)
-  else:
-    new_ema_state = None
+  # if config.ema:
+  #   _, new_ema_state = state.ema_tx.update(
+  #     updates=flax.core.frozen_dict.FrozenDict({'params': new_params, **new_variables}),
+  #     state=state.ema_state)
+  # else:
+  #   new_ema_state = None
   
   # new_ema = state.ema.update(flax.core.FrozenDict({'params': new_params, **new_variables})) if state.ema is not None else None
-  new_state = state.replace(
-    step=state.step + 1,
-    params=new_params,
-    opt_state=new_opt_state,
-    variables=new_variables,
-    rng=new_rng,
-    ema_state=new_ema_state
-  )
+  # new_state = state.replace(
+  #   step=state.step + 1,
+  #   params=new_params,
+  #   opt_state=new_opt_state,
+  #   variables=new_variables,
+  #   rng=new_rng,
+  #   ema_state=new_ema_state
+  # )
   # ----------------------------------------------------------------------------
 
   return new_state, metrics
 
 
-def eval_step(state, batch, ema_eval=False):
-  variables = {'params': state.params, **state.variables}
-  logits = state.apply_fn(variables, batch['image'], train=False, mutable=False)
+def eval_step(state, batch, model, ema_eval=False):
+  variables = {'params': state.params, **state.flax_mutables}
+  logits = model.apply(variables, batch['image'], train=False, mutable=False)
   metrics = compute_eval_metrics(logits, batch['label'], batch['label_one_hot'])
   metrics['test_acc1'] = metrics.pop('accuracy') * 100  # rename
   metrics['perf/test_acc1'] = metrics['test_acc1']  # for comparing with pytorch
   metrics['test_loss'] = metrics.pop('loss')  # rename
 
-  if ema_eval:
-    logits = state.apply_fn(state.ema_state.ema, batch['image'], train=False, mutable=False)
-    metrics_ema = compute_eval_metrics(logits, batch['label'], batch['label_one_hot'])
-    metrics['test_acc1_ema'] = metrics_ema.pop('accuracy') * 100  # rename
+  assert not ema_eval
+  # if ema_eval:
+  #   logits = state.apply_fn(state.ema_state.ema, batch['image'], train=False, mutable=False)
+  #   metrics_ema = compute_eval_metrics(logits, batch['label'], batch['label_one_hot'])
+  #   metrics['test_acc1_ema'] = metrics_ema.pop('accuracy') * 100  # rename
 
   return metrics
 
@@ -244,12 +242,12 @@ def sync_batch_stats(state):
   """Sync the batch statistics across replicas."""
   # Each device has its own version of the running average batch statistics and
   # we sync them before evaluation.
-  if 'batch_stats' not in state.variables:
+  if 'batch_stats' not in state.flax_mutables:
     return state
   else:
-    new_variables, batch_stats = state.variables.pop('batch_stats')
+    new_mutables, batch_stats = state.flax_mutables.pop('batch_stats')
     batch_stats = cross_replica_mean(batch_stats)
-    return state.replace(variables=flax.core.FrozenDict({'batch_stats': batch_stats, **new_variables}))
+    return state.replace(flax_mutables=flax.core.FrozenDict({'batch_stats': batch_stats, **new_mutables}))
 
 
 def seed_worker(worker_id):
@@ -364,34 +362,15 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   # step_offset > 0 if restarting from checkpoint
   step_offset = int(state.step)
-
-  # --------------------------------------------------------------------------------
-  # up til now, state.params are for one device
-  # image = jnp.ones([2, 224, 224, 3])
-  # label = jnp.ones([2,], dtype=jnp.int32)
-  # mutable_keys = [k for k in state.variables]
-  # outcome = state.apply_fn(
-  #     {'params': state.params,
-  #      **state.variables,
-  #     },
-  #     rngs=dict(dropout=state.rng),
-  #     inputs=image,
-  #     mutable=mutable_keys,
-  #     train=True)
-  # logits, new_variables = outcome
-  # num_params = np.sum([np.prod(p.shape) for p in jax.tree_leaves(state.opt_state[0].nu)])
-  # num_params = np.sum([np.prod(p.shape) for p in jax.tree_leaves(state.params)])
-  # num_params_mem = num_params * 4 / 1024 / 1024
-  # --------------------------------------------------------------------------------  
   state = jax_utils.replicate(state)
 
   p_train_step = jax.pmap(
-      functools.partial(train_step, learning_rate_fn=learning_rate_fn, config=config),
+      functools.partial(train_step, model=model, learning_rate_fn=learning_rate_fn, config=config),
       axis_name='batch',
       donate_argnums=(0,) if config.donate else ()
       )
   p_eval_step = jax.pmap(
-      functools.partial(eval_step, ema_eval=(config.ema and config.ema_eval)),
+      functools.partial(eval_step, model=model, ema_eval=(config.ema and config.ema_eval)),
       axis_name='batch')
 
   train_metrics = []
@@ -423,6 +402,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     for i, batch in enumerate(data_loader_train):
       batch = parse_batch(batch, local_batch_size, mixup_fn)
       state, metrics = p_train_step(state, batch)
+      if i > 100:
+        break
 
       epoch_1000x = int(step * config.batch_size / 1281167 * 1000)  # normalize to IN1K epoch anyway
 
