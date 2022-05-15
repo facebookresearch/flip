@@ -292,6 +292,7 @@ class VisionTransformer(nn.Module):
   representation_size: Optional[int] = None
   classifier: str = 'token'
   dtype: Any = jnp.float32
+  rescale_head_init: float = 1.
 
   @nn.compact
   def __call__(self, inputs, *, train):
@@ -361,12 +362,12 @@ class VisionTransformer(nn.Module):
     
     # ------------------------------------------------
     # debugging BN or state
-    x = nn.BatchNorm(
-      use_running_average=not train,
-      momentum=0.9,
-      epsilon=1e-5,
-      name='bn_debug'
-    )(x)
+    # x = nn.BatchNorm(
+    #   use_running_average=not train,
+    #   momentum=0.9,
+    #   epsilon=1e-5,
+    #   name='bn_debug'
+    # )(x)
     # ------------------------------------------------
 
     if self.num_classes:
@@ -374,10 +375,10 @@ class VisionTransformer(nn.Module):
       #   features=self.num_classes,
       #   name='head',
       #   kernel_init=head_kernel_init
-      # )(x)
+      # )(x)      
       x = t5x.layers.Dense(
           features=self.num_classes,
-          kernel_init=head_kernel_init,
+          kernel_init=lambda *args: head_kernel_init(*args) * self.rescale_head_init,
           kernel_axes=('embed', 'classes'),
           name='head',
       )(x)

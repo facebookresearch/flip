@@ -15,7 +15,7 @@ python3 main.py \
     --config.donate=True \
     --config.aug.randerase.on=True \
     --config.aug.randerase.prob=0.25 \
-    --config.rescale_head_init=0.001 \
+    --config.model.rescale_head_init=0.001 \
     --config.aug.mix.mixup=True \
     --config.aug.mix.cutmix=True \
     --config.aug.autoaug=autoaug \

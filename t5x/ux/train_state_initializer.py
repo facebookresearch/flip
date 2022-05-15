@@ -6,6 +6,7 @@ from flax.training import train_state
 import jax
 import jax.numpy as jnp
 import ml_collections
+import numpy as np
 import optax
 
 from typing import Any
@@ -23,30 +24,36 @@ class TrainState(train_state.TrainState):
   ema_state: optax.EmaState
 
 
-def initialized(key, image_size, model, init_backend='tpu'):
+def initialized(rng, image_size, model, init_backend='tpu'):
   input_shape = (1, image_size, image_size, 3)
   def init(*args):
     return model.init(*args, train=False)
   init = jax.jit(init, backend=init_backend)
   logging.info('Initializing params...')
-  variables = init({'params': key}, jnp.ones(input_shape, model.dtype))
+  variables = init({'params': rng}, jnp.ones(input_shape, model.dtype))
   logging.info('Initializing params done.')
-
-  variables_shape = jax.eval_shape(init, {'params': key}, jnp.ones(input_shape, model.dtype))
-  logging.info('variables_shape:\n{}'.format(variables_shape))
-
   return variables
 
 
-def create_optimizer(config, params, learning_rate_fn):
+def initialized_shapes(rng, image_size, model):
+  input_shape = (1, image_size, image_size, 3)
+  def init(*args):
+    return model.init(*args, train=False)
+  variables_shape = jax.eval_shape(init, {'params': rng}, jnp.ones(input_shape, model.dtype))
+  logging.info('variables_shape:\n{}'.format(variables_shape))
+  return variables_shape
+
+
+def create_optimizer(config, params_names, learning_rate_fn):
   # optional: exclude some wd
   if config.exclude_wd:
     mask = jax.tree_util.tree_map(lambda x, y: bool(x and y), 
-      opt_util.filter_parameters(params, opt_util.filter_bias_and_norm),
-      opt_util.filter_parameters(params, opt_util.filter_cls_and_posembed)
+      opt_util.filter_parameters(params_names, opt_util.filter_bias_and_norm),
+      opt_util.filter_parameters(params_names, opt_util.filter_cls_and_posembed)
     )
   else:
     mask = None
+  # logging.info('Apply wd: {}'.format(mask))
 
   tx = getattr(adamw_util, config.opt_type)  # optax.adamw
   tx = tx(learning_rate=learning_rate_fn, **config.opt, mask=mask, mu_dtype=getattr(jnp, config.opt_mu_dtype))
@@ -70,6 +77,10 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
 def __create_train_state(rng, config: ml_collections.ConfigDict,
                        model, image_size, learning_rate_fn):
   """Create initial training state."""
+  # create optimizer first
+  params_shapes = initialized_shapes(jax.random.PRNGKey(0), image_size, model)  # inference names
+  tx = create_optimizer(config, params_shapes['params'], learning_rate_fn)
+
   # split rng for init and for state
   rng_init, rng_state = jax.random.split(rng)
 
@@ -81,15 +92,13 @@ def __create_train_state(rng, config: ml_collections.ConfigDict,
     rescales = opt_util.filter_parameters(params, opt_util.layer_rescale)
     params = jax.tree_util.tree_map(lambda x, y: x * y, rescales, params)
 
-  if config.rescale_head_init != 1.:
-    params = flax.core.frozen_dict.unfreeze(params)
-    params['head']['kernel'] *= config.rescale_head_init
-    params = flax.core.frozen_dict.freeze(params)
+  # if config.rescale_head_init != 1.:
+  #   params = flax.core.frozen_dict.unfreeze(params)
+  #   params['head']['kernel'] *= config.rescale_head_init
+  #   params = flax.core.frozen_dict.freeze(params)
 
-  # stds = jax.tree_util.tree_map(lambda x: np.array(x).std(), params)
-  # logging.info('std: {}'.format(stds))
-
-  tx = create_optimizer(config, params, learning_rate_fn)
+  stds = jax.tree_util.tree_map(lambda x: np.array(x).std(), params)
+  logging.info('std: {}'.format(stds))
 
   if config.ema:
     raise NotImplementedError
