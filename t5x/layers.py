@@ -205,6 +205,15 @@ class MultiHeadDotProductAttention(nn.Module):
         features=(self.num_heads, head_dim),
         kernel_axes=('embed', 'joined_kv'),
         dtype=self.dtype)
+    # kaiming: the origial version;
+    # if we use this, the numerical results should be the same as original
+    # projection = functools.partial(
+    #     nn.DenseGeneral,
+    #     axis=-1,
+    #     features=(self.num_heads, head_dim),
+    #     bias_init=self.bias_init,
+    #     use_bias=True,
+    #     precision=None)
 
     # Project inputs_q to multi-headed q/k/v
     # dimensions are then [batch, length, num_heads, head_dim]
@@ -321,13 +330,12 @@ class MultiHeadDotProductAttention(nn.Module):
 
     # Back to the original inputs dimensions.
     out = DenseGeneral(
-        features=inputs_q.shape[-1],  # output dim is set to the input dim.
+        features=features,
         axis=(-2, -1),
         kernel_init=self.kernel_init,
         kernel_axes=('joined_kv', 'embed'),
         dtype=self.dtype,
-        name='out')(
-            x)
+        name='out')(x)
     return out
 
 
