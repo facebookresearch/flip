@@ -2,7 +2,6 @@
 from absl import logging
 import flax
 from flax import struct
-# from flax.training import train_state
 import jax
 import jax.numpy as jnp
 import ml_collections
@@ -20,13 +19,6 @@ from utils import adamw_util
 
 
 Array = Union[np.ndarray, jnp.ndarray, jax.pxla.ShardedDeviceArray]
-
-
-class TrainState(flax.training.train_state.TrainState):
-  rng: Any
-  variables: flax.core.FrozenDict[str, Any]
-  ema_tx: optax.GradientTransformation = struct.field(pytree_node=False)
-  ema_state: optax.EmaState
 
 
 def initialized(rng, image_size, model, init_backend='tpu'):
@@ -96,6 +88,9 @@ def __create_train_state(rng, config: ml_collections.ConfigDict,
   params_shapes = initialized_shapes(jax.random.PRNGKey(0), image_size, model)  # inference names
   optimizer_def = create_optimizer(config, params_shapes['params'], learning_rate_fn)
 
+  # optional: rescale
+  assert not config.rescale_init  # TODO: move to model
+
   # ---------------------------------------------------------------------------
   def initialize_train_state(rng: Array):
     # split rng for init and for state
@@ -109,41 +104,5 @@ def __create_train_state(rng, config: ml_collections.ConfigDict,
   state = initialize_train_state(rng)
   # train_state_shapes = jax.eval_shape(initialize_train_state, rng_init)
   return state
-  # ---------------------------------------------------------------------------
   
-  raise NotImplementedError
-
-  variables = initialized(rng_init, image_size, model, config.init_backend)
-  variables_states, params = variables.pop('params')
-
-  # optional: rescale
-  assert not config.rescale_init  # TODO: move to model
-  # if config.rescale_init:
-  #   rescales = opt_util.filter_parameters(params, opt_util.layer_rescale)
-  #   params = jax.tree_util.tree_map(lambda x, y: x * y, rescales, params)
-
-  # if config.rescale_head_init != 1.:
-  #   params = flax.core.frozen_dict.unfreeze(params)
-  #   params['head']['kernel'] *= config.rescale_head_init
-  #   params = flax.core.frozen_dict.freeze(params)
-
-  stds = jax.tree_util.tree_map(lambda x: np.array(x).std(), params)
-  logging.info('std: {}'.format(stds))
-
-  if config.ema:
-    raise NotImplementedError
-    ema_tx = optax.ema(decay=config.ema_decay, debias=False)
-    ema_state = ema_tx.init(flax.core.frozen_dict.FrozenDict({'params': params, **variables_states}))
-  else:
-    ema_tx = None
-    ema_state = None
-  state = TrainState.create(
-      apply_fn=model.apply,
-      params=params,
-      tx=tx,
-      rng=rng_state,
-      variables=variables_states,
-      ema_tx=ema_tx,
-      ema_state=ema_state)
-  return state
 

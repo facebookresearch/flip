@@ -10,8 +10,6 @@ python3 main.py \
     --config.log_every_steps=10 \
     --config.num_epochs=1 \
     --config.profile_memory=True \
-    --config.ema=False \
-    --config.ema_eval=False \
     --config.donate=True \
     --config.aug.randerase.on=True \
     --config.aug.randerase.prob=0.25 \

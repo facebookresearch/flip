@@ -6,7 +6,6 @@ lr=1e-3
 lrd=0.75
 ep=50
 dp=0.2
-ema=0.9999
 
 vitsize=large
 CONFIG=cfg_vit_${vitsize}
@@ -16,7 +15,7 @@ name=`basename ${PRETRAIN_DIR}`
 
 # finetune_pytorch_recipe (ftpy): lb0.1_b0.999_cropv4_exwd_initv2_headinit0.001_tgap_dp_mixup32_cutmix32_noerase_warmlr_minlr_autoaug
 # finetune_torch_loader (fttl): randaugv2erase_TorchLoader
-JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_fttl_b${batch}_lr${lr}_lrd${lrd}_dp${dp}_s${seed}_axisnames_wip  # _${ema}
+JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_fttl_b${batch}_lr${lr}_lrd${lrd}_dp${dp}_s${seed}_axisnames_wip
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
 LOGDIR=/kmh_data/logs/${JOBNAME}
@@ -60,9 +59,6 @@ python3 main.py \
     --config.seed_jax=${seed} \
     --config.seed_pt=${seed} \
     --config.model.transformer.torch_qkv=False \
-    --config.ema=False \
-    --config.ema_eval=False \
-    --config.ema_decay=${ema} \
     --config.model.classifier=tgap \
 2>&1 | tee $LOGDIR/finetune_\$SSH_ID.log
 " 2>&1 | tee $LOGDIR/finetune.log

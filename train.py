@@ -158,41 +158,26 @@ def train_step(state, batch, model, learning_rate_fn, config):
   # modified impl.
   # updates, new_opt_state = state.tx.update(grads, state.opt_state, state.params)
   # new_params = optax.apply_updates(state.params, updates)
-
-  # if config.ema:
-  #   _, new_ema_state = state.ema_tx.update(
-  #     updates=flax.core.frozen_dict.FrozenDict({'params': new_params, **new_variables}),
-  #     state=state.ema_state)
-  # else:
-  #   new_ema_state = None
   
-  # new_ema = state.ema.update(flax.core.FrozenDict({'params': new_params, **new_variables})) if state.ema is not None else None
   # new_state = state.replace(
   #   step=state.step + 1,
   #   params=new_params,
   #   opt_state=new_opt_state,
   #   variables=new_variables,
   #   rng=new_rng,
-  #   ema_state=new_ema_state
   # )
   # ----------------------------------------------------------------------------
 
   return new_state, metrics
 
 
-def eval_step(state, batch, model, ema_eval=False):
+def eval_step(state, batch, model):
   variables = {'params': state.params, **state.flax_mutables}
   logits = model.apply(variables, batch['image'], train=False, mutable=False)
   metrics = compute_eval_metrics(logits, batch['label'], batch['label_one_hot'])
   metrics['test_acc1'] = metrics.pop('accuracy') * 100  # rename
   metrics['perf/test_acc1'] = metrics['test_acc1']  # for comparing with pytorch
   metrics['test_loss'] = metrics.pop('loss')  # rename
-
-  assert not ema_eval
-  # if ema_eval:
-  #   logits = state.apply_fn(state.ema_state.ema, batch['image'], train=False, mutable=False)
-  #   metrics_ema = compute_eval_metrics(logits, batch['label'], batch['label_one_hot'])
-  #   metrics['test_acc1_ema'] = metrics_ema.pop('accuracy') * 100  # rename
 
   return metrics
 
@@ -370,7 +355,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
       donate_argnums=(0,) if config.donate else ()
       )
   p_eval_step = jax.pmap(
-      functools.partial(eval_step, model=model, ema_eval=(config.ema and config.ema_eval)),
+      functools.partial(eval_step, model=model),
       axis_name='batch')
 
   train_metrics = []
