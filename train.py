@@ -503,7 +503,7 @@ def run_eval(state, partitioned_eval_step, data_loader_val, local_batch_size, ep
     batch = parse_batch(batch, local_batch_size, mixup_fn=None)
     metrics = partitioned_eval_step(state, batch)
     eval_metrics.append(metrics)
-    # logging.info('{} / {}'.format(_, len(data_loader_val)))
+    logging.info('{} / {}'.format(_, len(data_loader_val)))
 
   # eval_metrics = jax.tree_map(lambda x: x, eval_metrics)
   eval_metrics = jax.device_get(eval_metrics)

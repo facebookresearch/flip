@@ -5,8 +5,8 @@ rm -rf tmp
 export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets
 python3 main.py \
     --workdir=./tmp \
-    --config=configs/cfg_vit_dbg.py \
-    --config.batch_size=64 \
+    --config=configs/cfg_vit_large.py \
+    --config.batch_size=32 \
     --config.log_every_steps=10 \
     --config.num_epochs=1 \
     --config.profile_memory=True \
