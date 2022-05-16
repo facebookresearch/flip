@@ -368,12 +368,12 @@ class VisionTransformer(nn.Module):
     #   epsilon=1e-5,
     #   name='bn_debug'
     # )(x)
-    var_bias = t5x.layers.variable_with_axes(
-      'debug_vars', 'var_bias',
-      lambda s: jnp.zeros(s, jnp.float32),
-      (x.shape[-1],),
-      axes=('embed',))
-    x += var_bias.value
+    # var_bias = t5x.layers.variable_with_axes(
+    #   'debug_vars', 'var_bias',
+    #   lambda s: jnp.zeros(s, jnp.float32),
+    #   (x.shape[-1],),
+    #   axes=('embed',))
+    # x += var_bias.value
     # if train:
     #   var_bias.value += 1.
     # ------------------------------------------------
