@@ -419,8 +419,6 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     for i, batch in enumerate(data_loader_train):
       batch = parse_batch(batch, local_batch_size, mixup_fn)
       state, metrics = partitioned_train_step(state, batch)
-      if i > 100:
-        break
       epoch_1000x = int(step * config.batch_size / 1281167 * 1000)  # normalize to IN1K epoch anyway
 
       if epoch == epoch_offset and i == 0:
