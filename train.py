@@ -419,7 +419,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     for i, batch in enumerate(data_loader_train):
       batch = parse_batch(batch, local_batch_size, mixup_fn)
       state, metrics = partitioned_train_step(state, batch)
-
+      if i > 100:
+        break
       epoch_1000x = int(step * config.batch_size / 1281167 * 1000)  # normalize to IN1K epoch anyway
 
       if epoch == epoch_offset and i == 0:
@@ -431,9 +432,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
         if (step + 1) % config.log_every_steps == 0:
           # Wait until computations are done before exiting
           jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
-          from IPython import embed; embed();
-          if (0 == 0): raise NotImplementedError
-          train_metrics = common_utils.get_metrics(train_metrics)
+          train_metrics = common_utils.get_metrics(jax.tree_map(lambda x: jnp.reshape(x, (-1,)), train_metrics))
           summary = {
               f'train_{k}': float(v)
               for k, v in jax.tree_map(lambda x: x.mean(), train_metrics).items()
@@ -469,8 +468,9 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # finished one epoch: eval
     # ------------------------------------------------------------
     if (epoch + 1) % config.save_every_epochs == 0 or epoch + 1 == int(config.num_epochs):
-      state = sync_batch_stats(state)
-      save_checkpoint(state, workdir)
+      logging.info('Not implemented saving checkpoint: {}'.format(workdir))
+      # state = sync_batch_stats(state)
+      # save_checkpoint(state, workdir)
 
   # Wait until computations are done before exiting
   jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
@@ -507,7 +507,7 @@ def run_eval(state, partitioned_eval_step, data_loader_val, local_batch_size, ep
     eval_metrics.append(metrics)
     # logging.info('{} / {}'.format(_, len(data_loader_val)))
 
-  eval_metrics = jax.tree_map(lambda x: x[0], eval_metrics)
+  # eval_metrics = jax.tree_map(lambda x: x, eval_metrics)
   eval_metrics = jax.device_get(eval_metrics)
   eval_metrics = jax.tree_map(lambda *args: np.concatenate(args), *eval_metrics)
 
