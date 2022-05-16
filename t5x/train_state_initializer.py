@@ -78,11 +78,6 @@ def create_optimizer(config, params_names, learning_rate_fn):
 
 def create_train_state(rng, config: ml_collections.ConfigDict,
                        model, image_size, learning_rate_fn, partitioner):
-  return __create_train_state(rng, config, model, image_size, learning_rate_fn, partitioner)
-
-
-def __create_train_state(rng, config: ml_collections.ConfigDict,
-                       model, image_size, learning_rate_fn, partitioner):
   """Create initial training state."""
   # create optimizer first
   params_shapes = initialized_shapes(jax.random.PRNGKey(0), image_size, model)  # inference names
@@ -109,7 +104,9 @@ def __create_train_state(rng, config: ml_collections.ConfigDict,
       in_axis_resources=None,
       out_axis_resources=train_state_axes)
 
+  logging.info('Initializing train_state...')
   train_state = p_initialize_train_state_fn(rng)
+  logging.info('Initializing train_state done.')
 
   # for debug
   # k = train_state.params['Transformer']['encoderblock_00']['MlpBlock_0']['Dense_0']['kernel']
@@ -119,6 +116,6 @@ def __create_train_state(rng, config: ml_collections.ConfigDict,
   # not partitioned
   # --------------------------------------------------
   # train_state = initialize_train_state(rng)
-  return train_state
+  return train_state, train_state_axes
   
 

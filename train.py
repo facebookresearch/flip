@@ -79,7 +79,7 @@ def compute_metrics(logits, labels, labels_one_hot):
       'loss': loss,
       'accuracy': accuracy,
   }
-  metrics = lax.pmean(metrics, axis_name='batch')
+  # metrics = lax.pmean(metrics, axis_name='batch')
   return metrics
 
 
@@ -93,7 +93,7 @@ def compute_eval_metrics(logits, labels, labels_one_hot):
       'accuracy': accuracy,
       'label': labels
   }
-  metrics = lax.all_gather(metrics, axis_name='batch')
+  # metrics = lax.all_gather(metrics, axis_name='batch')
   metrics = jax.tree_map(lambda x: jnp.reshape(x, [-1,]), metrics)
   return metrics
 
@@ -117,13 +117,14 @@ def create_learning_rate_fn(
   return schedule_fn
 
 
-def train_step(state, batch, model, learning_rate_fn, config):
+def train_step(state, batch, model, learning_rate_fn):
   """Perform a single training step."""
   _, new_rng = jax.random.split(state.rng)
   # Bind the rng key to the device id (which is unique across hosts)
   # Note: This is only used for multi-host training (i.e. multiple computers
   # each with multiple accelerators).
-  dropout_rng = jax.random.fold_in(state.rng, jax.lax.axis_index('batch'))
+  # dropout_rng = jax.random.fold_in(state.rng, jax.lax.axis_index('batch'))
+  dropout_rng = state.rng
   def loss_fn(params):
     """loss function used for training."""
     mutable = [k for k in state.flax_mutables]
@@ -144,7 +145,7 @@ def train_step(state, batch, model, learning_rate_fn, config):
   grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
   aux, grads = grad_fn(state.params)
   # Re-use same axis_name as in the call to `pmap(...train_step...)` below.
-  grads = lax.pmean(grads, axis_name='batch')
+  # grads = lax.pmean(grads, axis_name='batch')
 
   new_mutables, logits = aux[1]
   metrics = compute_metrics(logits, batch['label'], batch['label_one_hot'])
@@ -196,7 +197,8 @@ def prepare_pt_data(xs, batch_size):
 
     # reshape (host_batch_size, height, width, 3) to
     # (local_devices, device_batch_size, height, width, 3)
-    return x.reshape((local_device_count, -1) + x.shape[1:])
+    # return x.reshape((local_device_count, -1) + x.shape[1:])
+    return x.reshape((-1,) + x.shape[1:])  # do not reshape into (local_devices, -1, ...)
 
   return jax.tree_map(_prepare, xs)
 
@@ -342,7 +344,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   learning_rate_fn = create_learning_rate_fn(
       config, abs_learning_rate, steps_per_epoch)
 
-  state = create_train_state(rng, config, model, image_size, learning_rate_fn, partitioner)
+  state, state_axes = create_train_state(rng, config, model, image_size, learning_rate_fn, partitioner)
 
   if config.resume_dir != '':
     state = restore_checkpoint(state, config.resume_dir)
@@ -358,21 +360,40 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   # step_offset > 0 if restarting from checkpoint
   step_offset = int(state.step)
-  state = jax_utils.replicate(state)
+  # state = jax_utils.replicate(state)
 
-  p_train_step = jax.pmap(
-      functools.partial(train_step, model=model, learning_rate_fn=learning_rate_fn, config=config),
-      axis_name='batch',
-      donate_argnums=(0,) if config.donate else ()
-      )
-  p_eval_step = jax.pmap(
-      functools.partial(eval_step, model=model),
-      axis_name='batch')
+  # to create partitioned train_step
+  # TODO: learning_rate_fn for metric only; to use a smarter way?
+  train_step_fn = functools.partial(train_step, model=model, learning_rate_fn=learning_rate_fn)  # (state, batch) -> (state, metrics)
+  partitioned_train_step = partitioner.partition(
+        train_step_fn,
+        in_axis_resources=(state_axes, partitioner.data_partition_spec),
+        out_axis_resources=(state_axes, None),
+        donate_argnums=(0,))
+
+  eval_step_fn = functools.partial(eval_step, model=model)  # (state, batch) -> metrics
+  partitioned_eval_step = partitioner.partition(
+        eval_step_fn,
+        in_axis_resources=(state_axes, partitioner.data_partition_spec),
+        out_axis_resources=None)
+
+  # ------------------------------------------
+  # debug
+  # batch = next(iter(data_loader_train))
+  # batch = parse_batch(batch, local_batch_size, mixup_fn)
+  # metrics = partitioned_eval_step(state, batch)
+  # ------------------------------------------
+
+  # p_train_step = jax.pmap(
+  #     functools.partial(train_step, model=model, learning_rate_fn=learning_rate_fn),
+  #     axis_name='batch',
+  #     donate_argnums=(0,) if config.donate else ()
+  #     )
+  # p_eval_step = jax.pmap(
+  #     functools.partial(eval_step, model=model),
+  #     axis_name='batch')
 
   train_metrics = []
-  hooks = []
-  # if jax.process_index() == 0:
-  #   hooks += [periodic_actions.Profile(num_profile_steps=5, logdir=workdir)]
 
   logging.info('Work dir: {}'.format(workdir))
   train_metrics_last_t = time.time()
@@ -381,12 +402,12 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   if config.eval_only:
     # run eval only and return
     logging.info('Evaluating...')
-    run_eval(state, p_eval_step, data_loader_val, local_batch_size, epoch=-1)
+    run_eval(state, partitioned_eval_step, data_loader_val, local_batch_size, epoch=-1)
     return
 
   epoch_offset = (step_offset + 1) // steps_per_epoch
   step = epoch_offset * steps_per_epoch
-  assert step == int(state.step[0])  # sanity when loading
+  assert step == int(jnp.reshape(state.step, (-1,))[0])  # sanity when loading
 
   best_acc = 0.
   for epoch in range(epoch_offset, int(config.num_epochs)):
@@ -397,7 +418,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # ------------------------------------------------------------
     for i, batch in enumerate(data_loader_train):
       batch = parse_batch(batch, local_batch_size, mixup_fn)
-      state, metrics = p_train_step(state, batch)
+      state, metrics = partitioned_train_step(state, batch)
 
       epoch_1000x = int(step * config.batch_size / 1281167 * 1000)  # normalize to IN1K epoch anyway
 
@@ -410,6 +431,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
         if (step + 1) % config.log_every_steps == 0:
           # Wait until computations are done before exiting
           jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
+          from IPython import embed; embed();
+          if (0 == 0): raise NotImplementedError
           train_metrics = common_utils.get_metrics(train_metrics)
           summary = {
               f'train_{k}': float(v)
@@ -433,7 +456,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # finished one epoch: eval
     # ------------------------------------------------------------
     if True:
-      summary = run_eval(state, p_eval_step, data_loader_val, local_batch_size, epoch)
+      summary = run_eval(state, partitioned_eval_step, data_loader_val, local_batch_size, epoch)
       best_acc = max(best_acc, summary['test_acc1'])
 
       # to make it consistent with PyTorch log
@@ -473,14 +496,14 @@ def parse_batch(batch, local_batch_size, mixup_fn=None):
   return batch
 
 
-def run_eval(state, p_eval_step, data_loader_val, local_batch_size, epoch):
+def run_eval(state, partitioned_eval_step, data_loader_val, local_batch_size, epoch):
   eval_metrics = []
   # sync batch statistics across replicas
   state = sync_batch_stats(state)
   tic = time.time()
   for _, batch in enumerate(data_loader_val):
     batch = parse_batch(batch, local_batch_size, mixup_fn=None)
-    metrics = p_eval_step(state, batch)
+    metrics = partitioned_eval_step(state, batch)
     eval_metrics.append(metrics)
     # logging.info('{} / {}'.format(_, len(data_loader_val)))
 
