@@ -373,8 +373,9 @@ class VisionTransformer(nn.Module):
       lambda s: jnp.zeros(s, jnp.float32),
       (x.shape[-1],),
       axes=('embed',))
-    if train:
-      var_bias.value += 1.
+    x += var_bias.value
+    # if train:
+    #   var_bias.value += 1.
     # ------------------------------------------------
 
     if self.num_classes:

@@ -117,7 +117,7 @@ class FlaxOptimTrainState(flax.struct.PyTreeNode):
   # Flax mutable fields.
   flax_mutables: FrozenDict = EMPTY_DICT
   # Contains axis metadata (e.g., names) matching flax_mutables tree.
-  flax_mutables_axes: Optional[FrozenVariableDict] = EMPTY_DICT
+  flax_mutables_axes: Optional[FrozenVariableDict] = None  # rewrite default as None
   rng: Any = None
 
   @classmethod

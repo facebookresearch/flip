@@ -47,9 +47,9 @@ def get_testing_config():
   # Only used for testing.
   config.name = 'testing'
   config.patches = ml_collections.ConfigDict({'size': (16, 16)})
-  config.hidden_size = 10
+  config.hidden_size = 16
   config.transformer = ml_collections.ConfigDict()
-  config.transformer.mlp_dim = 10
+  config.transformer.mlp_dim = 32
   config.transformer.num_heads = 2
   config.transformer.num_layers = 1
   config.transformer.attention_dropout_rate = 0.0

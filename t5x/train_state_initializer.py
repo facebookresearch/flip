@@ -101,19 +101,19 @@ def __create_train_state(rng, config: ml_collections.ConfigDict,
           optimizer_def, initial_variables, rng=rng_state)
     return train_state_lib.InferenceState.create(initial_variables)
 
-  global_train_state_shape = jax.eval_shape(initialize_train_state, rng)
+  global_train_state_shape = jax.eval_shape(initialize_train_state, rng=rng)
   train_state_axes = partitioner.get_mesh_axes(global_train_state_shape)
-  from IPython import embed; embed();
-  if (0 == 0): raise NotImplementedError
 
   p_initialize_train_state_fn = partitioner.partition(
       initialize_train_state,
       in_axis_resources=None,
       out_axis_resources=train_state_axes)
 
-  p_train_state = p_initialize_train_state_fn(rng)
+  train_state = p_initialize_train_state_fn(rng)
 
-
+  # for debug
+  # k = train_state.params['Transformer']['encoderblock_00']['MlpBlock_0']['Dense_0']['kernel']
+  # k.sharding_spec
 
   # --------------------------------------------------
   # not partitioned

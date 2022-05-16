@@ -30,7 +30,8 @@ from jax import numpy as jnp
 from jax import random
 from jax.experimental import PartitionSpec
 from jax.experimental.maps import Mesh
-from jax.experimental.pjit import pjit as jax_pjit
+# from jax.experimental.pjit import pjit as jax_pjit
+from t5x.pjit import pjit as jax_pjit
 import numpy as np
 from t5x import train_state as train_state_lib
 
