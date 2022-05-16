@@ -21,15 +21,15 @@ from utils import adamw_util
 Array = Union[np.ndarray, jnp.ndarray, jax.pxla.ShardedDeviceArray]
 
 
-def initialized(rng, image_size, model, init_backend='tpu'):
-  input_shape = (1, image_size, image_size, 3)
-  def init(*args):
-    return model.init(*args, train=False)
-  init = jax.jit(init, backend=init_backend)
-  logging.info('Initializing params...')
-  variables = init({'params': rng}, jnp.ones(input_shape, model.dtype))
-  logging.info('Initializing params done.')
-  return variables
+# def initialized(rng, image_size, model, init_backend='tpu'):
+#   input_shape = (1, image_size, image_size, 3)
+#   def init(*args):
+#     return model.init(*args, train=False)
+#   init = jax.jit(init, backend=init_backend)
+#   logging.info('Initializing params...')
+#   variables = init({'params': rng}, jnp.ones(input_shape, model.dtype))
+#   logging.info('Initializing params done.')
+#   return variables
 
 
 def init_fn(rng, image_size, model, init_backend='tpu'):
@@ -46,7 +46,7 @@ def initialized_shapes(rng, image_size, model):
   def init(*args):
     return model.init(*args, train=False)
   variables_shape = jax.eval_shape(init, {'params': rng}, jnp.ones(input_shape, model.dtype))
-  logging.info('variables_shape:\n{}'.format(variables_shape))
+  # logging.info('variables_shape:\n{}'.format(variables_shape))
   return variables_shape
 
 
@@ -77,12 +77,12 @@ def create_optimizer(config, params_names, learning_rate_fn):
 
 
 def create_train_state(rng, config: ml_collections.ConfigDict,
-                       model, image_size, learning_rate_fn):
-  return __create_train_state(rng, config, model, image_size, learning_rate_fn)
+                       model, image_size, learning_rate_fn, partitioner):
+  return __create_train_state(rng, config, model, image_size, learning_rate_fn, partitioner)
 
 
 def __create_train_state(rng, config: ml_collections.ConfigDict,
-                       model, image_size, learning_rate_fn):
+                       model, image_size, learning_rate_fn, partitioner):
   """Create initial training state."""
   # create optimizer first
   params_shapes = initialized_shapes(jax.random.PRNGKey(0), image_size, model)  # inference names
@@ -101,8 +101,24 @@ def __create_train_state(rng, config: ml_collections.ConfigDict,
           optimizer_def, initial_variables, rng=rng_state)
     return train_state_lib.InferenceState.create(initial_variables)
 
-  state = initialize_train_state(rng)
-  # train_state_shapes = jax.eval_shape(initialize_train_state, rng_init)
-  return state
+  global_train_state_shape = jax.eval_shape(initialize_train_state, rng)
+  train_state_axes = partitioner.get_mesh_axes(global_train_state_shape)
+  from IPython import embed; embed();
+  if (0 == 0): raise NotImplementedError
+
+  p_initialize_train_state_fn = partitioner.partition(
+      initialize_train_state,
+      in_axis_resources=None,
+      out_axis_resources=train_state_axes)
+
+  p_train_state = p_initialize_train_state_fn(rng)
+
+
+
+  # --------------------------------------------------
+  # not partitioned
+  # --------------------------------------------------
+  # train_state = initialize_train_state(rng)
+  return train_state
   
 

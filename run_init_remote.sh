@@ -13,6 +13,8 @@ pip3 install torch==1.7.1
 pip3 install torchvision==0.8.2
 pip3 install timm==0.4.12
 
+pip install cached_property
+
 pip3 list | grep 'jax\|flax\|tensorflow\|clu '
 
 python3 -c 'import tensorflow as tf'

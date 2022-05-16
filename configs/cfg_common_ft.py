@@ -136,4 +136,9 @@ def get_config():
   config.torchload.data_dir = '/kmh_data/imagenet_full_size/061417'
   config.torchload.num_workers = 32
 
+  # partitioning
+  config.partitioning = ml_collections.ConfigDict()
+  config.partitioning.num_partitions = 1
+
+
   return config

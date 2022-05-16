@@ -51,6 +51,7 @@ from utils import torchloader_util
 from utils import adamw_util
 
 from t5x.train_state_initializer import create_train_state
+import t5x.partitioning
 
 import jax.profiler
 
@@ -274,6 +275,18 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   image_size = 224
 
+  # ------------------------------------
+  # Create partitioner
+  # ------------------------------------
+  partitioner = t5x.partitioning.PjitPartitioner(**config.partitioning)
+  partitioner._logical_axis_rules += (('_null0', None),)
+  partitioner._logical_axis_rules += (('_null1', None),)
+  partitioner._logical_axis_rules += (('_null2', None),)
+  partitioner._logical_axis_rules += (('classes', None),)
+
+  # ------------------------------------
+  # Create data loader
+  # ------------------------------------
   if config.batch_size % jax.device_count() > 0:
     raise ValueError('Batch size must be divisible by the number of devices')
   local_batch_size = config.batch_size // jax.process_count()
@@ -329,9 +342,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   learning_rate_fn = create_learning_rate_fn(
       config, abs_learning_rate, steps_per_epoch)
 
-  create_train_state_fun = functools.partial(create_train_state, config=config, model=model, image_size=image_size, learning_rate_fn=learning_rate_fn)
-  # state_shape = jax.eval_shape(create_train_state_fun, rng=rng,)
-  state = create_train_state(rng, config, model, image_size, learning_rate_fn)
+  state = create_train_state(rng, config, model, image_size, learning_rate_fn, partitioner)
 
   if config.resume_dir != '':
     state = restore_checkpoint(state, config.resume_dir)

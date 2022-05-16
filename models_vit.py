@@ -96,7 +96,7 @@ class AddPositionEmbs(nn.Module):
         self.posemb_init,
         pos_emb_shape,
         jnp.float32,
-        axes=('', 'length', 'embed'))
+        axes=('_null0', 'length', 'embed'))
     return inputs + pe
 
 
@@ -319,7 +319,7 @@ class VisionTransformer(nn.Module):
         name='embedding',
         kernel_init=patch_kernel_init,
         bias_init=patch_bias_init,
-        kernel_axes=('', '', '', 'embed'),
+        kernel_axes=('_null0', '_null1', '_null2', 'embed'),
         )(x)
 
     # Here, x is a grid of embeddings.
@@ -330,7 +330,7 @@ class VisionTransformer(nn.Module):
 
     # If we want to add a class token, add it here.
     if self.classifier in {'token', 'tgap'}:
-      cls = t5x.layers.param_with_axes('cls', clstoken_init, (1, 1, c), jnp.float32, axes=('', '', 'embed'))
+      cls = t5x.layers.param_with_axes('cls', clstoken_init, (1, 1, c), jnp.float32, axes=('_null0', '_null1', 'embed'))
       cls = jnp.tile(cls, [n, 1, 1])
       x = jnp.concatenate([cls, x], axis=1)
 
