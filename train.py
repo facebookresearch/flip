@@ -418,6 +418,12 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   best_acc = 0.
 
   train_state_mutex = threading.RLock()
+
+  logging.debug('Using fake batch')
+  len_data_loader_train = len(data_loader_train)
+  batch = next(iter(data_loader_train))
+  batch = parse_batch(batch, local_batch_size, mixup_fn)
+
   for epoch in range(epoch_offset, int(config.num_epochs)):
     data_loader_train.sampler.set_epoch(epoch)  # reset random seed
 
@@ -426,8 +432,9 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # train one epoch
     # ------------------------------------------------------------
     with train_state_mutex:
-      for i, batch in enumerate(data_loader_train):
-        batch = parse_batch(batch, local_batch_size, mixup_fn)
+      # for i, batch in enumerate(data_loader_train):
+      for i in range(len_data_loader_train):
+        # batch = parse_batch(batch, local_batch_size, mixup_fn)
         state, metrics = partitioned_train_step(state, batch)
         epoch_1000x = int(step * config.batch_size / 1281167 * 1000)  # normalize to IN1K epoch anyway
 
