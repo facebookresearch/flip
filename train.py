@@ -20,6 +20,7 @@ The data is loaded using tensorflow_datasets.
 
 import functools
 from threading import local
+import threading
 import time, datetime
 from typing import Any
 
@@ -52,6 +53,7 @@ from utils import adamw_util
 
 from t5x.train_state_initializer import create_train_state
 import t5x.partitioning
+from t5x.ux.log_model_info import log_model_info
 
 import jax.profiler
 
@@ -344,7 +346,12 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   learning_rate_fn = create_learning_rate_fn(
       config, abs_learning_rate, steps_per_epoch)
 
-  state, state_axes = create_train_state(rng, config, model, image_size, learning_rate_fn, partitioner)
+  state, state_axes, state_shape = create_train_state(rng, config, model, image_size, learning_rate_fn, partitioner)
+
+  # logging
+  log_file = os.path.join(workdir, 'model-info.txt')
+  log_model_info(log_file, state_shape, partitioner)
+
 
   if config.resume_dir != '':
     state = restore_checkpoint(state, config.resume_dir)
@@ -395,7 +402,6 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   train_metrics = []
 
-  logging.info('Work dir: {}'.format(workdir))
   train_metrics_last_t = time.time()
   logging.info('Initial compilation, this might take some minutes...')
 
@@ -410,45 +416,49 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   assert step == int(jnp.reshape(state.step, (-1,))[0])  # sanity when loading
 
   best_acc = 0.
+
+  train_state_mutex = threading.RLock()
   for epoch in range(epoch_offset, int(config.num_epochs)):
     data_loader_train.sampler.set_epoch(epoch)  # reset random seed
-    
+
+    logging.info('Work dir: {}'.format(workdir))
     # ------------------------------------------------------------
     # train one epoch
     # ------------------------------------------------------------
-    for i, batch in enumerate(data_loader_train):
-      batch = parse_batch(batch, local_batch_size, mixup_fn)
-      state, metrics = partitioned_train_step(state, batch)
-      epoch_1000x = int(step * config.batch_size / 1281167 * 1000)  # normalize to IN1K epoch anyway
+    with train_state_mutex:
+      for i, batch in enumerate(data_loader_train):
+        batch = parse_batch(batch, local_batch_size, mixup_fn)
+        state, metrics = partitioned_train_step(state, batch)
+        epoch_1000x = int(step * config.batch_size / 1281167 * 1000)  # normalize to IN1K epoch anyway
 
-      if epoch == epoch_offset and i == 0:
-        logging.info('Initial compilation completed.')
-        start_time = time.time()  # log the time after compilation
+        if epoch == epoch_offset and i == 0:
+          logging.info('Initial compilation completed.')
+          start_time = time.time()  # log the time after compilation
 
-      if config.get('log_every_steps'):
-        train_metrics.append(metrics)
-        if (step + 1) % config.log_every_steps == 0:
-          # Wait until computations are done before exiting
-          jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
-          train_metrics = common_utils.get_metrics(jax.tree_map(lambda x: jnp.reshape(x, (-1,)), train_metrics))
-          summary = {
-              f'train_{k}': float(v)
-              for k, v in jax.tree_map(lambda x: x.mean(), train_metrics).items()
-          }
-          summary['steps_per_second'] = config.log_every_steps / (
-              time.time() - train_metrics_last_t)
+        if config.get('log_every_steps'):
+          train_metrics.append(metrics)
+          if (step + 1) % config.log_every_steps == 0:
+            # Wait until computations are done before exiting
+            jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
+            train_metrics = common_utils.get_metrics(jax.tree_map(lambda x: jnp.reshape(x, (-1,)), train_metrics))
+            summary = {
+                f'train_{k}': float(v)
+                for k, v in jax.tree_map(lambda x: x.mean(), train_metrics).items()
+            }
+            summary['steps_per_second'] = config.log_every_steps / (
+                time.time() - train_metrics_last_t)
 
-          # to make it consistent with PyTorch log
-          summary['loss'] = summary['train_loss']  # add extra name
-          summary['lr'] = summary.pop('train_learning_rate')  # rename
-          summary['class_acc'] = summary.pop('train_accuracy')  # this is [0, 1]
-          summary['step_tensorboard'] = epoch_1000x  # step for tensorboard
+            # to make it consistent with PyTorch log
+            summary['loss'] = summary['train_loss']  # add extra name
+            summary['lr'] = summary.pop('train_learning_rate')  # rename
+            summary['class_acc'] = summary.pop('train_accuracy')  # this is [0, 1]
+            summary['step_tensorboard'] = epoch_1000x  # step for tensorboard
 
-          writer.write_scalars(step + 1, summary)
-          train_metrics = []
-          train_metrics_last_t = time.time()
+            writer.write_scalars(step + 1, summary)
+            train_metrics = []
+            train_metrics_last_t = time.time()
 
-      step += 1  
+        step += 1  
     # ------------------------------------------------------------
     # finished one epoch: eval
     # ------------------------------------------------------------

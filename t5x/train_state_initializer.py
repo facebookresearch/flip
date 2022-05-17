@@ -32,8 +32,8 @@ Array = Union[np.ndarray, jnp.ndarray, jax.pxla.ShardedDeviceArray]
 #   return variables
 
 
-def init_fn(rng, image_size, model, init_backend='tpu'):
-  input_shape = (1, image_size, image_size, 3)
+def init_fn(rng, input_shape, model, init_backend='tpu'):
+  # input_shape = (1, image_size, image_size, 3)
   def init(*args):
     return model.init(*args, train=False)
   init = jax.jit(init, backend=init_backend)
@@ -87,10 +87,11 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
   assert not config.rescale_init  # TODO: move to model
 
   # ---------------------------------------------------------------------------
+  input_shape = (config.batch_size, image_size, image_size, 3)
   def initialize_train_state(rng: Array):
     # split rng for init and for state
     rng_init, rng_state = jax.random.split(rng)
-    initial_variables = init_fn(rng=rng_init, image_size=image_size, model=model)
+    initial_variables = init_fn(rng=rng_init, input_shape=input_shape, model=model)
     if optimizer_def:
       return train_state_lib.FlaxOptimTrainState.create(
           optimizer_def, initial_variables, rng=rng_state)
@@ -116,6 +117,6 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
   # not partitioned
   # --------------------------------------------------
   # train_state = initialize_train_state(rng)
-  return train_state, train_state_axes
+  return train_state, train_state_axes, global_train_state_shape
   
 
