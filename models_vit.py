@@ -330,6 +330,7 @@ class VisionTransformer(nn.Module):
     # Transformer.
     n, h, w, c = x.shape
     x = jnp.reshape(x, [n, h * w, c])
+    x = t5x.layers.with_sharding_constraint(x, ('batch', 'length', 'embed'))
     # ------------------------------------------------------------
 
     # hack: no conv1
