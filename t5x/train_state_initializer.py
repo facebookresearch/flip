@@ -41,12 +41,11 @@ def init_fn(rng, input_shape, model, init_backend='tpu'):
   return variables
 
 
-def initialized_shapes(rng, image_size, model):
-  input_shape = (1, image_size, image_size, 3)
+def initialized_shapes(rng, input_shape, model):
+  # input_shape = (1, image_size, image_size, 3)
   def init(*args):
     return model.init(*args, train=False)
   variables_shape = jax.eval_shape(init, {'params': rng}, jnp.ones(input_shape, model.dtype))
-  # logging.info('variables_shape:\n{}'.format(variables_shape))
   return variables_shape
 
 
@@ -79,15 +78,16 @@ def create_optimizer(config, params_names, learning_rate_fn):
 def create_train_state(rng, config: ml_collections.ConfigDict,
                        model, image_size, learning_rate_fn, partitioner):
   """Create initial training state."""
+  # input_shape = (config.batch_size, image_size, image_size, 3)
+  input_shape = (config.batch_size, image_size // config.model.patches.size[0] * image_size // config.model.patches.size[1], 4)
   # create optimizer first
-  params_shapes = initialized_shapes(jax.random.PRNGKey(0), image_size, model)  # inference names
+  params_shapes = initialized_shapes(jax.random.PRNGKey(0), input_shape, model)  # inference names
   optimizer_def = create_optimizer(config, params_shapes['params'], learning_rate_fn)
 
   # optional: rescale
   assert not config.rescale_init  # TODO: move to model
 
   # ---------------------------------------------------------------------------
-  input_shape = (config.batch_size, image_size, image_size, 3)
   def initialize_train_state(rng: Array):
     # split rng for init and for state
     rng_init, rng_state = jax.random.split(rng)

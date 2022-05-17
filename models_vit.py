@@ -302,7 +302,7 @@ class VisionTransformer(nn.Module):
     # (Possibly partial) ResNet root.
     assert self.resnet == None
 
-    n, h, w, c = x.shape
+    # n, h, w, c = x.shape
     # We can merge s2d+emb into a single conv; it's the same.
     # x = nn.Conv(
     #     features=self.hidden_size,
@@ -314,22 +314,31 @@ class VisionTransformer(nn.Module):
     #     bias_init=patch_bias_init,
     #     )(x)
     # ------------------------------------------------------------
-    x = t5x.layers.Conv(
-        features=self.hidden_size,
-        kernel_size=self.patches.size,
-        strides=self.patches.size,
-        padding='VALID',
-        name='embedding',
-        kernel_init=patch_kernel_init,
-        bias_init=patch_bias_init,
-        kernel_axes=('_null0', '_null1', '_null2', 'embed'),
-        )(x)
+    # x = t5x.layers.Conv(
+    #     features=self.hidden_size,
+    #     kernel_size=self.patches.size,
+    #     strides=self.patches.size,
+    #     padding='VALID',
+    #     name='embedding',
+    #     kernel_init=patch_kernel_init,
+    #     bias_init=patch_bias_init,
+    #     kernel_axes=('_null0', '_null1', '_null2', 'embed'),
+    #     )(x)
 
     # Here, x is a grid of embeddings.
 
     # Transformer.
-    n, h, w, c = x.shape
-    x = jnp.reshape(x, [n, h * w, c])
+    # n, h, w, c = x.shape
+    # x = jnp.reshape(x, [n, h * w, c])
+    
+    x = t5x.layers.Dense(
+        features=self.hidden_size,
+        dtype=self.dtype,
+        kernel_axes=('_null0', 'embed'),
+        name='embedding',
+    )(x)
+
+    n, _, c = x.shape
     x = t5x.layers.with_sharding_constraint(x, ('batch', 'length', 'embed'))
     # ------------------------------------------------------------
 

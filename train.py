@@ -428,7 +428,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # ------------------------------------------------------------
     with train_state_mutex:
       for i, batch in enumerate(data_loader_train):
-        batch = parse_batch(batch, local_batch_size, mixup_fn)
+        batch = parse_batch(batch, local_batch_size, mixup_fn, config)
         state, metrics = partitioned_train_step(state, batch)
         epoch_1000x = int(step * config.batch_size / 1281167 * 1000)  # normalize to IN1K epoch anyway
 
@@ -494,7 +494,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   return state
 
 
-def parse_batch(batch, local_batch_size, mixup_fn=None):
+def parse_batch(batch, local_batch_size, mixup_fn=None, config=None):
   images, labels, labels_one_hot = batch
   if mixup_fn is not None:
     assert images.shape[1] == 3  # nchw
@@ -502,6 +502,15 @@ def parse_batch(batch, local_batch_size, mixup_fn=None):
   images = images.permute([0, 2, 3, 1])  # nchw -> nhwc
   batch = {'image': images, 'label': labels, 'label_one_hot': labels_one_hot}
   batch = prepare_pt_data(batch, local_batch_size)  # to (local_devices, device_batch_size, height, width, 3)
+
+  # --------------------------------
+  # hack:
+  n, h, w, _ = batch['image'].shape
+  seq_shape = (n, h // config.model.patches.size[0] * w // config.model.patches.size[1], 4)
+  seq = np.random.normal(0, 1, seq_shape).astype(np.float32)
+  batch['image'] = seq
+  # --------------------------------
+
   return batch
 
 
