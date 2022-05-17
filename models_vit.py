@@ -139,6 +139,7 @@ class MlpBlock(nn.Module):
     output = nn.Dropout(
         rate=self.dropout_rate)(
             output, deterministic=deterministic)
+    output = t5x.layers.with_sharding_constraint(output, ('batch', 'length', 'embed'))
     return output
 
 
@@ -313,38 +314,39 @@ class VisionTransformer(nn.Module):
     #     bias_init=patch_bias_init,
     #     )(x)
     # ------------------------------------------------------------
-    # x = t5x.layers.Conv(
-    #     features=self.hidden_size,
-    #     kernel_size=self.patches.size,
-    #     strides=self.patches.size,
-    #     padding='VALID',
-    #     name='embedding',
-    #     kernel_init=patch_kernel_init,
-    #     bias_init=patch_bias_init,
-    #     kernel_axes=('_null0', '_null1', '_null2', 'embed'),
-    #     )(x)
+    x = t5x.layers.Conv(
+        features=self.hidden_size,
+        kernel_size=self.patches.size,
+        strides=self.patches.size,
+        padding='VALID',
+        name='embedding',
+        kernel_init=patch_kernel_init,
+        bias_init=patch_bias_init,
+        kernel_axes=('_null0', '_null1', '_null2', 'embed'),
+        )(x)
 
     # Here, x is a grid of embeddings.
 
     # Transformer.
-    # n, h, w, c = x.shape
-    # x = jnp.reshape(x, [n, h * w, c])
+    n, h, w, c = x.shape
+    x = jnp.reshape(x, [n, h * w, c])
     # ------------------------------------------------------------
 
     # hack: no conv1
-    rng = self.make_rng('dropout') if train else jax.random.PRNGKey(0)
-    x = jax.random.normal(rng, shape=(n, h // self.patches.size[0] * w // self.patches.size[1], self.hidden_size))
-    n, _, c = x.shape
+    # rng = self.make_rng('dropout') if train else jax.random.PRNGKey(0)
+    # x = jax.random.normal(rng, shape=(n, h // self.patches.size[0] * w // self.patches.size[1], self.hidden_size))
+    # n, _, c = x.shape
     # ------------------------------------------------------------
 
     # If we want to add a class token, add it here.
     if self.classifier in {'token', 'tgap'}:
+      raise NotImplementedError
       cls = t5x.layers.param_with_axes('cls', clstoken_init, (1, 1, c), jnp.float32, axes=('_null0', '_null1', 'embed'))
       cls = jnp.tile(cls, [n, 1, 1])
       x = jnp.concatenate([cls, x], axis=1)
 
     # we add posemb here
-    x = AddPositionEmbs(posemb_init=posemb_init, name='posembed_encoder')(x)
+    # x = AddPositionEmbs(posemb_init=posemb_init, name='posembed_encoder')(x)
 
     x = Encoder(name='Transformer', **self.transformer)(x, train=train, encoder_norm=(self.classifier == 'token'))
 
