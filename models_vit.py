@@ -17,6 +17,7 @@ from typing import Any, Callable, Optional, Tuple
 
 import flax.linen as nn
 import jax.numpy as jnp
+import jax
 
 import t5x.layers
 
@@ -311,22 +312,30 @@ class VisionTransformer(nn.Module):
     #     kernel_init=patch_kernel_init,
     #     bias_init=patch_bias_init,
     #     )(x)
-    x = t5x.layers.Conv(
-        features=self.hidden_size,
-        kernel_size=self.patches.size,
-        strides=self.patches.size,
-        padding='VALID',
-        name='embedding',
-        kernel_init=patch_kernel_init,
-        bias_init=patch_bias_init,
-        kernel_axes=('_null0', '_null1', '_null2', 'embed'),
-        )(x)
+    # ------------------------------------------------------------
+    # x = t5x.layers.Conv(
+    #     features=self.hidden_size,
+    #     kernel_size=self.patches.size,
+    #     strides=self.patches.size,
+    #     padding='VALID',
+    #     name='embedding',
+    #     kernel_init=patch_kernel_init,
+    #     bias_init=patch_bias_init,
+    #     kernel_axes=('_null0', '_null1', '_null2', 'embed'),
+    #     )(x)
 
     # Here, x is a grid of embeddings.
 
     # Transformer.
-    n, h, w, c = x.shape
-    x = jnp.reshape(x, [n, h * w, c])
+    # n, h, w, c = x.shape
+    # x = jnp.reshape(x, [n, h * w, c])
+    # ------------------------------------------------------------
+
+    # hack: no conv1
+    rng = self.make_rng('dropout') if train else jax.random.PRNGKey(0)
+    x = jax.random.normal(rng, shape=(n, h // self.patches.size[0] * w // self.patches.size[1], self.hidden_size))
+    n, _, c = x.shape
+    # ------------------------------------------------------------
 
     # If we want to add a class token, add it here.
     if self.classifier in {'token', 'tgap'}:
