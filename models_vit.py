@@ -212,7 +212,7 @@ class Encoder1DBlock(nn.Module):
     )(x, x)
     x = nn.Dropout(rate=self.dropout_rate)(x, deterministic=deterministic)
     # droppath
-    x = nn.Dropout(rate=self.droppath_rate, broadcast_dims=(1, 2), name='droppath_msa')(x, deterministic=deterministic)
+    # x = nn.Dropout(rate=self.droppath_rate, broadcast_dims=(1, 2), name='droppath_msa')(x, deterministic=deterministic)
     x = x + inputs
 
     # MLP block.
@@ -223,7 +223,7 @@ class Encoder1DBlock(nn.Module):
         bias_init=mlp_bias_init,
         )(y, deterministic=deterministic)
     # droppath
-    y = nn.Dropout(rate=self.droppath_rate, broadcast_dims=(1, 2), name='droppath_mlp')(y, deterministic=deterministic)
+    # y = nn.Dropout(rate=self.droppath_rate, broadcast_dims=(1, 2), name='droppath_mlp')(y, deterministic=deterministic)
 
     return x + y
 
@@ -363,8 +363,10 @@ class VisionTransformer(nn.Module):
     x = t5x.layers.with_sharding_constraint(x, ('batch', 'length', 'embed'))
 
     if self.classifier == 'token':
+      raise NotImplementedError
       x = x[:, 0]
     elif self.classifier == 'tgap':
+      raise NotImplementedError
       x = x[:, 1:]
       x = jnp.mean(x, axis=list(range(1, x.ndim - 1)))  # (1,) or (1,2)
       x = t5x.layers.with_sharding_constraint(x, ('batch', 'embed'))
@@ -378,12 +380,12 @@ class VisionTransformer(nn.Module):
     else:
       raise ValueError(f'Invalid classifier={self.classifier}')
 
-    if self.representation_size is not None:
-      raise NotImplementedError 
-      # x = nn.Dense(features=self.representation_size, name='pre_logits')(x)
-      # x = nn.tanh(x)
-    else:
-      x = IdentityLayer(name='pre_logits')(x)
+    # if self.representation_size is not None:
+    #   raise NotImplementedError 
+    #   # x = nn.Dense(features=self.representation_size, name='pre_logits')(x)
+    #   # x = nn.tanh(x)
+    # else:
+    #   x = IdentityLayer(name='pre_logits')(x)
     
     # ------------------------------------------------
     # debugging BN or state
@@ -402,7 +404,6 @@ class VisionTransformer(nn.Module):
     # if train:
     #   var_bias.value += 1.
     # ------------------------------------------------
-
     if self.num_classes:
       # x = nn.Dense(
       #   features=self.num_classes,
@@ -411,7 +412,8 @@ class VisionTransformer(nn.Module):
       # )(x)      
       x = t5x.layers.Dense(
           features=self.num_classes,
-          kernel_init=lambda *args: head_kernel_init(*args) * self.rescale_head_init,
+          # kernel_init=lambda *args: head_kernel_init(*args) * self.rescale_head_init,
+          kernel_init=head_kernel_init,
           kernel_axes=('embed', 'classes'),
           name='head',
       )(x)
