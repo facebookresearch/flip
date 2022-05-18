@@ -51,9 +51,11 @@ from utils import lrd_util
 from utils import torchloader_util
 from utils import adamw_util
 
+import t5x.train_state_initializer
 from t5x.train_state_initializer import create_train_state
 import t5x.partitioning
 from t5x.ux.log_model_info import log_model_info
+import t5x.models_wrapper 
 
 import jax.profiler
 
@@ -119,7 +121,7 @@ def create_learning_rate_fn(
   return schedule_fn
 
 
-def train_step(state, batch, model, learning_rate_fn):
+def train_step(state, batch, model_wrapped, learning_rate_fn):
   """Perform a single training step."""
   _, new_rng = jax.random.split(state.rng)
   # Bind the rng key to the device id (which is unique across hosts)
@@ -141,13 +143,14 @@ def train_step(state, batch, model, learning_rate_fn):
   #   loss = cross_entropy_loss(logits, batch['label_one_hot'])
   #   return loss, (new_mutables, logits)
   assert len(state.flax_mutables) == 0
-  grad_fn = jax.value_and_grad(model.loss_fn, has_aux=True)
+  grad_fn = jax.value_and_grad(model_wrapped.loss_fn, has_aux=True)
   aux, grads = grad_fn(state.params, batch, dropout_rng)
 
   # new_mutables, logits = aux[1]
   logits = aux[1]
   new_mutables=state.flax_mutables
   metrics = compute_metrics(logits, batch['label'], batch['label_one_hot'])
+  # metrics = {'loss': -1., 'accuracy': -1.,}
 
   # for logging only
   # step = state.step
@@ -159,19 +162,6 @@ def train_step(state, batch, model, learning_rate_fn):
     learning_rate=None,  # TODO: learning_rate is not used; fix it
     flax_mutables=new_mutables)
   new_state = new_state.replace(rng=new_rng)
-  # ----------------------------------------------------------------------------
-  # modified impl.
-  # updates, new_opt_state = state.tx.update(grads, state.opt_state, state.params)
-  # new_params = optax.apply_updates(state.params, updates)
-  
-  # new_state = state.replace(
-  #   step=state.step + 1,
-  #   params=new_params,
-  #   opt_state=new_opt_state,
-  #   variables=new_variables,
-  #   rng=new_rng,
-  # )
-  # ----------------------------------------------------------------------------
 
   return new_state, metrics
 
@@ -344,10 +334,12 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   model_cls = models_vit.VisionTransformer
   model = model_cls(num_classes=len(dataset_train.classes), **config.model)
 
-  learning_rate_fn = create_learning_rate_fn(
-      config, abs_learning_rate, steps_per_epoch)
+  learning_rate_fn = create_learning_rate_fn(config, abs_learning_rate, steps_per_epoch)
 
-  state, state_axes, state_shape = create_train_state(rng, config, model, image_size, learning_rate_fn, partitioner)
+  optimizer_def = t5x.train_state_initializer.create_optimizer(config, None, learning_rate_fn)
+  model_wrapped = t5x.models_wrapper.BaseTransformerModel(module=model, optimizer_def=optimizer_def)
+
+  state, state_axes, state_shape = create_train_state(rng, config, model_wrapped, image_size, learning_rate_fn, partitioner)
 
   # logging
   log_file = os.path.join(workdir, 'model-info.txt')
@@ -372,12 +364,22 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   # to create partitioned train_step
   # TODO: learning_rate_fn for metric only; to use a smarter way?
-  train_step_fn = functools.partial(train_step, model=model, learning_rate_fn=learning_rate_fn)  # (state, batch) -> (state, metrics)
+  train_step_fn = functools.partial(train_step, model_wrapped=model_wrapped, learning_rate_fn=learning_rate_fn)  # (state, batch) -> (state, metrics)
   partitioned_train_step = partitioner.partition(
         train_step_fn,
         in_axis_resources=(state_axes, partitioner.data_partition_spec),
         out_axis_resources=(state_axes, None),
         donate_argnums=(0,))
+
+  # ------------------------------------------------------------------
+  tic = time.time()
+  batch = next(iter(data_loader_train))
+  batch = parse_batch(batch, local_batch_size, mixup_fn, config)
+  logging.info('Pre-compilation started...')
+  partitioned_train_step = partitioner.compile(partitioned_train_step, state, batch)
+  logging.info('Pre-compilation completed: {}'.format(time.time() - tic))
+  # ------------------------------------------------------------------
+
 
   eval_step_fn = functools.partial(eval_step, model=model)  # (state, batch) -> metrics
   partitioned_eval_step = partitioner.partition(

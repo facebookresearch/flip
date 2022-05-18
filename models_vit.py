@@ -418,21 +418,32 @@ class VisionTransformer(nn.Module):
 
     return x
 
-  # def loss_fn(self, params, batch, flax_mutables, dropout_rng):
-  def loss_fn(self, params, batch, dropout_rng):
-    """loss function used for training."""
-    outcome = self.apply(
-        {'params': params,}, # {'params': params, **flax_mutables},
-        inputs=batch['image'],
-        mutable=False, # mutable=flax_mutables.keys(),
-        rngs=dict(dropout=dropout_rng),
-        train=True)
-    # logits, new_mutables = outcome
-    logits = outcome
 
-    loss = cross_entropy_loss(logits, batch['label_one_hot'])
-    # return loss, (new_mutables, logits)
-    return loss, logits
+  # def compute_logits(self, params, batch, dropout_rng):
+  #   logits = self.apply(
+  #       {'params': params,}, # {'params': params, **flax_mutables},
+  #       inputs=batch['image'],
+  #       mutable=False, # mutable=flax_mutables.keys(),
+  #       rngs=dict(dropout=dropout_rng),
+  #       train=True)
+  #   return logits
+
+
+  # # def loss_fn(self, params, batch, flax_mutables, dropout_rng):
+  # def loss_fn(self, params, batch, dropout_rng):
+  #   """loss function used for training."""
+  #   logits =self.compute_logits(params, batch, dropout_rng)
+  #   # outcome = self.apply(
+  #   #     {'params': params,}, # {'params': params, **flax_mutables},
+  #   #     inputs=batch['image'],
+  #   #     mutable=False, # mutable=flax_mutables.keys(),
+  #   #     rngs=dict(dropout=dropout_rng),
+  #   #     train=True)
+  #   # logits, new_mutables = outcome
+
+  #   loss = cross_entropy_loss(logits, batch['label_one_hot'])
+  #   # return loss, (new_mutables, logits)
+  #   return loss, logits
 
 
 def cross_entropy_loss(logits, labels_one_hot):
