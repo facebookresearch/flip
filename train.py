@@ -127,30 +127,28 @@ def train_step(state, batch, model, learning_rate_fn):
   # each with multiple accelerators).
   # dropout_rng = jax.random.fold_in(state.rng, jax.lax.axis_index('batch'))
   dropout_rng = state.rng
-  def loss_fn(params):
-    """loss function used for training."""
-    mutable = [k for k in state.flax_mutables]
-    outcome = model.apply(
-        {'params': params, **state.flax_mutables},
-        inputs=batch['image'],
-        mutable=mutable,
-        rngs=dict(dropout=dropout_rng),
-        train=True)
-    logits, new_mutables = outcome
+  # def loss_fn(params):
+  #   """loss function used for training."""
+  #   mutable = [k for k in state.flax_mutables]
+  #   outcome = model.apply(
+  #       {'params': params, **state.flax_mutables},
+  #       inputs=batch['image'],
+  #       mutable=mutable,
+  #       rngs=dict(dropout=dropout_rng),
+  #       train=True)
+  #   logits, new_mutables = outcome
 
-    loss = cross_entropy_loss(logits, batch['label_one_hot'])
-    return loss, (new_mutables, logits)
-
-  step = state.step
-  lr = learning_rate_fn(step)
-
-  grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
-  aux, grads = grad_fn(state.params)
-  # Re-use same axis_name as in the call to `pmap(...train_step...)` below.
-  # grads = lax.pmean(grads, axis_name='batch')
+  #   loss = cross_entropy_loss(logits, batch['label_one_hot'])
+  #   return loss, (new_mutables, logits)
+  grad_fn = jax.value_and_grad(model.loss_fn, has_aux=True)
+  aux, grads = grad_fn(state.params, batch, state.flax_mutables, dropout_rng)
 
   new_mutables, logits = aux[1]
   metrics = compute_metrics(logits, batch['label'], batch['label_one_hot'])
+
+  # for logging only
+  step = state.step
+  lr = learning_rate_fn(step)
   metrics['learning_rate'] = lr
 
   new_state = state.apply_gradient(

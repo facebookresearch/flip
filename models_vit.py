@@ -18,6 +18,7 @@ from typing import Any, Callable, Optional, Tuple
 import flax.linen as nn
 import jax.numpy as jnp
 import jax
+import optax
 
 import t5x.layers
 
@@ -330,7 +331,7 @@ class VisionTransformer(nn.Module):
     # Transformer.
     # n, h, w, c = x.shape
     # x = jnp.reshape(x, [n, h * w, c])
-    
+
     x = t5x.layers.Dense(
         features=self.hidden_size,
         dtype=self.dtype,
@@ -359,16 +360,19 @@ class VisionTransformer(nn.Module):
     # x = AddPositionEmbs(posemb_init=posemb_init, name='posembed_encoder')(x)
 
     x = Encoder(name='Transformer', **self.transformer)(x, train=train, encoder_norm=(self.classifier == 'token'))
+    x = t5x.layers.with_sharding_constraint(x, ('batch', 'length', 'embed'))
 
     if self.classifier == 'token':
       x = x[:, 0]
     elif self.classifier == 'tgap':
       x = x[:, 1:]
       x = jnp.mean(x, axis=list(range(1, x.ndim - 1)))  # (1,) or (1,2)
+      x = t5x.layers.with_sharding_constraint(x, ('batch', 'embed'))
       # x = nn.LayerNorm(name='fc_norm')(x)
       x = t5x.layers.LayerNorm(name='fc_norm', axes=('embed',))(x)
     elif self.classifier == 'gap':
       x = jnp.mean(x, axis=list(range(1, x.ndim - 1)))  # (1,) or (1,2)
+      x = t5x.layers.with_sharding_constraint(x, ('batch', 'embed'))
       # x = nn.LayerNorm(name='fc_norm')(x)
       x = t5x.layers.LayerNorm(name='fc_norm', axes=('embed',))(x)
     else:
@@ -413,3 +417,22 @@ class VisionTransformer(nn.Module):
       )(x)
 
     return x
+
+  def loss_fn(self, params, batch, flax_mutables, dropout_rng):
+    """loss function used for training."""
+    mutable = [k for k in flax_mutables]
+    outcome = self.apply(
+        {'params': params, **flax_mutables},
+        inputs=batch['image'],
+        mutable=mutable,
+        rngs=dict(dropout=dropout_rng),
+        train=True)
+    logits, new_mutables = outcome
+
+    loss = cross_entropy_loss(logits, batch['label_one_hot'])
+    return loss, (new_mutables, logits)
+
+
+def cross_entropy_loss(logits, labels_one_hot):
+  xentropy = optax.softmax_cross_entropy(logits=logits, labels=labels_one_hot)
+  return jnp.mean(xentropy)
