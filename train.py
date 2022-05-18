@@ -140,16 +140,19 @@ def train_step(state, batch, model, learning_rate_fn):
 
   #   loss = cross_entropy_loss(logits, batch['label_one_hot'])
   #   return loss, (new_mutables, logits)
+  assert len(state.flax_mutables) == 0
   grad_fn = jax.value_and_grad(model.loss_fn, has_aux=True)
-  aux, grads = grad_fn(state.params, batch, state.flax_mutables, dropout_rng)
+  aux, grads = grad_fn(state.params, batch, dropout_rng)
 
-  new_mutables, logits = aux[1]
+  # new_mutables, logits = aux[1]
+  logits = aux[1]
+  new_mutables=state.flax_mutables
   metrics = compute_metrics(logits, batch['label'], batch['label_one_hot'])
 
   # for logging only
-  step = state.step
-  lr = learning_rate_fn(step)
-  metrics['learning_rate'] = lr
+  # step = state.step
+  # lr = learning_rate_fn(step)
+  metrics['learning_rate'] = -1.
 
   new_state = state.apply_gradient(
     grads,

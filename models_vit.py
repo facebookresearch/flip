@@ -273,7 +273,7 @@ class Encoder(nn.Module):
           mlp_dim=self.mlp_dim,
           dropout_rate=self.dropout_rate,
           attention_dropout_rate=self.attention_dropout_rate,
-          droppath_rate=self.droppath_rate * lyr / (self.num_layers - 1),
+          droppath_rate=self.droppath_rate * lyr / (self.num_layers - 1) if lyr > 0 else 0.,
           name='encoderblock_{:02d}'.format(lyr),
           num_heads=self.num_heads,
           layer_id=lyr,
@@ -418,19 +418,21 @@ class VisionTransformer(nn.Module):
 
     return x
 
-  def loss_fn(self, params, batch, flax_mutables, dropout_rng):
+  # def loss_fn(self, params, batch, flax_mutables, dropout_rng):
+  def loss_fn(self, params, batch, dropout_rng):
     """loss function used for training."""
-    mutable = [k for k in flax_mutables]
     outcome = self.apply(
-        {'params': params, **flax_mutables},
+        {'params': params,}, # {'params': params, **flax_mutables},
         inputs=batch['image'],
-        mutable=mutable,
+        mutable=False, # mutable=flax_mutables.keys(),
         rngs=dict(dropout=dropout_rng),
         train=True)
-    logits, new_mutables = outcome
+    # logits, new_mutables = outcome
+    logits = outcome
 
     loss = cross_entropy_loss(logits, batch['label_one_hot'])
-    return loss, (new_mutables, logits)
+    # return loss, (new_mutables, logits)
+    return loss, logits
 
 
 def cross_entropy_loss(logits, labels_one_hot):
