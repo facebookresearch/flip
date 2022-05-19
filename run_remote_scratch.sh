@@ -1,7 +1,7 @@
 echo 'code dir: '$STAGEDIR
 
 # seed=0
-batch=1024
+batch=4096
 lr=1e-4
 wd=0.3
 lrd=1.0

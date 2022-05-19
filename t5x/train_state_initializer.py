@@ -1,14 +1,9 @@
 
 from absl import logging
-import flax
-from flax import struct
 import jax
 import jax.numpy as jnp
-import ml_collections
-import numpy as np
 import optax
-
-from typing import Any, Callable, Iterable, Mapping, Optional, Sequence, Tuple, Type, Union
+import functools
 
 import t5x.train_state as train_state_lib
 import t5x.optimizers
@@ -18,35 +13,16 @@ from utils import lrd_util
 from utils import adamw_util
 
 
-Array = Union[np.ndarray, jnp.ndarray, jax.pxla.ShardedDeviceArray]
-
-
-# def initialized(rng, image_size, model, init_backend='tpu'):
-#   input_shape = (1, image_size, image_size, 3)
-#   def init(*args):
-#     return model.init(*args, train=False)
-#   init = jax.jit(init, backend=init_backend)
-#   logging.info('Initializing params...')
-#   variables = init({'params': rng}, jnp.ones(input_shape, model.dtype))
-#   logging.info('Initializing params done.')
-#   return variables
-
-
-def init_fn(rng, image_size, model, init_backend='tpu'):
+def init_fn(rng, image_size, model):
   input_shape = (1, image_size, image_size, 3)
-  def init(*args):
-    return model.init(*args, train=False)
-  init = jax.jit(init, backend=init_backend)
-  variables = init({'params': rng}, jnp.ones(input_shape, model.dtype))
+  variables = model.init({'params': rng}, jnp.ones(input_shape, model.dtype), train=False)
   return variables
 
 
-def initialized_shapes(rng, image_size, model):
+def init_shapes(rng, image_size, model):
   input_shape = (1, image_size, image_size, 3)
-  def init(*args):
-    return model.init(*args, train=False)
+  init = functools.partial(model.init, train=False) 
   variables_shape = jax.eval_shape(init, {'params': rng}, jnp.ones(input_shape, model.dtype))
-  # logging.info('variables_shape:\n{}'.format(variables_shape))
   return variables_shape
 
 
@@ -58,7 +34,7 @@ def create_optimizer(config, params_names, learning_rate_fn):
       opt_util.filter_parameters(params_names, opt_util.filter_bias_and_norm),
       opt_util.filter_parameters(params_names, opt_util.filter_cls_and_posembed)
     )
-  # logging.info('Apply wd: {}'.format(mask))
+  logging.info('Apply wd: {}'.format(mask))
 
   optimizer_def = getattr(adamw_util, config.opt_type)  # optax.adamw
   optimizer_def = t5x.optimizers.wrap_optax_optimizer(optimizer_def)
@@ -76,18 +52,17 @@ def create_optimizer(config, params_names, learning_rate_fn):
   return tx
 
 
-def create_train_state(rng, config: ml_collections.ConfigDict,
-                       model, image_size, learning_rate_fn, partitioner):
+def create_train_state(rng, config, model, image_size, learning_rate_fn, partitioner):
   """Create initial training state."""
   # create optimizer first
-  params_shapes = initialized_shapes(jax.random.PRNGKey(0), image_size, model)  # inference names
+  params_shapes = init_shapes(rng, image_size, model)
   optimizer_def = create_optimizer(config, params_shapes['params'], learning_rate_fn)
 
   # optional: rescale
   assert not config.rescale_init  # TODO: move to model
 
   # ---------------------------------------------------------------------------
-  def initialize_train_state(rng: Array):
+  def initialize_train_state(rng):
     # split rng for init and for state
     rng_init, rng_state = jax.random.split(rng)
     initial_variables = init_fn(rng=rng_init, image_size=image_size, model=model)
@@ -108,14 +83,6 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
   train_state = p_initialize_train_state_fn(rng)
   logging.info('Initializing train_state done.')
 
-  # for debug
-  # k = train_state.params['Transformer']['encoderblock_00']['MlpBlock_0']['Dense_0']['kernel']
-  # k.sharding_spec
-
-  # --------------------------------------------------
-  # not partitioned
-  # --------------------------------------------------
-  # train_state = initialize_train_state(rng)
   return train_state, train_state_axes, train_state_shape
   
 
