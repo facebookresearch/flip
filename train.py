@@ -352,7 +352,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   # log some info
   log_model_info(None, state_shape, partitioner)
-  # profile_memory(work_dir)
+  # profile_memory(workdir)
 
   if config.resume_dir != '':
     state = restore_checkpoint(state, config.resume_dir)
