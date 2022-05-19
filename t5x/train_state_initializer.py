@@ -32,8 +32,8 @@ Array = Union[np.ndarray, jnp.ndarray, jax.pxla.ShardedDeviceArray]
 #   return variables
 
 
-def init_fn(rng, input_shape, model, init_backend='tpu'):
-  # input_shape = (1, image_size, image_size, 3)
+def init_fn(rng, image_size, model, init_backend='tpu'):
+  input_shape = (1, image_size, image_size, 3)
   def init(*args):
     return model.init(*args, train=False)
   init = jax.jit(init, backend=init_backend)
@@ -41,19 +41,19 @@ def init_fn(rng, input_shape, model, init_backend='tpu'):
   return variables
 
 
-def initialized_shapes(rng, input_shape, model):
-  # input_shape = (1, image_size, image_size, 3)
+def initialized_shapes(rng, image_size, model):
+  input_shape = (1, image_size, image_size, 3)
   def init(*args):
     return model.init(*args, train=False)
   variables_shape = jax.eval_shape(init, {'params': rng}, jnp.ones(input_shape, model.dtype))
+  # logging.info('variables_shape:\n{}'.format(variables_shape))
   return variables_shape
 
 
-def create_optimizer(config, params_names=None, learning_rate_fn=None):
+def create_optimizer(config, params_names, learning_rate_fn):
   # optional: exclude some wd
   mask = None
-  if config.exclude_wd and params_names is not None:
-    raise NotImplementedError
+  if config.exclude_wd:
     mask = jax.tree_util.tree_map(lambda x, y: bool(x and y), 
       opt_util.filter_parameters(params_names, opt_util.filter_bias_and_norm),
       opt_util.filter_parameters(params_names, opt_util.filter_cls_and_posembed)
@@ -77,14 +77,11 @@ def create_optimizer(config, params_names=None, learning_rate_fn=None):
 
 
 def create_train_state(rng, config: ml_collections.ConfigDict,
-                       model_wrapped, image_size, learning_rate_fn, partitioner):
+                       model, image_size, learning_rate_fn, partitioner):
   """Create initial training state."""
-  input_shape = (config.batch_size, image_size, image_size, 3)
-  # input_shape = (config.batch_size, image_size // config.model.patches.size[0] * image_size // config.model.patches.size[1], 4)
   # create optimizer first
-  # params_shapes = initialized_shapes(jax.random.PRNGKey(0), input_shape, model_wrapped.module)  # inference names
-  # optimizer_def = create_optimizer(config, params_shapes['params'], learning_rate_fn)
-  optimizer_def = model_wrapped.optimizer_def
+  params_shapes = initialized_shapes(jax.random.PRNGKey(0), image_size, model)  # inference names
+  optimizer_def = create_optimizer(config, params_shapes['params'], learning_rate_fn)
 
   # optional: rescale
   assert not config.rescale_init  # TODO: move to model
@@ -93,7 +90,7 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
   def initialize_train_state(rng: Array):
     # split rng for init and for state
     rng_init, rng_state = jax.random.split(rng)
-    initial_variables = init_fn(rng=rng_init, input_shape=input_shape, model=model_wrapped.module)
+    initial_variables = init_fn(rng=rng_init, image_size=image_size, model=model)
     if optimizer_def:
       return train_state_lib.FlaxOptimTrainState.create(
           optimizer_def, initial_variables, rng=rng_state)
@@ -119,6 +116,6 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
   # not partitioned
   # --------------------------------------------------
   # train_state = initialize_train_state(rng)
-  return train_state, train_state_axes, global_train_state_shape
+  return train_state, train_state_axes
   
 

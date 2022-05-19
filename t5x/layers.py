@@ -621,30 +621,6 @@ class Conv(nn.Conv):
 
 
 #------------------------------------------------------------------------------
-# T5 Layernorm - no subtraction of mean or bias.
-#------------------------------------------------------------------------------
-# class LayerNorm(nn.Module):
-#   """T5 Layer normalization operating on the last axis of the input data."""
-#   epsilon: float = 1e-6
-#   dtype: Any = jnp.float32
-#   scale_init: Initializer = nn.initializers.ones
-#   axes: Tuple[str, ...] = ()
-
-#   @nn.compact
-#   def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
-#     """Applies layer normalization on the input."""
-#     x = jnp.asarray(x, jnp.float32)
-#     features = x.shape[-1]
-#     mean2 = jnp.mean(lax.square(x), axis=-1, keepdims=True)
-#     y = jnp.asarray(x * lax.rsqrt(mean2 + self.epsilon), self.dtype)
-#     scale = param_with_axes(
-#         'scale', self.scale_init, (features,), jnp.float32, axes=self.axes)
-
-#     scale = jnp.asarray(scale, self.dtype)
-#     return y * scale
-
-
-#------------------------------------------------------------------------------
 # Normalization layers
 #------------------------------------------------------------------------------
 class LayerNorm(nn.Module):
@@ -740,53 +716,3 @@ def _normalize(mdl: nn.Module, x: Array, mean: Array, var: Array,
     #                  param_dtype).reshape(feature_shape)
     y += bias
   return jnp.asarray(y, dtype)
-
-
-#------------------------------------------------------------------------------
-# Dropout
-#------------------------------------------------------------------------------
-class Dropout(nn.Module):
-  """Create a dropout layer.
-
-    Attributes:
-      rate: the dropout probability.  (_not_ the keep rate!)
-      broadcast_dims: dimensions that will share the same dropout mask
-      deterministic: if false the inputs are scaled by `1 / (1 - rate)` and
-        masked, whereas if true, no mask is applied and the inputs are returned
-        as is.
-  """
-  rate: float
-  broadcast_dims: Sequence[int] = ()
-  deterministic: Optional[bool] = None
-
-  @nn.compact
-  def __call__(self, inputs, deterministic: Optional[bool] = None):
-    """Applies a random dropout mask to the input.
-
-    Args:
-      inputs: the inputs that should be randomly masked.
-      deterministic: if false the inputs are scaled by `1 / (1 - rate)` and
-        masked, whereas if true, no mask is applied and the inputs are returned
-        as is.
-
-    Returns:
-      The masked inputs reweighted to preserve mean.
-    """
-    deterministic = nn.merge_param(
-        'deterministic', self.deterministic, deterministic)
-    if self.rate == 0.:
-      return inputs
-    keep_prob = 1. - self.rate
-    if deterministic:
-      return inputs
-    else:
-      rng = self.make_rng('dropout')
-      broadcast_shape = list(inputs.shape)
-      for dim in self.broadcast_dims:
-        broadcast_shape[dim] = 1
-      mask = random.bernoulli(rng, p=keep_prob, shape=broadcast_shape)
-      mask = jnp.broadcast_to(mask, inputs.shape)
-      multiplier = (mask.astype(inputs.dtype) / jnp.asarray(keep_prob, dtype=inputs.dtype))
-      inputs = inputs * multiplier
-      return inputs
-      # return lax.select(mask, inputs / keep_prob, jnp.zeros_like(inputs))

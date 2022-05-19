@@ -17,8 +17,6 @@ from typing import Any, Callable, Optional, Tuple
 
 import flax.linen as nn
 import jax.numpy as jnp
-import jax
-import optax
 
 import t5x.layers
 
@@ -127,7 +125,7 @@ class MlpBlock(nn.Module):
         name='Dense_0',
     )(inputs)
     x = nn.gelu(x)
-    # x = nn.Dropout(rate=self.dropout_rate)(x, deterministic=deterministic)
+    x = nn.Dropout(rate=self.dropout_rate)(x, deterministic=deterministic)
     x = t5x.layers.with_sharding_constraint(x, ('batch', 'length', 'mlp'))
     output = t5x.layers.Dense(
         features=actual_out_dim,
@@ -137,8 +135,9 @@ class MlpBlock(nn.Module):
         kernel_axes=('mlp', 'embed'),
         name='Dense_1',
     )(x)
-    # output = nn.Dropout(rate=self.dropout_rate)(output, deterministic=deterministic)
-    output = t5x.layers.with_sharding_constraint(output, ('batch', 'length', 'embed'))
+    output = nn.Dropout(
+        rate=self.dropout_rate)(
+            output, deterministic=deterministic)
     return output
 
 
@@ -208,9 +207,9 @@ class Encoder1DBlock(nn.Module):
         dropout_rate=self.attention_dropout_rate,
         num_heads=self.num_heads,
     )(x, x)
-    x = t5x.layers.Dropout(rate=self.dropout_rate)(x, deterministic=deterministic)
+    x = nn.Dropout(rate=self.dropout_rate)(x, deterministic=deterministic)
     # droppath
-    x = t5x.layers.Dropout(rate=self.droppath_rate, broadcast_dims=(1, 2), name='droppath_msa')(x, deterministic=deterministic)
+    x = nn.Dropout(rate=self.droppath_rate, broadcast_dims=(1, 2), name='droppath_msa')(x, deterministic=deterministic)
     x = x + inputs
 
     # MLP block.
@@ -221,9 +220,9 @@ class Encoder1DBlock(nn.Module):
         bias_init=mlp_bias_init,
         )(y, deterministic=deterministic)
     # droppath
-    y = t5x.layers.Dropout(rate=self.droppath_rate, broadcast_dims=(1, 2), name='droppath_mlp')(y, deterministic=deterministic)
-    y = x + y
-    return y
+    y = nn.Dropout(rate=self.droppath_rate, broadcast_dims=(1, 2), name='droppath_mlp')(y, deterministic=deterministic)
+
+    return x + y
 
 
 class Encoder(nn.Module):
@@ -271,7 +270,7 @@ class Encoder(nn.Module):
           mlp_dim=self.mlp_dim,
           dropout_rate=self.dropout_rate,
           attention_dropout_rate=self.attention_dropout_rate,
-          droppath_rate=self.droppath_rate * lyr / (self.num_layers - 1) if lyr > 0 else 0.,
+          droppath_rate=self.droppath_rate * lyr / (self.num_layers - 1),
           name='encoderblock_{:02d}'.format(lyr),
           num_heads=self.num_heads,
           layer_id=lyr,
@@ -301,7 +300,7 @@ class VisionTransformer(nn.Module):
     # (Possibly partial) ResNet root.
     assert self.resnet == None
 
-    # n, h, w, c = x.shape
+    n, h, w, c = x.shape
     # We can merge s2d+emb into a single conv; it's the same.
     # x = nn.Conv(
     #     features=self.hidden_size,
@@ -312,7 +311,6 @@ class VisionTransformer(nn.Module):
     #     kernel_init=patch_kernel_init,
     #     bias_init=patch_bias_init,
     #     )(x)
-    # ------------------------------------------------------------
     x = t5x.layers.Conv(
         features=self.hidden_size,
         kernel_size=self.patches.size,
@@ -330,23 +328,6 @@ class VisionTransformer(nn.Module):
     n, h, w, c = x.shape
     x = jnp.reshape(x, [n, h * w, c])
 
-    # x = t5x.layers.Dense(
-    #     features=self.hidden_size,
-    #     dtype=self.dtype,
-    #     kernel_axes=('_null0', 'embed'),
-    #     name='embedding',
-    # )(x)
-
-    n, _, c = x.shape
-    x = t5x.layers.with_sharding_constraint(x, ('batch', 'length', 'embed'))
-    # ------------------------------------------------------------
-
-    # hack: no conv1
-    # rng = self.make_rng('dropout') if train else jax.random.PRNGKey(0)
-    # x = jax.random.normal(rng, shape=(n, h // self.patches.size[0] * w // self.patches.size[1], self.hidden_size))
-    # n, _, c = x.shape
-    # ------------------------------------------------------------
-
     # If we want to add a class token, add it here.
     if self.classifier in {'token', 'tgap'}:
       cls = t5x.layers.param_with_axes('cls', clstoken_init, (1, 1, c), jnp.float32, axes=('_null0', '_null1', 'embed'))
@@ -357,20 +338,16 @@ class VisionTransformer(nn.Module):
     x = AddPositionEmbs(posemb_init=posemb_init, name='posembed_encoder')(x)
 
     x = Encoder(name='Transformer', **self.transformer)(x, train=train, encoder_norm=(self.classifier == 'token'))
-    x = t5x.layers.with_sharding_constraint(x, ('batch', 'length', 'embed'))
 
     if self.classifier == 'token':
-      raise NotImplementedError
       x = x[:, 0]
     elif self.classifier == 'tgap':
       x = x[:, 1:]
       x = jnp.mean(x, axis=list(range(1, x.ndim - 1)))  # (1,) or (1,2)
-      x = t5x.layers.with_sharding_constraint(x, ('batch', 'embed'))
       # x = nn.LayerNorm(name='fc_norm')(x)
       x = t5x.layers.LayerNorm(name='fc_norm', axes=('embed',))(x)
     elif self.classifier == 'gap':
       x = jnp.mean(x, axis=list(range(1, x.ndim - 1)))  # (1,) or (1,2)
-      x = t5x.layers.with_sharding_constraint(x, ('batch', 'embed'))
       # x = nn.LayerNorm(name='fc_norm')(x)
       x = t5x.layers.LayerNorm(name='fc_norm', axes=('embed',))(x)
     else:
@@ -400,6 +377,7 @@ class VisionTransformer(nn.Module):
     # if train:
     #   var_bias.value += 1.
     # ------------------------------------------------
+
     if self.num_classes:
       # x = nn.Dense(
       #   features=self.num_classes,
@@ -408,42 +386,9 @@ class VisionTransformer(nn.Module):
       # )(x)      
       x = t5x.layers.Dense(
           features=self.num_classes,
-          # kernel_init=lambda *args: head_kernel_init(*args) * self.rescale_head_init,
-          kernel_init=head_kernel_init,
+          kernel_init=lambda *args: head_kernel_init(*args) * self.rescale_head_init,
           kernel_axes=('embed', 'classes'),
           name='head',
       )(x)
 
     return x
-
-
-  # def compute_logits(self, params, batch, dropout_rng):
-  #   logits = self.apply(
-  #       {'params': params,}, # {'params': params, **flax_mutables},
-  #       inputs=batch['image'],
-  #       mutable=False, # mutable=flax_mutables.keys(),
-  #       rngs=dict(dropout=dropout_rng),
-  #       train=True)
-  #   return logits
-
-
-  # # def loss_fn(self, params, batch, flax_mutables, dropout_rng):
-  # def loss_fn(self, params, batch, dropout_rng):
-  #   """loss function used for training."""
-  #   logits =self.compute_logits(params, batch, dropout_rng)
-  #   # outcome = self.apply(
-  #   #     {'params': params,}, # {'params': params, **flax_mutables},
-  #   #     inputs=batch['image'],
-  #   #     mutable=False, # mutable=flax_mutables.keys(),
-  #   #     rngs=dict(dropout=dropout_rng),
-  #   #     train=True)
-  #   # logits, new_mutables = outcome
-
-  #   loss = cross_entropy_loss(logits, batch['label_one_hot'])
-  #   # return loss, (new_mutables, logits)
-  #   return loss, logits
-
-
-def cross_entropy_loss(logits, labels_one_hot):
-  xentropy = optax.softmax_cross_entropy(logits=logits, labels=labels_one_hot)
-  return jnp.mean(xentropy)

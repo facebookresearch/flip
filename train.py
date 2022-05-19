@@ -20,7 +20,6 @@ The data is loaded using tensorflow_datasets.
 
 import functools
 from threading import local
-import threading
 import time, datetime
 from typing import Any
 
@@ -51,12 +50,8 @@ from utils import lrd_util
 from utils import torchloader_util
 from utils import adamw_util
 
-import t5x.train_state_initializer
 from t5x.train_state_initializer import create_train_state
 import t5x.partitioning
-from t5x.ux.log_model_info import log_model_info
-import t5x.models_wrapper 
-import t5x.rng
 
 import jax.profiler
 
@@ -122,7 +117,7 @@ def create_learning_rate_fn(
   return schedule_fn
 
 
-def train_step(state, batch, model_wrapped, learning_rate_fn):
+def train_step(state, batch, model, learning_rate_fn):
   """Perform a single training step."""
   _, new_rng = jax.random.split(state.rng)
   # Bind the rng key to the device id (which is unique across hosts)
@@ -130,40 +125,50 @@ def train_step(state, batch, model_wrapped, learning_rate_fn):
   # each with multiple accelerators).
   # dropout_rng = jax.random.fold_in(state.rng, jax.lax.axis_index('batch'))
   dropout_rng = state.rng
+  def loss_fn(params):
+    """loss function used for training."""
+    mutable = [k for k in state.flax_mutables]
+    outcome = model.apply(
+        {'params': params, **state.flax_mutables},
+        inputs=batch['image'],
+        mutable=mutable,
+        rngs=dict(dropout=dropout_rng),
+        train=True)
+    logits, new_mutables = outcome
 
-  # def loss_fn(params):
-  #   """loss function used for training."""
-  #   mutable = [k for k in state.flax_mutables]
-  #   outcome = model.apply(
-  #       {'params': params, **state.flax_mutables},
-  #       inputs=batch['image'],
-  #       mutable=mutable,
-  #       rngs=dict(dropout=dropout_rng),
-  #       train=True)
-  #   logits, new_mutables = outcome
+    loss = cross_entropy_loss(logits, batch['label_one_hot'])
+    return loss, (new_mutables, logits)
 
-  #   loss = cross_entropy_loss(logits, batch['label_one_hot'])
-  #   return loss, (new_mutables, logits)
-  assert len(state.flax_mutables) == 0
-  grad_fn = jax.value_and_grad(model_wrapped.loss_fn, has_aux=True)
-  aux, grads = grad_fn(state.params, batch, dropout_rng)
+  step = state.step
+  lr = learning_rate_fn(step)
 
-  # new_mutables, logits = aux[1]
-  logits = aux[1]
-  new_mutables=state.flax_mutables
+  grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
+  aux, grads = grad_fn(state.params)
+  # Re-use same axis_name as in the call to `pmap(...train_step...)` below.
+  # grads = lax.pmean(grads, axis_name='batch')
+
+  new_mutables, logits = aux[1]
   metrics = compute_metrics(logits, batch['label'], batch['label_one_hot'])
-  # metrics = {'loss': -1., 'accuracy': -1.,}
-
-  # for logging only
-  # step = state.step
-  # lr = learning_rate_fn(step)
-  metrics['learning_rate'] = -1.
+  metrics['learning_rate'] = lr
 
   new_state = state.apply_gradient(
     grads,
     learning_rate=None,  # TODO: learning_rate is not used; fix it
     flax_mutables=new_mutables)
   new_state = new_state.replace(rng=new_rng)
+  # ----------------------------------------------------------------------------
+  # modified impl.
+  # updates, new_opt_state = state.tx.update(grads, state.opt_state, state.params)
+  # new_params = optax.apply_updates(state.params, updates)
+  
+  # new_state = state.replace(
+  #   step=state.step + 1,
+  #   params=new_params,
+  #   opt_state=new_opt_state,
+  #   variables=new_variables,
+  #   rng=new_rng,
+  # )
+  # ----------------------------------------------------------------------------
 
   return new_state, metrics
 
@@ -264,8 +269,6 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   # ------------------------------------
   rng_torch = set_seed_torch(config.seed_pt)
   tf.random.set_seed(config.seed_tf + jax.process_index())
-
-  t5x.rng.set_hardware_rng_ops()
   rng = random.PRNGKey(config.seed_jax)  # used to be 0
   # ------------------------------------
 
@@ -338,17 +341,10 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   model_cls = models_vit.VisionTransformer
   model = model_cls(num_classes=len(dataset_train.classes), **config.model)
 
-  learning_rate_fn = create_learning_rate_fn(config, abs_learning_rate, steps_per_epoch)
+  learning_rate_fn = create_learning_rate_fn(
+      config, abs_learning_rate, steps_per_epoch)
 
-  optimizer_def = t5x.train_state_initializer.create_optimizer(config, None, learning_rate_fn)
-  model_wrapped = t5x.models_wrapper.BaseTransformerModel(module=model, optimizer_def=optimizer_def)
-
-  state, state_axes, state_shape = create_train_state(rng, config, model_wrapped, image_size, learning_rate_fn, partitioner)
-
-  # logging
-  log_file = os.path.join(workdir, 'model-info.txt')
-  log_model_info(log_file, state_shape, partitioner)
-
+  state, state_axes = create_train_state(rng, config, model, image_size, learning_rate_fn, partitioner)
 
   if config.resume_dir != '':
     state = restore_checkpoint(state, config.resume_dir)
@@ -368,22 +364,12 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   # to create partitioned train_step
   # TODO: learning_rate_fn for metric only; to use a smarter way?
-  train_step_fn = functools.partial(train_step, model_wrapped=model_wrapped, learning_rate_fn=learning_rate_fn)  # (state, batch) -> (state, metrics)
+  train_step_fn = functools.partial(train_step, model=model, learning_rate_fn=learning_rate_fn)  # (state, batch) -> (state, metrics)
   partitioned_train_step = partitioner.partition(
         train_step_fn,
         in_axis_resources=(state_axes, partitioner.data_partition_spec),
         out_axis_resources=(state_axes, None),
         donate_argnums=(0,))
-
-  # ------------------------------------------------------------------
-  tic = time.time()
-  batch = next(iter(data_loader_train))
-  batch = parse_batch(batch, local_batch_size, mixup_fn, config)
-  logging.info('Pre-compilation started...')
-  partitioned_train_step = partitioner.compile(partitioned_train_step, state, batch)
-  logging.info('Pre-compilation completed: {}'.format(time.time() - tic))
-  # ------------------------------------------------------------------
-
 
   eval_step_fn = functools.partial(eval_step, model=model)  # (state, batch) -> metrics
   partitioned_eval_step = partitioner.partition(
@@ -409,6 +395,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   train_metrics = []
 
+  logging.info('Work dir: {}'.format(workdir))
   train_metrics_last_t = time.time()
   logging.info('Initial compilation, this might take some minutes...')
 
@@ -423,50 +410,45 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   assert step == int(jnp.reshape(state.step, (-1,))[0])  # sanity when loading
 
   best_acc = 0.
-
-  train_state_mutex = threading.RLock()
-
   for epoch in range(epoch_offset, int(config.num_epochs)):
     data_loader_train.sampler.set_epoch(epoch)  # reset random seed
-
-    logging.info('Work dir: {}'.format(workdir))
+    
     # ------------------------------------------------------------
     # train one epoch
     # ------------------------------------------------------------
-    with train_state_mutex:
-      for i, batch in enumerate(data_loader_train):
-        batch = parse_batch(batch, local_batch_size, mixup_fn, config)
-        state, metrics = partitioned_train_step(state, batch)
-        epoch_1000x = int(step * config.batch_size / 1281167 * 1000)  # normalize to IN1K epoch anyway
+    for i, batch in enumerate(data_loader_train):
+      batch = parse_batch(batch, local_batch_size, mixup_fn)
+      state, metrics = partitioned_train_step(state, batch)
+      epoch_1000x = int(step * config.batch_size / 1281167 * 1000)  # normalize to IN1K epoch anyway
 
-        if epoch == epoch_offset and i == 0:
-          logging.info('Initial compilation completed.')
-          start_time = time.time()  # log the time after compilation
+      if epoch == epoch_offset and i == 0:
+        logging.info('Initial compilation completed.')
+        start_time = time.time()  # log the time after compilation
 
-        if config.get('log_every_steps'):
-          train_metrics.append(metrics)
-          if (step + 1) % config.log_every_steps == 0:
-            # Wait until computations are done before exiting
-            jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
-            train_metrics = common_utils.get_metrics(jax.tree_map(lambda x: jnp.reshape(x, (-1,)), train_metrics))
-            summary = {
-                f'train_{k}': float(v)
-                for k, v in jax.tree_map(lambda x: x.mean(), train_metrics).items()
-            }
-            summary['steps_per_second'] = config.log_every_steps / (
-                time.time() - train_metrics_last_t)
+      if config.get('log_every_steps'):
+        train_metrics.append(metrics)
+        if (step + 1) % config.log_every_steps == 0:
+          # Wait until computations are done before exiting
+          jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
+          train_metrics = common_utils.get_metrics(jax.tree_map(lambda x: jnp.reshape(x, (-1,)), train_metrics))
+          summary = {
+              f'train_{k}': float(v)
+              for k, v in jax.tree_map(lambda x: x.mean(), train_metrics).items()
+          }
+          summary['steps_per_second'] = config.log_every_steps / (
+              time.time() - train_metrics_last_t)
 
-            # to make it consistent with PyTorch log
-            summary['loss'] = summary['train_loss']  # add extra name
-            summary['lr'] = summary.pop('train_learning_rate')  # rename
-            summary['class_acc'] = summary.pop('train_accuracy')  # this is [0, 1]
-            summary['step_tensorboard'] = epoch_1000x  # step for tensorboard
+          # to make it consistent with PyTorch log
+          summary['loss'] = summary['train_loss']  # add extra name
+          summary['lr'] = summary.pop('train_learning_rate')  # rename
+          summary['class_acc'] = summary.pop('train_accuracy')  # this is [0, 1]
+          summary['step_tensorboard'] = epoch_1000x  # step for tensorboard
 
-            writer.write_scalars(step + 1, summary)
-            train_metrics = []
-            train_metrics_last_t = time.time()
+          writer.write_scalars(step + 1, summary)
+          train_metrics = []
+          train_metrics_last_t = time.time()
 
-        step += 1  
+      step += 1  
     # ------------------------------------------------------------
     # finished one epoch: eval
     # ------------------------------------------------------------
@@ -501,7 +483,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   return state
 
 
-def parse_batch(batch, local_batch_size, mixup_fn=None, config=None):
+def parse_batch(batch, local_batch_size, mixup_fn=None):
   images, labels, labels_one_hot = batch
   if mixup_fn is not None:
     assert images.shape[1] == 3  # nchw
@@ -509,7 +491,6 @@ def parse_batch(batch, local_batch_size, mixup_fn=None, config=None):
   images = images.permute([0, 2, 3, 1])  # nchw -> nhwc
   batch = {'image': images, 'label': labels, 'label_one_hot': labels_one_hot}
   batch = prepare_pt_data(batch, local_batch_size)  # to (local_devices, device_batch_size, height, width, 3)
-
   return batch
 
 
