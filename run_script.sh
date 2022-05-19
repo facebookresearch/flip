@@ -5,7 +5,7 @@ rm -rf tmp
 export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets
 python3 main.py \
     --workdir=./tmp \
-    --config=configs/cfg_vit_large.py \
+    --config=configs/cfg_vit_dbg.py \
     --config.batch_size=32 \
     --config.log_every_steps=10 \
     --config.num_epochs=1 \
@@ -19,7 +19,7 @@ python3 main.py \
     --config.aug.autoaug=autoaug \
     --config.model.transformer.torch_qkv=False \
     --config.eval_only=False \
-    --config.model.classifier=tgap \
+    --config.model.classifier=token \
     --config.learning_rate_decay=1. \
     --config.partitioning.num_partitions=1 \
 

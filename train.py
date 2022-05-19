@@ -52,6 +52,7 @@ from utils import adamw_util
 
 from t5x.train_state_initializer import create_train_state
 import t5x.partitioning
+import t5x.rng
 
 import jax.profiler
 
@@ -269,7 +270,9 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   # ------------------------------------
   rng_torch = set_seed_torch(config.seed_pt)
   tf.random.set_seed(config.seed_tf + jax.process_index())
-  rng = random.PRNGKey(config.seed_jax)  # used to be 0
+
+  t5x.rng.set_hardware_rng_ops()
+  rng = random.PRNGKey(config.seed_jax)
   # ------------------------------------
 
   writer = metric_writers.create_default_writer(
