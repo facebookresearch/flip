@@ -26,7 +26,31 @@ def init_shapes(rng, image_size, model):
   return variables_shape
 
 
-def create_optimizer(config, params_names, learning_rate_fn):
+def create_learning_rate_fn(
+    config,
+    base_learning_rate: float,
+    steps_per_epoch: int):
+  """Create learning rate schedule."""
+  warmup_fn = optax.linear_schedule(
+      init_value=config.warmup_abs_lr, end_value=base_learning_rate,
+      transition_steps=config.warmup_epochs * steps_per_epoch)
+  cosine_epochs = max(config.num_epochs - config.warmup_epochs, 1)
+  cosine_fn = optax.cosine_decay_schedule(
+      init_value=base_learning_rate,
+      decay_steps=cosine_epochs * steps_per_epoch,
+      alpha=config.min_abs_lr / base_learning_rate)
+  schedule_fn = optax.join_schedules(
+      schedules=[warmup_fn, cosine_fn],
+      boundaries=[config.warmup_epochs * steps_per_epoch])
+  return schedule_fn
+
+
+def create_optimizer(config, params_names, steps_per_epoch):
+
+  # create the lr schedule function
+  abs_learning_rate = config.learning_rate * config.batch_size / 256.
+  learning_rate_fn = create_learning_rate_fn(config, abs_learning_rate, steps_per_epoch)
+
   # optional: exclude some wd
   mask = None
   if config.exclude_wd:
@@ -36,10 +60,11 @@ def create_optimizer(config, params_names, learning_rate_fn):
     )
   logging.info('Apply wd: {}'.format(mask))
 
-  optimizer_def = getattr(adamw_util, config.opt_type)  # optax.adamw
-  optimizer_def = t5x.optimizers.wrap_optax_optimizer(optimizer_def)
-  tx = optimizer_def(learning_rate=learning_rate_fn, **config.opt, mask=mask, mu_dtype=getattr(jnp, config.opt_mu_dtype))
-  return tx
+  opt = getattr(adamw_util, config.opt_type)  # optax.adamw
+  opt = t5x.optimizers.wrap_optax_optimizer(opt)
+  opt = opt(learning_rate=learning_rate_fn, **config.opt, mask=mask, mu_dtype=getattr(jnp, config.opt_mu_dtype))
+  opt.metric_learning_rate_fn = learning_rate_fn  # hack for metric
+  return opt
 
   if config.learning_rate_decay < 1.:
     raise NotImplementedError
@@ -52,11 +77,11 @@ def create_optimizer(config, params_names, learning_rate_fn):
   return tx
 
 
-def create_train_state(rng, config, model, image_size, learning_rate_fn, partitioner):
+def create_train_state(rng, config, model, image_size, steps_per_epoch, partitioner):
   """Create initial training state."""
   # create optimizer first
   params_shapes = init_shapes(rng, image_size, model)
-  optimizer_def = create_optimizer(config, params_shapes['params'], learning_rate_fn)
+  opt = create_optimizer(config, params_shapes['params'], steps_per_epoch)
 
   # optional: rescale
   assert not config.rescale_init  # TODO: move to model
@@ -66,9 +91,9 @@ def create_train_state(rng, config, model, image_size, learning_rate_fn, partiti
     # split rng for init and for state
     rng_init, rng_state = jax.random.split(rng)
     initial_variables = init_fn(rng=rng_init, image_size=image_size, model=model)
-    if optimizer_def:
+    if opt:
       return train_state_lib.FlaxOptimTrainState.create(
-          optimizer_def, initial_variables, rng=rng_state)
+          opt, initial_variables, rng=rng_state)
     return train_state_lib.InferenceState.create(initial_variables)
 
   train_state_shape = jax.eval_shape(initialize_train_state, rng=rng)

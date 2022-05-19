@@ -1,5 +1,5 @@
 # VM_NAME=kmh-tpuvm-v3-128-2
-VM_NAME=kmh-tpuvm-v3-256-4
+VM_NAME=kmh-tpuvm-v3-256-1
 echo $VM_NAME
 
 # ------------------------------------------------
@@ -25,5 +25,5 @@ source run_remote_scratch.sh
 
 echo sleep 1m
 sleep 1m
-source run_kill_remote.sh > /dev/null
+source run_kill_remote.sh
 done

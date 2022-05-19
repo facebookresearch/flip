@@ -100,33 +100,30 @@ def compute_eval_metrics(logits, labels, labels_one_hot):
   return metrics
 
 
-def create_learning_rate_fn(
-    config: ml_collections.ConfigDict,
-    base_learning_rate: float,
-    steps_per_epoch: int):
-  """Create learning rate schedule."""
-  warmup_fn = optax.linear_schedule(
-      init_value=config.warmup_abs_lr, end_value=base_learning_rate,
-      transition_steps=config.warmup_epochs * steps_per_epoch)
-  cosine_epochs = max(config.num_epochs - config.warmup_epochs, 1)
-  cosine_fn = optax.cosine_decay_schedule(
-      init_value=base_learning_rate,
-      decay_steps=cosine_epochs * steps_per_epoch,
-      alpha=config.min_abs_lr / base_learning_rate)
-  schedule_fn = optax.join_schedules(
-      schedules=[warmup_fn, cosine_fn],
-      boundaries=[config.warmup_epochs * steps_per_epoch])
-  return schedule_fn
+# def create_learning_rate_fn(
+#     config: ml_collections.ConfigDict,
+#     base_learning_rate: float,
+#     steps_per_epoch: int):
+#   """Create learning rate schedule."""
+#   warmup_fn = optax.linear_schedule(
+#       init_value=config.warmup_abs_lr, end_value=base_learning_rate,
+#       transition_steps=config.warmup_epochs * steps_per_epoch)
+#   cosine_epochs = max(config.num_epochs - config.warmup_epochs, 1)
+#   cosine_fn = optax.cosine_decay_schedule(
+#       init_value=base_learning_rate,
+#       decay_steps=cosine_epochs * steps_per_epoch,
+#       alpha=config.min_abs_lr / base_learning_rate)
+#   schedule_fn = optax.join_schedules(
+#       schedules=[warmup_fn, cosine_fn],
+#       boundaries=[config.warmup_epochs * steps_per_epoch])
+#   return schedule_fn
 
 
-def train_step(state, batch, model, learning_rate_fn):
+def train_step(state, batch, model):
   """Perform a single training step."""
   _, new_rng = jax.random.split(state.rng)
-  # Bind the rng key to the device id (which is unique across hosts)
-  # Note: This is only used for multi-host training (i.e. multiple computers
-  # each with multiple accelerators).
-  # dropout_rng = jax.random.fold_in(state.rng, jax.lax.axis_index('batch'))
   dropout_rng = state.rng
+
   def loss_fn(params):
     """loss function used for training."""
     mutable = [k for k in state.flax_mutables]
@@ -141,16 +138,14 @@ def train_step(state, batch, model, learning_rate_fn):
     loss = cross_entropy_loss(logits, batch['label_one_hot'])
     return loss, (new_mutables, logits)
 
-  step = state.step
-  lr = learning_rate_fn(step)
-
   grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
   aux, grads = grad_fn(state.params)
-  # Re-use same axis_name as in the call to `pmap(...train_step...)` below.
-  # grads = lax.pmean(grads, axis_name='batch')
 
   new_mutables, logits = aux[1]
   metrics = compute_metrics(logits, batch['label'], batch['label_one_hot'])
+
+  # only for metric logging
+  lr = state._optimizer.optimizer_def.metric_learning_rate_fn(state.step)
   metrics['learning_rate'] = lr
 
   new_state = state.apply_gradient(
@@ -158,20 +153,6 @@ def train_step(state, batch, model, learning_rate_fn):
     learning_rate=None,  # TODO: learning_rate is not used; fix it
     flax_mutables=new_mutables)
   new_state = new_state.replace(rng=new_rng)
-  # ----------------------------------------------------------------------------
-  # modified impl.
-  # updates, new_opt_state = state.tx.update(grads, state.opt_state, state.params)
-  # new_params = optax.apply_updates(state.params, updates)
-  
-  # new_state = state.replace(
-  #   step=state.step + 1,
-  #   params=new_params,
-  #   opt_state=new_opt_state,
-  #   variables=new_variables,
-  #   rng=new_rng,
-  # )
-  # ----------------------------------------------------------------------------
-
   return new_state, metrics
 
 
@@ -342,15 +323,9 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   steps_per_epoch = len(data_loader_train)
   assert steps_per_epoch == len(dataset_train) // config.batch_size
   
-  abs_learning_rate = config.learning_rate * config.batch_size / 256.
+  model = models_vit.VisionTransformer(num_classes=len(dataset_train.classes), **config.model)
 
-  model_cls = models_vit.VisionTransformer
-  model = model_cls(num_classes=len(dataset_train.classes), **config.model)
-
-  learning_rate_fn = create_learning_rate_fn(
-      config, abs_learning_rate, steps_per_epoch)
-
-  state, state_axes, state_shape = create_train_state(rng, config, model, image_size, learning_rate_fn, partitioner)
+  state, state_axes, state_shape = create_train_state(rng, config, model, image_size, steps_per_epoch, partitioner)
 
   # log some info
   log_model_info(None, state_shape, partitioner)
@@ -370,11 +345,9 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   # step_offset > 0 if restarting from checkpoint
   step_offset = int(state.step)
-  # state = jax_utils.replicate(state)
 
   # to create partitioned train_step
-  # TODO: learning_rate_fn for metric only; to use a smarter way?
-  train_step_fn = functools.partial(train_step, model=model, learning_rate_fn=learning_rate_fn)  # (state, batch) -> (state, metrics)
+  train_step_fn = functools.partial(train_step, model=model)  # (state, batch) -> (state, metrics)
   partitioned_train_step = partitioner.partition(
         train_step_fn,
         in_axis_resources=(state_axes, partitioner.data_partition_spec),
@@ -393,15 +366,6 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   # batch = parse_batch(batch, local_batch_size, mixup_fn)
   # metrics = partitioned_eval_step(state, batch)
   # ------------------------------------------
-
-  # p_train_step = jax.pmap(
-  #     functools.partial(train_step, model=model, learning_rate_fn=learning_rate_fn),
-  #     axis_name='batch',
-  #     donate_argnums=(0,) if config.donate else ()
-  #     )
-  # p_eval_step = jax.pmap(
-  #     functools.partial(eval_step, model=model),
-  #     axis_name='batch')
 
   train_metrics = []
 

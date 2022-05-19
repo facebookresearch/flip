@@ -411,19 +411,19 @@ def wrap_optax_optimizer(optax_optimizer):
   return wrapped_optimizer
 
 
-adabelief = wrap_optax_optimizer(optax.adabelief)
-adagrad = wrap_optax_optimizer(optax.adagrad)
-adam = wrap_optax_optimizer(optax.adam)
-adamw = wrap_optax_optimizer(optax.adamw)
-fromage = wrap_optax_optimizer(optax.fromage)
-lars = wrap_optax_optimizer(optax.lars)
-lamb = wrap_optax_optimizer(optax.lamb)
-noisy_sgd = wrap_optax_optimizer(optax.noisy_sgd)
-radam = wrap_optax_optimizer(optax.radam)
-rmsprop = wrap_optax_optimizer(optax.rmsprop)
-sgd = wrap_optax_optimizer(optax.sgd)
-yogi = wrap_optax_optimizer(optax.yogi)
-dpsgd = wrap_optax_optimizer(optax.dpsgd)
+# adabelief = wrap_optax_optimizer(optax.adabelief)
+# adagrad = wrap_optax_optimizer(optax.adagrad)
+# adam = wrap_optax_optimizer(optax.adam)
+# adamw = wrap_optax_optimizer(optax.adamw)
+# fromage = wrap_optax_optimizer(optax.fromage)
+# lars = wrap_optax_optimizer(optax.lars)
+# lamb = wrap_optax_optimizer(optax.lamb)
+# noisy_sgd = wrap_optax_optimizer(optax.noisy_sgd)
+# radam = wrap_optax_optimizer(optax.radam)
+# rmsprop = wrap_optax_optimizer(optax.rmsprop)
+# sgd = wrap_optax_optimizer(optax.sgd)
+# yogi = wrap_optax_optimizer(optax.yogi)
+# dpsgd = wrap_optax_optimizer(optax.dpsgd)
 
 # Excluded optimizers:
 # TODO(levskaya): add shampoo, sm3
