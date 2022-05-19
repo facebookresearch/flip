@@ -58,23 +58,20 @@ def create_optimizer(config, params_names, steps_per_epoch):
       opt_util.filter_parameters(params_names, opt_util.filter_bias_and_norm),
       opt_util.filter_parameters(params_names, opt_util.filter_cls_and_posembed)
     )
-  logging.info('Apply wd: {}'.format(mask))
+  # logging.info('Apply wd: {}'.format(mask))
 
   opt = getattr(adamw_util, config.opt_type)  # optax.adamw
   opt = t5x.optimizers.wrap_optax_optimizer(opt)
   opt = opt(learning_rate=learning_rate_fn, **config.opt, mask=mask, mu_dtype=getattr(jnp, config.opt_mu_dtype))
   opt.metric_learning_rate_fn = learning_rate_fn  # hack for metric
-  return opt
 
-  if config.learning_rate_decay < 1.:
-    raise NotImplementedError
+  if config.learning_rate_decay <= 1.:
     lrd_func = lrd_util.lrd_func(config.model.transformer.num_layers, config.learning_rate_decay)
-    lrd = lrd_util.filter_parameters(params, lrd_func)
-    # logging.info('Apply lrd: {}'.format(lrd))
-    tx = optax._src.combine.chain(tx, lrd_util.scale_by_lrd(lrd))
+    lrd = lrd_util.filter_parameters(params_names, lrd_func)
+    logging.info('Apply lrd: {}'.format(lrd))
+    opt.optax_optimizer = optax._src.combine.chain(opt.optax_optimizer, lrd_util.scale_by_lrd(lrd))
 
-  tx = optax.GradientTransformation(init=jax.jit(tx.init, backend=config.init_backend), update=tx.update)  # put to cpu
-  return tx
+  return opt
 
 
 def create_train_state(rng, config, model, image_size, steps_per_epoch, partitioner):
