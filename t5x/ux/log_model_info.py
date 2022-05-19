@@ -33,6 +33,8 @@ def log_model_info(log_file: Optional[str],
   state_dict = full_train_state.state_dict()
   total_num_params = jax.tree_util.tree_reduce(
       np.add, jax.tree_map(np.size, state_dict['target']))
+  total_num_states = jax.tree_util.tree_reduce(
+      np.add, jax.tree_map(np.size, state_dict['state']))
 
   logical_axes = partitioner.get_logical_axes(full_train_state).state_dict()
 
@@ -74,9 +76,6 @@ def log_model_info(log_file: Optional[str],
         state_utils.get_name_tree(state_dict['target'], keep_empty_nodes=True),
         state_dict['target'], logical_axes['target'], mesh_axes['target'])
 
-    _log_info_and_write_to_file(writer, 'Total number of parameters (M): %.6f',
-                                total_num_params / 1e6)
-
     # Add a blank line between params and states.
     _log_info_and_write_to_file(writer, '')
 
@@ -84,3 +83,12 @@ def log_model_info(log_file: Optional[str],
         _log_variable,
         state_utils.get_name_tree(state_dict['state'], keep_empty_nodes=True),
         state_dict['state'], logical_axes['state'], mesh_axes['state'])
+
+    _log_info_and_write_to_file(writer, 'Total number of parameters (1e6): %.6f',
+                                total_num_params / 1e6)
+    _log_info_and_write_to_file(writer, 'Total number of parameter_states (1e6): %.6f',
+                                total_num_states / 1e6)
+
+    expected_memory = (total_num_params + total_num_states) * 4
+    _log_info_and_write_to_file(writer, 'Total model memory (G, per device): %.6f',
+                                expected_memory / 1024 / 1024)
