@@ -127,7 +127,7 @@ class MlpBlock(nn.Module):
         name='Dense_0',
     )(inputs)
     x = nn.gelu(x)
-    x = nn.Dropout(rate=self.dropout_rate)(x, deterministic=deterministic)
+    # x = nn.Dropout(rate=self.dropout_rate)(x, deterministic=deterministic)
     x = t5x.layers.with_sharding_constraint(x, ('batch', 'length', 'mlp'))
     output = t5x.layers.Dense(
         features=actual_out_dim,
@@ -137,9 +137,7 @@ class MlpBlock(nn.Module):
         kernel_axes=('mlp', 'embed'),
         name='Dense_1',
     )(x)
-    output = nn.Dropout(
-        rate=self.dropout_rate)(
-            output, deterministic=deterministic)
+    # output = nn.Dropout(rate=self.dropout_rate)(output, deterministic=deterministic)
     output = t5x.layers.with_sharding_constraint(output, ('batch', 'length', 'embed'))
     return output
 
@@ -210,9 +208,9 @@ class Encoder1DBlock(nn.Module):
         dropout_rate=self.attention_dropout_rate,
         num_heads=self.num_heads,
     )(x, x)
-    x = nn.Dropout(rate=self.dropout_rate)(x, deterministic=deterministic)
+    x = t5x.layers.Dropout(rate=self.dropout_rate)(x, deterministic=deterministic)
     # droppath
-    # x = nn.Dropout(rate=self.droppath_rate, broadcast_dims=(1, 2), name='droppath_msa')(x, deterministic=deterministic)
+    x = t5x.layers.Dropout(rate=self.droppath_rate, broadcast_dims=(1, 2), name='droppath_msa')(x, deterministic=deterministic)
     x = x + inputs
 
     # MLP block.
@@ -223,9 +221,9 @@ class Encoder1DBlock(nn.Module):
         bias_init=mlp_bias_init,
         )(y, deterministic=deterministic)
     # droppath
-    # y = nn.Dropout(rate=self.droppath_rate, broadcast_dims=(1, 2), name='droppath_mlp')(y, deterministic=deterministic)
-
-    return x + y
+    y = t5x.layers.Dropout(rate=self.droppath_rate, broadcast_dims=(1, 2), name='droppath_mlp')(y, deterministic=deterministic)
+    y = x + y
+    return y
 
 
 class Encoder(nn.Module):
@@ -380,12 +378,12 @@ class VisionTransformer(nn.Module):
     else:
       raise ValueError(f'Invalid classifier={self.classifier}')
 
-    # if self.representation_size is not None:
-    #   raise NotImplementedError 
-    #   # x = nn.Dense(features=self.representation_size, name='pre_logits')(x)
-    #   # x = nn.tanh(x)
-    # else:
-    #   x = IdentityLayer(name='pre_logits')(x)
+    if self.representation_size is not None:
+      raise NotImplementedError 
+      # x = nn.Dense(features=self.representation_size, name='pre_logits')(x)
+      # x = nn.tanh(x)
+    else:
+      x = IdentityLayer(name='pre_logits')(x)
     
     # ------------------------------------------------
     # debugging BN or state

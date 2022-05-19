@@ -740,3 +740,55 @@ def _normalize(mdl: nn.Module, x: Array, mean: Array, var: Array,
     #                  param_dtype).reshape(feature_shape)
     y += bias
   return jnp.asarray(y, dtype)
+
+
+#------------------------------------------------------------------------------
+# Dropout
+#------------------------------------------------------------------------------
+class Dropout(nn.Module):
+  """Create a dropout layer.
+
+    Attributes:
+      rate: the dropout probability.  (_not_ the keep rate!)
+      broadcast_dims: dimensions that will share the same dropout mask
+      deterministic: if false the inputs are scaled by `1 / (1 - rate)` and
+        masked, whereas if true, no mask is applied and the inputs are returned
+        as is.
+  """
+  rate: float
+  broadcast_dims: Sequence[int] = ()
+  deterministic: Optional[bool] = None
+
+  @nn.compact
+  def __call__(self, inputs, deterministic: Optional[bool] = None):
+    """Applies a random dropout mask to the input.
+
+    Args:
+      inputs: the inputs that should be randomly masked.
+      deterministic: if false the inputs are scaled by `1 / (1 - rate)` and
+        masked, whereas if true, no mask is applied and the inputs are returned
+        as is.
+
+    Returns:
+      The masked inputs reweighted to preserve mean.
+    """
+    deterministic = nn.merge_param(
+        'deterministic', self.deterministic, deterministic)
+    if self.rate == 0.:
+      return inputs
+    keep_prob = 1. - self.rate
+    if deterministic:
+      return inputs
+    else:
+      rng = self.make_rng('dropout')
+      broadcast_shape = list(inputs.shape)
+      for dim in self.broadcast_dims:
+        broadcast_shape[dim] = 1
+      mask = random.bernoulli(rng, p=keep_prob, shape=broadcast_shape)
+      # mask = jnp.ones(broadcast_shape, dtype=inputs.dtype)
+      # mask = jnp.broadcast_to(mask, inputs.shape)
+      multiplier = mask
+      # multiplier = (mask.astype(inputs.dtype) / jnp.asarray(keep_prob, dtype=inputs.dtype))
+      inputs = inputs * multiplier
+      return inputs
+      # return lax.select(mask, inputs / keep_prob, jnp.zeros_like(inputs))
