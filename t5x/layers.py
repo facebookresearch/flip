@@ -785,10 +785,8 @@ class Dropout(nn.Module):
       for dim in self.broadcast_dims:
         broadcast_shape[dim] = 1
       mask = random.bernoulli(rng, p=keep_prob, shape=broadcast_shape)
-      # mask = jnp.ones(broadcast_shape, dtype=inputs.dtype)
-      # mask = jnp.broadcast_to(mask, inputs.shape)
-      multiplier = mask
-      # multiplier = (mask.astype(inputs.dtype) / jnp.asarray(keep_prob, dtype=inputs.dtype))
+      mask = jnp.broadcast_to(mask, inputs.shape)
+      multiplier = (mask.astype(inputs.dtype) / jnp.asarray(keep_prob, dtype=inputs.dtype))
       inputs = inputs * multiplier
       return inputs
       # return lax.select(mask, inputs / keep_prob, jnp.zeros_like(inputs))

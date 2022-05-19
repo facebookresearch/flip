@@ -56,6 +56,7 @@ from t5x.train_state_initializer import create_train_state
 import t5x.partitioning
 from t5x.ux.log_model_info import log_model_info
 import t5x.models_wrapper 
+import t5x.rng
 
 import jax.profiler
 
@@ -123,12 +124,11 @@ def create_learning_rate_fn(
 
 def train_step(state, batch, model_wrapped, learning_rate_fn):
   """Perform a single training step."""
-  # _, new_rng = jax.random.split(state.rng)
+  _, new_rng = jax.random.split(state.rng)
   # Bind the rng key to the device id (which is unique across hosts)
   # Note: This is only used for multi-host training (i.e. multiple computers
   # each with multiple accelerators).
   # dropout_rng = jax.random.fold_in(state.rng, jax.lax.axis_index('batch'))
-  # dropout_rng = state.rng
   dropout_rng = state.rng
 
   # def loss_fn(params):
@@ -265,8 +265,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   rng_torch = set_seed_torch(config.seed_pt)
   tf.random.set_seed(config.seed_tf + jax.process_index())
 
-
-  
+  t5x.rng.set_hardware_rng_ops()
   rng = random.PRNGKey(config.seed_jax)  # used to be 0
   # ------------------------------------
 
