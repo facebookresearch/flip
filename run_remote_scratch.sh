@@ -8,6 +8,7 @@ lrd=1.0
 ep=50
 warm=20
 dp=0.2
+beta2=0.95
 
 vitsize=large
 CONFIG=cfg_vit_${vitsize}
@@ -18,7 +19,7 @@ CONFIG=cfg_vit_${vitsize}
 
 # finetune_pytorch_recipe (ftpy): lb0.1_b0.999_cropv4_exwd_initv2_headinit0.001_tgap_dp_mixup32_cutmix32_noerase_warmlr_minlr_autoaug
 # finetune_torch_loader (fttl): randaugv2erase_TorchLoader
-JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_scratch_${VM_NAME}_${CONFIG}_${ep}ep_fttl_b${batch}_wd${wd}_lr${lr}_lrd${lrd}_dp${dp}_warm${warm}_s${seed}_fnpartition1_hwrng_log
+JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_scratch_${VM_NAME}_${CONFIG}_${ep}ep_fttl_b${batch}_wd${wd}_lr${lr}_lrd${lrd}_dp${dp}_warm${warm}_s${seed}_beta${beta2}_fnpartition1_hwrng_log
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
 LOGDIR=/kmh_data/logs/${JOBNAME}
@@ -47,6 +48,7 @@ python3 main.py \
     --config.learning_rate=${lr} \
     --config.learning_rate_decay=${lrd} \
     --config.opt.weight_decay=${wd} \
+    --config.opt.b2=${beta2} \
     --config.warmup_epochs=${warm} \
     --config.log_every_steps=100 \
     --config.num_epochs=${ep} \
