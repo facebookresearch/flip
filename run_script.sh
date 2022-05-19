@@ -19,7 +19,7 @@ python3 main.py \
     --config.aug.autoaug=autoaug \
     --config.model.transformer.torch_qkv=False \
     --config.eval_only=False \
-    --config.model.classifier=gap \
+    --config.model.classifier=tgap \
     --config.learning_rate_decay=1. \
     --config.partitioning.num_partitions=1 \
 

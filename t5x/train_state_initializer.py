@@ -79,8 +79,8 @@ def create_optimizer(config, params_names=None, learning_rate_fn=None):
 def create_train_state(rng, config: ml_collections.ConfigDict,
                        model_wrapped, image_size, learning_rate_fn, partitioner):
   """Create initial training state."""
-  # input_shape = (config.batch_size, image_size, image_size, 3)
-  input_shape = (config.batch_size, image_size // config.model.patches.size[0] * image_size // config.model.patches.size[1], 4)
+  input_shape = (config.batch_size, image_size, image_size, 3)
+  # input_shape = (config.batch_size, image_size // config.model.patches.size[0] * image_size // config.model.patches.size[1], 4)
   # create optimizer first
   # params_shapes = initialized_shapes(jax.random.PRNGKey(0), input_shape, model_wrapped.module)  # inference names
   # optimizer_def = create_optimizer(config, params_shapes['params'], learning_rate_fn)

@@ -404,16 +404,16 @@ class DenseGeneral(nn.Module):
     contract_ind = tuple(range(0, len(axis)))
     y = lax.dot_general(inputs, kernel, ((axis, contract_ind), ((), ())))
 
-    # if self.use_bias:
-    #   bias = param_with_axes(
-    #       'bias',
-    #       self.bias_init,
-    #       kernel_param_shape[-1],
-    #       jnp.float32,
-    #       axes=(self.kernel_axes[-1],))
-    #   bias = jnp.asarray(bias, self.dtype)
-    #   bias = jnp.reshape(bias, (1,) * (y.ndim - len(features)) + features)
-    #   y += bias
+    if self.use_bias:
+      bias = param_with_axes(
+          'bias',
+          self.bias_init,
+          kernel_param_shape[-1],
+          jnp.float32,
+          axes=(self.kernel_axes[-1],))
+      bias = jnp.asarray(bias, self.dtype)
+      bias = jnp.reshape(bias, (1,) * (y.ndim - len(features)) + features)
+      y += bias
     return y
 
 
@@ -460,15 +460,15 @@ class Dense(nn.Module):
     y = lax.dot_general(inputs, kernel,
                         (((inputs.ndim - 1,), (0,)), ((), ())),
                         precision=self.precision)
-    # if self.use_bias:
-    #   bias = param_with_axes(
-    #       'bias',
-    #       self.bias_init,
-    #       (self.features,),
-    #       self.param_dtype,
-    #       axes=(self.kernel_axes[-1],))
-    #   bias = jnp.asarray(bias, self.dtype)
-    #   y += jnp.reshape(bias, (1,) * (y.ndim - 1) + (-1,))
+    if self.use_bias:
+      bias = param_with_axes(
+          'bias',
+          self.bias_init,
+          (self.features,),
+          self.param_dtype,
+          axes=(self.kernel_axes[-1],))
+      bias = jnp.asarray(bias, self.dtype)
+      y += jnp.reshape(bias, (1,) * (y.ndim - 1) + (-1,))
     return y
 
 
@@ -623,31 +623,31 @@ class Conv(nn.Conv):
 #------------------------------------------------------------------------------
 # T5 Layernorm - no subtraction of mean or bias.
 #------------------------------------------------------------------------------
-class LayerNorm(nn.Module):
-  """T5 Layer normalization operating on the last axis of the input data."""
-  epsilon: float = 1e-6
-  dtype: Any = jnp.float32
-  scale_init: Initializer = nn.initializers.ones
-  axes: Tuple[str, ...] = ()
+# class LayerNorm(nn.Module):
+#   """T5 Layer normalization operating on the last axis of the input data."""
+#   epsilon: float = 1e-6
+#   dtype: Any = jnp.float32
+#   scale_init: Initializer = nn.initializers.ones
+#   axes: Tuple[str, ...] = ()
 
-  @nn.compact
-  def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
-    """Applies layer normalization on the input."""
-    x = jnp.asarray(x, jnp.float32)
-    features = x.shape[-1]
-    mean2 = jnp.mean(lax.square(x), axis=-1, keepdims=True)
-    y = jnp.asarray(x * lax.rsqrt(mean2 + self.epsilon), self.dtype)
-    scale = param_with_axes(
-        'scale', self.scale_init, (features,), jnp.float32, axes=self.axes)
+#   @nn.compact
+#   def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
+#     """Applies layer normalization on the input."""
+#     x = jnp.asarray(x, jnp.float32)
+#     features = x.shape[-1]
+#     mean2 = jnp.mean(lax.square(x), axis=-1, keepdims=True)
+#     y = jnp.asarray(x * lax.rsqrt(mean2 + self.epsilon), self.dtype)
+#     scale = param_with_axes(
+#         'scale', self.scale_init, (features,), jnp.float32, axes=self.axes)
 
-    scale = jnp.asarray(scale, self.dtype)
-    return y * scale
+#     scale = jnp.asarray(scale, self.dtype)
+#     return y * scale
 
 
 #------------------------------------------------------------------------------
 # Normalization layers
 #------------------------------------------------------------------------------
-class __LayerNorm(nn.Module):
+class LayerNorm(nn.Module):
   """Layer normalization with axis names."""
   epsilon: float = 1e-6
   dtype: Any = jnp.float32

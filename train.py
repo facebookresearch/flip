@@ -510,14 +510,6 @@ def parse_batch(batch, local_batch_size, mixup_fn=None, config=None):
   batch = {'image': images, 'label': labels, 'label_one_hot': labels_one_hot}
   batch = prepare_pt_data(batch, local_batch_size)  # to (local_devices, device_batch_size, height, width, 3)
 
-  # --------------------------------
-  # hack:
-  n, h, w, _ = batch['image'].shape
-  seq_shape = (n, h // config.model.patches.size[0] * w // config.model.patches.size[1], 4)
-  seq = np.random.normal(0, 1, seq_shape).astype(np.float32)
-  batch['image'] = seq
-  # --------------------------------
-
   return batch
 
 
