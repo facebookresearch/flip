@@ -96,8 +96,8 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
           optimizer_def, initial_variables, rng=rng_state)
     return train_state_lib.InferenceState.create(initial_variables)
 
-  global_train_state_shape = jax.eval_shape(initialize_train_state, rng=rng)
-  train_state_axes = partitioner.get_mesh_axes(global_train_state_shape)
+  train_state_shape = jax.eval_shape(initialize_train_state, rng=rng)
+  train_state_axes = partitioner.get_mesh_axes(train_state_shape)
 
   p_initialize_train_state_fn = partitioner.partition(
       initialize_train_state,
@@ -116,6 +116,6 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
   # not partitioned
   # --------------------------------------------------
   # train_state = initialize_train_state(rng)
-  return train_state, train_state_axes
+  return train_state, train_state_axes, train_state_shape
   
 

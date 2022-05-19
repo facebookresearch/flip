@@ -53,6 +53,7 @@ from utils import adamw_util
 from t5x.train_state_initializer import create_train_state
 import t5x.partitioning
 import t5x.rng
+from t5x.ux.log_model_info import log_model_info
 
 import jax.profiler
 
@@ -347,7 +348,10 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   learning_rate_fn = create_learning_rate_fn(
       config, abs_learning_rate, steps_per_epoch)
 
-  state, state_axes = create_train_state(rng, config, model, image_size, learning_rate_fn, partitioner)
+  state, state_axes, state_shape = create_train_state(rng, config, model, image_size, learning_rate_fn, partitioner)
+
+  # log some info
+  log_model_info(None, state_shape, partitioner)
 
   if config.resume_dir != '':
     state = restore_checkpoint(state, config.resume_dir)
@@ -506,7 +510,7 @@ def run_eval(state, partitioned_eval_step, data_loader_val, local_batch_size, ep
     batch = parse_batch(batch, local_batch_size, mixup_fn=None)
     metrics = partitioned_eval_step(state, batch)
     eval_metrics.append(metrics)
-    logging.info('{} / {}'.format(_, len(data_loader_val)))
+    # logging.info('{} / {}'.format(_, len(data_loader_val)))
 
   # eval_metrics = jax.tree_map(lambda x: x, eval_metrics)
   eval_metrics = jax.device_get(eval_metrics)
