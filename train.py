@@ -220,7 +220,9 @@ def save_checkpoint(state, workdir):
 def profile_memory(workdir):
   jax.profiler.save_device_memory_profile("/tmp/memory.prof")
   if jax.process_index() == 0:
+    logging.info('Saving memory.prof...')
     os.system('gsutil cp /tmp/memory.prof {}'.format(workdir))
+    logging.info('Saved memory.prof.')
 
 
 # pmean only works inside pmap because it needs an axis name.
@@ -487,6 +489,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   if config.profile_memory:
     profile_memory(workdir)
+  jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
 
   return state
 

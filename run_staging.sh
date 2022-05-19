@@ -25,5 +25,5 @@ source run_remote_scratch.sh
 
 echo sleep 1m
 sleep 1m
-source run_kill_remote.sh
+source run_kill_remote.sh > /dev/null
 done
