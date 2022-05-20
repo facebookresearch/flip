@@ -328,7 +328,9 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   # Create model
   # ------------------------------------
   model = models_vit.VisionTransformer(num_classes=len(dataset_train.classes), **config.model)
-  state, state_axes, state_shape, rng = create_train_state(rng, config, model, image_size, steps_per_epoch, partitioner)
+  
+  p_init_fn, state_axes, state_shape = create_train_state(config, model, image_size, steps_per_epoch, partitioner)
+  rng_init, rng = jax.random.split(rng)
 
   log_model_info(None, state_shape, partitioner)
   # profile_memory(workdir)
@@ -342,9 +344,6 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     checkpoints_dir=workdir,
     keep=None,  # TODO: move to config
   )
-  # debug
-  # checkpointer.save(state)
-  # state = checkpointer.restore(path=checkpointer.checkpoints_dir + '/checkpoint_0')
   
   if config.resume_dir != '':
     state = checkpointer.restore(path=config.resume_dir)
@@ -352,15 +351,20 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     raise NotImplementedError
     logging.info('Loading from pre-training:')
     state = checkpoint_util.load_from_pretrain(state, config.pretrain_dir)
-
+  else:
+    logging.info('Initializing train_state...')
+    state = p_init_fn(rng_init)
+    logging.info('Initializing train_state done.')
     # stds = jax.tree_util.tree_map(lambda x: np.array(x).std(), state.params)
     # logging.info('std: {}'.format(stds))
-  
-  # try to restore
-  # state = restore_checkpoint(state, workdir)
+
+  # debug
+  checkpointer.save(state)
+  # state = checkpointer.restore(path=checkpointer.checkpoints_dir + '/checkpoint_0')
 
   # step_offset > 0 if restarting from checkpoint
   step_offset = int(state.step)
+  logging.info('step_offse: {}'.format(step_offset))
 
   # to create partitioned train_step
   train_step_fn = functools.partial(train_step, model=model, rng=rng)  # (state, batch, rng) -> (state, metrics)
