@@ -120,10 +120,11 @@ def compute_eval_metrics(logits, labels, labels_one_hot):
 #   return schedule_fn
 
 
-def train_step(state, batch, model):
+def train_step(state, batch, model, rng):
   """Perform a single training step."""
-  _, new_rng = jax.random.split(state.rng)
-  dropout_rng = state.rng
+  dropout_rng = jax.random.fold_in(rng, state.step)
+  # _, new_rng = jax.random.split(rng)
+  # dropout_rng = rng
 
   def loss_fn(params):
     """loss function used for training."""
@@ -153,7 +154,6 @@ def train_step(state, batch, model):
     grads,
     learning_rate=None,  # TODO: learning_rate is not used; fix it
     flax_mutables=new_mutables)
-  new_state = new_state.replace(rng=new_rng)
   return new_state, metrics
 
 
@@ -328,7 +328,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   # Create model
   # ------------------------------------
   model = models_vit.VisionTransformer(num_classes=len(dataset_train.classes), **config.model)
-  state, state_axes, state_shape = create_train_state(rng, config, model, image_size, steps_per_epoch, partitioner)
+  state, state_axes, state_shape, rng = create_train_state(rng, config, model, image_size, steps_per_epoch, partitioner)
 
   log_model_info(None, state_shape, partitioner)
   # profile_memory(workdir)
@@ -343,11 +343,11 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     keep=None,  # TODO: move to config
   )
   # debug
-  checkpointer.save(state)
-
+  # checkpointer.save(state)
+  # state = checkpointer.restore(path=checkpointer.checkpoints_dir + '/checkpoint_0')
+  
   if config.resume_dir != '':
-    raise NotImplementedError
-    state = restore_checkpoint(state, config.resume_dir)
+    state = checkpointer.restore(path=config.resume_dir)
   elif config.pretrain_dir != '':
     raise NotImplementedError
     logging.info('Loading from pre-training:')
@@ -363,7 +363,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   step_offset = int(state.step)
 
   # to create partitioned train_step
-  train_step_fn = functools.partial(train_step, model=model)  # (state, batch) -> (state, metrics)
+  train_step_fn = functools.partial(train_step, model=model, rng=rng)  # (state, batch, rng) -> (state, metrics)
   partitioned_train_step = partitioner.partition(
         train_step_fn,
         in_axis_resources=(state_axes, partitioner.data_partition_spec),

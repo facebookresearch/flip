@@ -118,11 +118,10 @@ class FlaxOptimTrainState(flax.struct.PyTreeNode):
   flax_mutables: FrozenDict = EMPTY_DICT
   # Contains axis metadata (e.g., names) matching flax_mutables tree.
   flax_mutables_axes: Optional[FrozenVariableDict] = None  # rewrite default as None
-  rng: Any = None
 
   @classmethod
   def create(cls, optimizer_def: optimizers.OptimizerDefType,
-             model_variables: FrozenVariableDict, rng: Any) -> 'FlaxOptimTrainState':
+             model_variables: FrozenVariableDict) -> 'FlaxOptimTrainState':
     other_variables, params = model_variables.pop('params')
     if 'params_axes' in other_variables:
       other_variables, params_axes = other_variables.pop('params_axes')
@@ -150,8 +149,7 @@ class FlaxOptimTrainState(flax.struct.PyTreeNode):
         optimizer,
         params_axes=params_axes,
         flax_mutables=flax_mutables,
-        flax_mutables_axes=flax_mutables_axes,
-        rng=rng)
+        flax_mutables_axes=flax_mutables_axes)
 
   @property
   def step(self) -> jnp.ndarray:

@@ -84,16 +84,16 @@ def create_train_state(rng, config, model, image_size, steps_per_epoch, partitio
   assert not config.rescale_init  # TODO: move to model
 
   # ---------------------------------------------------------------------------
-  def initialize_train_state(rng):
+  # kaiming: when using hardware_rng, rng is a wrapper, not an array
+  # instead, rng._keys is an array
+  rng_init, rng_state = jax.random.split(rng)
+  def initialize_train_state(rng_init):
     # split rng for init and for state
-    rng_init, rng_state = jax.random.split(rng)
     initial_variables = init_fn(rng=rng_init, image_size=image_size, model=model)
     if opt:
-      return train_state_lib.FlaxOptimTrainState.create(
-          opt, initial_variables, rng=rng_state)
+      return train_state_lib.FlaxOptimTrainState.create(opt, initial_variables)
     return train_state_lib.InferenceState.create(initial_variables)
-
-  train_state_shape = jax.eval_shape(initialize_train_state, rng=rng)
+  train_state_shape = jax.eval_shape(initialize_train_state, rng_init=rng_init)
   train_state_axes = partitioner.get_mesh_axes(train_state_shape)
 
   p_initialize_train_state_fn = partitioner.partition(
@@ -102,9 +102,9 @@ def create_train_state(rng, config, model, image_size, steps_per_epoch, partitio
       out_axis_resources=train_state_axes)
 
   logging.info('Initializing train_state...')
-  train_state = p_initialize_train_state_fn(rng)
+  train_state = p_initialize_train_state_fn(rng_init)
   logging.info('Initializing train_state done.')
 
-  return train_state, train_state_axes, train_state_shape
+  return train_state, train_state_axes, train_state_shape, rng_state
   
 
