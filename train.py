@@ -54,6 +54,7 @@ from t5x.train_state_initializer import create_train_state
 import t5x.partitioning
 import t5x.rng
 from t5x.ux.log_model_info import log_model_info
+import t5x.checkpoints
 
 import jax.profiler
 
@@ -250,7 +251,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     Final TrainState.
   """
   # ------------------------------------
-  # Set random seed
+  # Set random seeds
   # ------------------------------------
   rng_torch = set_seed_torch(config.seed_pt)
   tf.random.set_seed(config.seed_tf + jax.process_index())
@@ -262,7 +263,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   writer = metric_writers.create_default_writer(
       logdir=workdir, just_logging=jax.process_index() != 0)
 
-  image_size = 224
+  image_size = 224  # TODO: move to config and model
 
   # ------------------------------------
   # Create partitioner
@@ -323,17 +324,30 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   steps_per_epoch = len(data_loader_train)
   assert steps_per_epoch == len(dataset_train) // config.batch_size
   
+  # ------------------------------------
+  # Create model
+  # ------------------------------------
   model = models_vit.VisionTransformer(num_classes=len(dataset_train.classes), **config.model)
-
   state, state_axes, state_shape = create_train_state(rng, config, model, image_size, steps_per_epoch, partitioner)
 
-  # log some info
   log_model_info(None, state_shape, partitioner)
   # profile_memory(workdir)
 
+  # ------------------------------------
+  # Create checkpointer
+  # ------------------------------------
+  checkpointer = t5x.checkpoints.Checkpointer(
+    train_state=state_shape,
+    partitioner=partitioner,
+    checkpoints_dir=workdir,
+    keep=None,  # TODO: move to config
+  )
+
   if config.resume_dir != '':
+    raise NotImplementedError
     state = restore_checkpoint(state, config.resume_dir)
   elif config.pretrain_dir != '':
+    raise NotImplementedError
     logging.info('Loading from pre-training:')
     state = checkpoint_util.load_from_pretrain(state, config.pretrain_dir)
 
@@ -440,9 +454,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # finished one epoch: eval
     # ------------------------------------------------------------
     if (epoch + 1) % config.save_every_epochs == 0 or epoch + 1 == int(config.num_epochs):
-      logging.info('Not implemented saving checkpoint: {}'.format(workdir))
-      # state = sync_batch_stats(state)
-      # save_checkpoint(state, workdir)
+      logging.info('Saving checkpoint: {}'.format(workdir))
+      checkpointer.save(state)
 
   # Wait until computations are done before exiting
   jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()

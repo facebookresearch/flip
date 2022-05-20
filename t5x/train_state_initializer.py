@@ -68,7 +68,7 @@ def create_optimizer(config, params_names, steps_per_epoch):
   if config.learning_rate_decay <= 1.:
     lrd_func = lrd_util.lrd_func(config.model.transformer.num_layers, config.learning_rate_decay)
     lrd = lrd_util.filter_parameters(params_names, lrd_func)
-    logging.info('Apply lrd: {}'.format(lrd))
+    # logging.info('Apply lrd: {}'.format(lrd))
     opt.optax_optimizer = optax._src.combine.chain(opt.optax_optimizer, lrd_util.scale_by_lrd(lrd))
 
   return opt
