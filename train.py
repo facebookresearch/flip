@@ -202,7 +202,7 @@ def profile_memory(workdir):
   jax.profiler.save_device_memory_profile("/tmp/memory.prof")
   if jax.process_index() == 0:
     logging.info('Saving memory.prof...')
-    os.system('gsutil cp /tmp/memory.prof {}'.format(workdir))
+    os.system('cd ~; gsutil cp /tmp/memory.prof {}'.format(workdir))
     logging.info('Saved memory.prof.')
 
 
