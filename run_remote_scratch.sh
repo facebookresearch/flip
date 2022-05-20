@@ -10,7 +10,7 @@ warm=20
 dp=0.2
 beta2=0.95
 
-partitions=1
+partitions=8
 
 vitsize=large
 CONFIG=cfg_vit_${vitsize}

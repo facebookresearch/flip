@@ -342,6 +342,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     checkpoints_dir=workdir,
     keep=None,  # TODO: move to config
   )
+  # debug
+  checkpointer.save(state)
 
   if config.resume_dir != '':
     raise NotImplementedError
@@ -355,7 +357,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # logging.info('std: {}'.format(stds))
   
   # try to restore
-  state = restore_checkpoint(state, workdir)
+  # state = restore_checkpoint(state, workdir)
 
   # step_offset > 0 if restarting from checkpoint
   step_offset = int(state.step)
