@@ -61,26 +61,37 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=FutureWarning) 
 
 
-def build_dataloaders(config, rng_torch):
-  if config.batch_size % jax.device_count() > 0:
-    raise ValueError('Batch size must be divisible by the number of devices')
+def build_dataloaders(config, partitioner, rng_torch):
 
-  local_batch_size = config.batch_size // jax.process_count()
+  data_layout = partitioner.get_data_layout(config.batch_size)
+  shard_id = data_layout.shard_id
+  num_shards = data_layout.num_shards
+
+  # ----------------------------------------
+  logging_util.sync_and_delay()
+  logging_util.verbose_on()
+  logging.info(data_layout)
+  logging_util.verbose_off()
+  # ----------------------------------------
+
+  if config.batch_size % num_shards > 0:
+    raise ValueError('Batch size must be divisible by the number of devices')
+  local_batch_size = config.batch_size // num_shards
 
   dataset_val = torchloader_util.build_dataset(is_train=False, data_dir=config.torchload.data_dir, aug=config.aug)
   dataset_train = torchloader_util.build_dataset(is_train=True, data_dir=config.torchload.data_dir, aug=config.aug)
 
   sampler_train = torch.utils.data.DistributedSampler(
     dataset_train,
-    num_replicas=jax.process_count(),
-    rank=jax.process_index(),
+    num_replicas=num_shards, # jax.process_count(),
+    rank=shard_id, # jax.process_index(),
     shuffle=True,
     seed=config.seed_pt,
   )
   sampler_val = torch.utils.data.DistributedSampler(
     dataset_val,
-    num_replicas=jax.process_count(),
-    rank=jax.process_index(),
+    num_replicas=num_shards, # jax.process_count(),
+    rank=shard_id, # jax.process_index(),
     shuffle=False,
   )
   
@@ -91,7 +102,7 @@ def build_dataloaders(config, rng_torch):
     pin_memory=True,
     drop_last=True,
     generator=rng_torch,
-    worker_init_fn=seed_worker,
+    worker_init_fn=functools.partial(seed_worker, shard_id=shard_id),
     persistent_workers=True,
     timeout=60.,
   )
@@ -222,10 +233,14 @@ def profile_memory(workdir):
     logging.info('Saved memory.prof.')
 
 
-def seed_worker(worker_id):
-    worker_seed = torch.initial_seed() % 2**32 + jax.process_index()
+def seed_worker(worker_id, shard_id):
+    worker_seed = torch.initial_seed() % 2**32 + shard_id
     np.random.seed(worker_seed)
     _random.seed(worker_seed)
+
+    logging_util.verbose_on()
+    logging.info('worker_id: {}, shard_id: {}, worker_seed: {}'.format(worker_id, shard_id, worker_seed))
+    logging_util.verbose_off()
 
 
 def set_seed_torch(seed):
@@ -275,7 +290,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   # ------------------------------------
   # Create data loader
   # ------------------------------------
-  data_loader_train, data_loader_val, local_batch_size = build_dataloaders(config, rng_torch)
+  data_loader_train, data_loader_val, local_batch_size = build_dataloaders(config, partitioner, rng_torch)
 
   mixup_fn = torchloader_util.get_mixup_fn(config.aug)
 
