@@ -68,8 +68,8 @@ def build_dataloaders(config, partitioner, rng_torch):
   num_shards = data_layout.num_shards
 
   # ----------------------------------------
-  logging_util.sync_and_delay()
   logging_util.verbose_on()
+  logging_util.sync_and_delay()
   logging.info(data_layout)
   logging_util.verbose_off()
   # ----------------------------------------
@@ -118,6 +118,24 @@ def build_dataloaders(config, partitioner, rng_torch):
 
   assert len(data_loader_train) == len(dataset_train) // config.batch_size
   return data_loader_train, data_loader_val, local_batch_size
+
+
+def print_sanity_check(batch, shard_id):
+  """A sanity check when model partitions > 8 and data must be shared across nodes
+  """
+  logging_util.sync_and_delay(delay=shard_id * 0.5)
+  logging_util.verbose_on()
+  str = '{}'.format(batch['label'])
+  str = (str + ' ' * 60)[:60] + '...'
+  logging.info('shard: {}, label: {}'.format(shard_id, str))
+
+  logging_util.sync_and_delay(delay=shard_id * 0.5)
+  str = '{}'.format(np.array(batch['image'][:, 0, 0, 0]))
+  str = (str + ' ' * 60)[:60] + '...'
+  logging.info('shard: {}, image: {}'.format(shard_id, str))
+  logging_util.verbose_off()
+  return
+
 
 
 def cross_entropy_loss(logits, labels_one_hot):
@@ -234,7 +252,8 @@ def profile_memory(workdir):
 
 
 def seed_worker(worker_id, shard_id):
-    worker_seed = torch.initial_seed() % 2**32 + shard_id
+    # worker_seed = torch.initial_seed() % 2**32 + shard_id
+    worker_seed = worker_id + shard_id * 10000
     np.random.seed(worker_seed)
     _random.seed(worker_seed)
 
@@ -378,6 +397,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   step = epoch_offset * steps_per_epoch
 
   # assert step == int(jnp.reshape(state.step, (-1,))[0])  # sanity when loading
+  data_layout = partitioner.get_data_layout(config.batch_size)
+  shard_id = data_layout.shard_id
 
   best_acc = 0.
   for epoch in range(epoch_offset, int(config.num_epochs)):
@@ -386,9 +407,14 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # ------------------------------------------------------------
     # train one epoch
     # ------------------------------------------------------------
+    logging_util.sync_and_delay(10)
     for i, batch in enumerate(data_loader_train):
       batch = parse_batch(batch, local_batch_size, mixup_fn)
       state, metrics = partitioned_train_step(state, batch)
+
+      if epoch == epoch_offset and i == 0:
+        print_sanity_check(batch, shard_id)
+
       epoch_1000x = int(step * config.batch_size / 1281167 * 1000)  # normalize to IN1K epoch anyway
 
       if epoch == epoch_offset and i == 0:

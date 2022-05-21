@@ -23,7 +23,9 @@ def verbose_off():
     logging.set_verbosity(logging.ERROR)  # disable info/warning
 
 
-def sync_and_delay():
+def sync_and_delay(delay=None):
   # Block all hosts until directory is ready.
   multihost_utils.sync_global_devices(f'logging')
-  time.sleep(jax.process_index() * 0.1)
+  if delay is None:
+    delay = jax.process_index() * 0.1
+  time.sleep(delay)

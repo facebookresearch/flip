@@ -10,7 +10,7 @@ warm=5
 dp=0.2
 beta2=0.999
 
-partitions=8
+partitions=1
 
 vitsize=large
 CONFIG=cfg_vit_${vitsize}
@@ -55,7 +55,7 @@ python3 main.py \
     --config.warmup_epochs=${warm} \
     --config.log_every_steps=100 \
     --config.num_epochs=${ep} \
-    --config.save_every_epochs=10 \
+    --config.save_every_epochs=50 \
     --config.profile_memory=True \
     --config.donate=True \
     --config.init_backend=tpu \

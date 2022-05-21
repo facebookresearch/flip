@@ -67,9 +67,9 @@ def log_model_info(log_file: Optional[str],
         shape_str = '({})'.format(', '.join(
             f'{name}={dimension}'
             for name, dimension in zip(logical_axes, arr.shape)))
-      _log_info_and_write_to_file(
-          writer, '%-96s %-20s %-40s %s',
-          name, arr.size, shape_str, mesh_axes)
+      # _log_info_and_write_to_file(
+      #     writer, '%-96s %-20s %-40s %s',
+      #     name, arr.size, shape_str, mesh_axes)
 
     jax.tree_map(
         _log_variable,
