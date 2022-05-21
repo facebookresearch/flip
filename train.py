@@ -45,7 +45,7 @@ import models_vit
 
 from utils import summary_util as summary_util  # must be after 'from clu import metric_writers'
 from utils import opt_util
-from utils import checkpoint_util
+from utils import checkpoint_util as ckp
 from utils import lrd_util
 from utils import torchloader_util
 from utils import adamw_util
@@ -83,7 +83,6 @@ def compute_metrics(logits, labels, labels_one_hot):
       'loss': loss,
       'accuracy': accuracy,
   }
-  # metrics = lax.pmean(metrics, axis_name='batch')
   return metrics
 
 
@@ -97,35 +96,13 @@ def compute_eval_metrics(logits, labels, labels_one_hot):
       'accuracy': accuracy,
       'label': labels
   }
-  # metrics = lax.all_gather(metrics, axis_name='batch')
   metrics = jax.tree_map(lambda x: jnp.reshape(x, [-1,]), metrics)
   return metrics
-
-
-# def create_learning_rate_fn(
-#     config: ml_collections.ConfigDict,
-#     base_learning_rate: float,
-#     steps_per_epoch: int):
-#   """Create learning rate schedule."""
-#   warmup_fn = optax.linear_schedule(
-#       init_value=config.warmup_abs_lr, end_value=base_learning_rate,
-#       transition_steps=config.warmup_epochs * steps_per_epoch)
-#   cosine_epochs = max(config.num_epochs - config.warmup_epochs, 1)
-#   cosine_fn = optax.cosine_decay_schedule(
-#       init_value=base_learning_rate,
-#       decay_steps=cosine_epochs * steps_per_epoch,
-#       alpha=config.min_abs_lr / base_learning_rate)
-#   schedule_fn = optax.join_schedules(
-#       schedules=[warmup_fn, cosine_fn],
-#       boundaries=[config.warmup_epochs * steps_per_epoch])
-#   return schedule_fn
 
 
 def train_step(state, batch, model, rng):
   """Perform a single training step."""
   dropout_rng = jax.random.fold_in(rng, state.step)
-  # _, new_rng = jax.random.split(rng)
-  # dropout_rng = rng
 
   def loss_fn(params):
     """loss function used for training."""
@@ -188,55 +165,12 @@ def prepare_pt_data(xs, batch_size):
   return jax.tree_map(_prepare, xs)
 
 
-def restore_checkpoint(checkpointer, path):
-  step = t5x.checkpoints.latest_step(path)  # try to load the latest checkpoint if not specified
-  path_chkpt = path if step is None else t5x.checkpoints.get_checkpoint_dir(path, step)
-  state = checkpointer.restore(path=path_chkpt)
-  return state
-
-
-def restore_from_pretrain(state, config, partitioner, state_axes):
-  if config.pretrain_fmt == 'jax':
-    logging.info('Loading from JAX pre-training format:')
-    state = checkpoint_util.load_from_pretrain(state, config.pretrain_dir)
-  else:
-    raise NotImplementedError
-
-  params = partitioner.move_params_to_devices(state.params, state_axes.params)
-  state = state.replace_params(params)
-  return state
-
-def save_checkpoint(state, workdir):
-  if jax.process_index() == 0:
-    # get train state from the first replica
-    state = jax.device_get(jax.tree_map(lambda x: x[0], state))
-    step = int(state.step)
-    checkpoints.save_checkpoint(workdir, state, step, keep=5)
-
-
 def profile_memory(workdir):
   jax.profiler.save_device_memory_profile("/tmp/memory.prof")
   if jax.process_index() == 0:
     logging.info('Saving memory.prof...')
     os.system('cd ~; gsutil cp /tmp/memory.prof {}'.format(workdir))
     logging.info('Saved memory.prof.')
-
-
-# pmean only works inside pmap because it needs an axis name.
-# This function will average the inputs across all devices.
-cross_replica_mean = jax.pmap(lambda x: lax.pmean(x, 'x'), 'x')
-
-
-def sync_batch_stats(state):
-  """Sync the batch statistics across replicas."""
-  # Each device has its own version of the running average batch statistics and
-  # we sync them before evaluation.
-  if 'batch_stats' not in state.flax_mutables:
-    return state
-  else:
-    new_mutables, batch_stats = state.flax_mutables.pop('batch_stats')
-    batch_stats = cross_replica_mean(batch_stats)
-    return state.replace(flax_mutables=flax.core.FrozenDict({'batch_stats': batch_stats, **new_mutables}))
 
 
 def seed_worker(worker_id):
@@ -294,6 +228,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   # ------------------------------------
   if config.batch_size % jax.device_count() > 0:
     raise ValueError('Batch size must be divisible by the number of devices')
+
   local_batch_size = config.batch_size // jax.process_count()
 
   dataset_val = torchloader_util.build_dataset(is_train=False, data_dir=config.torchload.data_dir, aug=config.aug)
@@ -361,14 +296,14 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   )
   
   if config.resume_dir != '':
-    state = restore_checkpoint(checkpointer, path=config.resume_dir)
+    state = ckp.restore_checkpoint(checkpointer, path=config.resume_dir)
   elif config.pretrain_dir != '':
     # When fine-tuning, we run initialization anyway
     logging.info('Initializing train_state...')
     state = p_init_fn(rng_init)
     logging.info('Initializing train_state done.')
 
-    state = restore_from_pretrain(state, config, partitioner, state_axes)
+    state = ckp.restore_from_pretrain(state, config, partitioner, state_axes)
   else:
     logging.info('Initializing train_state...')
     state = p_init_fn(rng_init)
@@ -509,8 +444,6 @@ def parse_batch(batch, local_batch_size, mixup_fn=None):
 
 def run_eval(state, partitioned_eval_step, data_loader_val, local_batch_size, epoch):
   eval_metrics = []
-  # sync batch statistics across replicas
-  state = sync_batch_stats(state)
   tic = time.time()
   for _, batch in enumerate(data_loader_val):
     batch = parse_batch(batch, local_batch_size, mixup_fn=None)

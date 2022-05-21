@@ -12,8 +12,34 @@ from flax.training import checkpoints
 import jax.numpy as jnp
 
 import jax.tree_util as tu
+import t5x.checkpoints
 
 
+# --------------------------------------------
+# interfaces
+# --------------------------------------------
+def restore_checkpoint(checkpointer, path):
+  step = t5x.checkpoints.latest_step(path)  # try to load the latest checkpoint if not specified
+  path_chkpt = path if step is None else t5x.checkpoints.get_checkpoint_dir(path, step)
+  state = checkpointer.restore(path=path_chkpt)
+  return state
+
+
+def restore_from_pretrain(state, config, partitioner, state_axes):
+  if config.pretrain_fmt == 'jax':
+    logging.info('Loading from JAX pre-training format:')
+    state = load_from_pretrain(state, config.pretrain_dir)
+  else:
+    raise NotImplementedError
+
+  params = partitioner.move_params_to_devices(state.params, state_axes.params)
+  state = state.replace_params(params)
+  return state
+
+
+# --------------------------------------------
+# load JAX checkpoint from pre-training
+# --------------------------------------------
 def load_from_pretrain(state, pretrain_dir):
   state_load = checkpoints.restore_checkpoint(pretrain_dir, target=None)
   load_params = flax.core.freeze(state_load.pop('params'))  # match the type of state.params
