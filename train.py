@@ -187,8 +187,11 @@ def prepare_pt_data(xs, batch_size):
   return jax.tree_map(_prepare, xs)
 
 
-def restore_checkpoint(state, workdir):
-  return checkpoints.restore_checkpoint(workdir, state)
+def restore_checkpoint(checkpointer, path):
+  step = t5x.checkpoints.latest_step(path)  # try to load the latest checkpoint if not specified
+  path_chkpt = path if step is None else t5x.checkpoints.get_checkpoint_dir(path, step)
+  state = checkpointer.restore(path=path_chkpt)
+  return state
 
 
 def save_checkpoint(state, workdir):
@@ -346,7 +349,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   )
   
   if config.resume_dir != '':
-    state = checkpointer.restore(path=config.resume_dir)
+    state = restore_checkpoint(checkpointer, path=config.resume_dir)
   elif config.pretrain_dir != '':
     raise NotImplementedError
     logging.info('Loading from pre-training:')
@@ -359,7 +362,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # logging.info('std: {}'.format(stds))
 
   # debug
-  checkpointer.save(state)
+  # checkpointer.save(state)
   # state = checkpointer.restore(path=checkpointer.checkpoints_dir + '/checkpoint_0')
 
   # step_offset > 0 if restarting from checkpoint
@@ -401,7 +404,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   epoch_offset = (step_offset + 1) // steps_per_epoch
   step = epoch_offset * steps_per_epoch
-  assert step == int(jnp.reshape(state.step, (-1,))[0])  # sanity when loading
+
+  # assert step == int(jnp.reshape(state.step, (-1,))[0])  # sanity when loading
 
   best_acc = 0.
   for epoch in range(epoch_offset, int(config.num_epochs)):
