@@ -19,22 +19,15 @@ The data is loaded using tensorflow_datasets.
 """
 
 import functools
-from threading import local
 import time, datetime
 from typing import Any
 
 from absl import logging
 from clu import metric_writers
-from clu import periodic_actions
 import flax
-from flax import jax_utils
-from flax import optim
-from flax import struct
-from flax.training import checkpoints
 from flax.training import common_utils
 from flax.training import train_state
 import jax
-from jax import lax
 import jax.numpy as jnp
 from jax import random
 import ml_collections
@@ -44,11 +37,8 @@ import tensorflow as tf
 import models_vit
 
 from utils import summary_util as summary_util  # must be after 'from clu import metric_writers'
-from utils import opt_util
 from utils import checkpoint_util as ckp
-from utils import lrd_util
 from utils import torchloader_util
-from utils import adamw_util
 from utils import logging_util
 
 from t5x.train_state_initializer import create_train_state
@@ -69,6 +59,54 @@ import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning) 
 warnings.filterwarnings("ignore", category=FutureWarning) 
+
+
+def build_dataloaders(config, rng_torch):
+  if config.batch_size % jax.device_count() > 0:
+    raise ValueError('Batch size must be divisible by the number of devices')
+
+  local_batch_size = config.batch_size // jax.process_count()
+
+  dataset_val = torchloader_util.build_dataset(is_train=False, data_dir=config.torchload.data_dir, aug=config.aug)
+  dataset_train = torchloader_util.build_dataset(is_train=True, data_dir=config.torchload.data_dir, aug=config.aug)
+
+  sampler_train = torch.utils.data.DistributedSampler(
+    dataset_train,
+    num_replicas=jax.process_count(),
+    rank=jax.process_index(),
+    shuffle=True,
+    seed=config.seed_pt,
+  )
+  sampler_val = torch.utils.data.DistributedSampler(
+    dataset_val,
+    num_replicas=jax.process_count(),
+    rank=jax.process_index(),
+    shuffle=False,
+  )
+  
+  data_loader_train = torch.utils.data.DataLoader(
+    dataset_train, sampler=sampler_train,
+    batch_size=local_batch_size,
+    num_workers=config.torchload.num_workers,
+    pin_memory=True,
+    drop_last=True,
+    generator=rng_torch,
+    worker_init_fn=seed_worker,
+    persistent_workers=True,
+    timeout=60.,
+  )
+  data_loader_val = torch.utils.data.DataLoader(
+    dataset_val, sampler=sampler_val,
+    batch_size=local_batch_size,
+    num_workers=config.torchload.num_workers,
+    pin_memory=True,
+    drop_last=False,
+    persistent_workers=True,
+    timeout=60.,
+  )
+
+  assert len(data_loader_train) == len(dataset_train) // config.batch_size
+  return data_loader_train, data_loader_val, local_batch_size
 
 
 def cross_entropy_loss(logits, labels_one_hot):
@@ -144,6 +182,17 @@ def eval_step(state, batch, model):
   metrics['test_loss'] = metrics.pop('loss')  # rename
 
   return metrics
+
+
+def parse_batch(batch, local_batch_size, mixup_fn=None):
+  images, labels, labels_one_hot = batch
+  if mixup_fn is not None:
+    assert images.shape[1] == 3  # nchw
+    images, labels_one_hot = mixup_fn(images, labels)
+  images = images.permute([0, 2, 3, 1])  # nchw -> nhwc
+  batch = {'image': images, 'label': labels, 'label_one_hot': labels_one_hot}
+  batch = prepare_pt_data(batch, local_batch_size)  # to (local_devices, device_batch_size, height, width, 3)
+  return batch
 
 
 def prepare_pt_data(xs, batch_size):
@@ -226,58 +275,16 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   # ------------------------------------
   # Create data loader
   # ------------------------------------
-  if config.batch_size % jax.device_count() > 0:
-    raise ValueError('Batch size must be divisible by the number of devices')
-
-  local_batch_size = config.batch_size // jax.process_count()
-
-  dataset_val = torchloader_util.build_dataset(is_train=False, data_dir=config.torchload.data_dir, aug=config.aug)
-  dataset_train = torchloader_util.build_dataset(is_train=True, data_dir=config.torchload.data_dir, aug=config.aug)
-
-  sampler_train = torch.utils.data.DistributedSampler(
-    dataset_train,
-    num_replicas=jax.process_count(),
-    rank=jax.process_index(),
-    shuffle=True,
-    seed=config.seed_pt,
-  )
-  sampler_val = torch.utils.data.DistributedSampler(
-    dataset_val,
-    num_replicas=jax.process_count(),
-    rank=jax.process_index(),
-    shuffle=False,
-  )
-  
-  data_loader_train = torch.utils.data.DataLoader(
-    dataset_train, sampler=sampler_train,
-    batch_size=local_batch_size,
-    num_workers=config.torchload.num_workers,
-    pin_memory=True,
-    drop_last=True,
-    generator=rng_torch,
-    worker_init_fn=seed_worker,
-    persistent_workers=True,
-    timeout=60.,
-  )
-  data_loader_val = torch.utils.data.DataLoader(
-    dataset_val, sampler=sampler_val,
-    batch_size=local_batch_size,
-    num_workers=config.torchload.num_workers,
-    pin_memory=True,
-    drop_last=False,
-    persistent_workers=True,
-    timeout=60.,
-  )
+  data_loader_train, data_loader_val, local_batch_size = build_dataloaders(config, rng_torch)
 
   mixup_fn = torchloader_util.get_mixup_fn(config.aug)
 
   steps_per_epoch = len(data_loader_train)
-  assert steps_per_epoch == len(dataset_train) // config.batch_size
   
   # ------------------------------------
   # Create model
   # ------------------------------------
-  model = models_vit.VisionTransformer(num_classes=len(dataset_train.classes), **config.model)
+  model = models_vit.VisionTransformer(**config.model)
   
   p_init_fn, state_axes, state_shape = create_train_state(config, model, image_size, steps_per_epoch, partitioner)
   rng_init, rng = jax.random.split(rng)
@@ -429,17 +436,6 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
 
   return state
-
-
-def parse_batch(batch, local_batch_size, mixup_fn=None):
-  images, labels, labels_one_hot = batch
-  if mixup_fn is not None:
-    assert images.shape[1] == 3  # nchw
-    images, labels_one_hot = mixup_fn(images, labels)
-  images = images.permute([0, 2, 3, 1])  # nchw -> nhwc
-  batch = {'image': images, 'label': labels, 'label_one_hot': labels_one_hot}
-  batch = prepare_pt_data(batch, local_batch_size)  # to (local_devices, device_batch_size, height, width, 3)
-  return batch
 
 
 def run_eval(state, partitioned_eval_step, data_loader_val, local_batch_size, epoch):
