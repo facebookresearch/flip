@@ -49,6 +49,7 @@ from utils import checkpoint_util
 from utils import lrd_util
 from utils import torchloader_util
 from utils import adamw_util
+from utils import logging_util
 
 from t5x.train_state_initializer import create_train_state
 import t5x.partitioning
@@ -367,7 +368,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   # step_offset > 0 if restarting from checkpoint
   step_offset = int(state.step)
-  logging.info('step_offse: {}'.format(step_offset))
+  logging.info('step_offset: {}'.format(step_offset))
 
   # to create partitioned train_step
   train_step_fn = functools.partial(train_step, model=model, rng=rng)  # (state, batch, rng) -> (state, metrics)
@@ -416,6 +417,12 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # ------------------------------------------------------------
     for i, batch in enumerate(data_loader_train):
       batch = parse_batch(batch, local_batch_size, mixup_fn)
+      if i == 0:
+        logging_util.sync_and_delay()
+        logging_util.verbose_on()
+        logging.info(batch['label'])
+        logging_util.verbose_off()
+        time.sleep(10)
       state, metrics = partitioned_train_step(state, batch)
       epoch_1000x = int(step * config.batch_size / 1281167 * 1000)  # normalize to IN1K epoch anyway
 
