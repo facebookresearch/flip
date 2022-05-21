@@ -195,6 +195,17 @@ def restore_checkpoint(checkpointer, path):
   return state
 
 
+def restore_from_pretrain(state, config, partitioner, state_axes):
+  if config.pretrain_fmt == 'jax':
+    logging.info('Loading from JAX pre-training format:')
+    state = checkpoint_util.load_from_pretrain(state, config.pretrain_dir)
+  else:
+    raise NotImplementedError
+
+  params = partitioner.move_params_to_devices(state.params, state_axes.params)
+  state = state.replace_params(params)
+  return state
+
 def save_checkpoint(state, workdir):
   if jax.process_index() == 0:
     # get train state from the first replica
@@ -352,9 +363,12 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   if config.resume_dir != '':
     state = restore_checkpoint(checkpointer, path=config.resume_dir)
   elif config.pretrain_dir != '':
-    raise NotImplementedError
-    logging.info('Loading from pre-training:')
-    state = checkpoint_util.load_from_pretrain(state, config.pretrain_dir)
+    # When fine-tuning, we run initialization anyway
+    logging.info('Initializing train_state...')
+    state = p_init_fn(rng_init)
+    logging.info('Initializing train_state done.')
+
+    state = restore_from_pretrain(state, config, partitioner, state_axes)
   else:
     logging.info('Initializing train_state...')
     state = p_init_fn(rng_init)
@@ -417,12 +431,6 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # ------------------------------------------------------------
     for i, batch in enumerate(data_loader_train):
       batch = parse_batch(batch, local_batch_size, mixup_fn)
-      if i == 0:
-        logging_util.sync_and_delay()
-        logging_util.verbose_on()
-        logging.info(batch['label'])
-        logging_util.verbose_off()
-        time.sleep(10)
       state, metrics = partitioned_train_step(state, batch)
       epoch_1000x = int(step * config.batch_size / 1281167 * 1000)  # normalize to IN1K epoch anyway
 

@@ -6,6 +6,7 @@ import tree as nest
 import numpy as np
 
 import jax
+import jaxlib
 import flax
 from flax.training import checkpoints
 import jax.numpy as jnp
@@ -67,7 +68,8 @@ def load_from_pretrain(state, pretrain_dir):
   assert jnp.all(jnp.array(verify)).item()
 
   del state_params
-  return state.replace(params=params)
+  state = state.replace_params(params=params)
+  return state
 
 
 def get_name(path: Tuple[Any], val: jnp.ndarray):

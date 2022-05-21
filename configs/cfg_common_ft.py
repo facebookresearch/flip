@@ -121,8 +121,10 @@ def get_config():
   config.init_backend = 'tpu'
 
   # utils
-  config.pretrain_dir = ''
   config.resume_dir = ''
+
+  config.pretrain_dir = ''
+  config.pretrain_fmt = 'jax'  # 't5x'
 
   config.eval_only = False
 
