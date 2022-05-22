@@ -197,7 +197,7 @@ def train_step(state, batch, model, rng):
 
   new_state = state.apply_gradient(
     grads,
-    learning_rate=None,  # TODO: learning_rate is not used; fix it
+    learning_rate=lr,  # TODO: only for adafactor; not used in adamw
     flax_mutables=new_mutables)
   return new_state, metrics
 

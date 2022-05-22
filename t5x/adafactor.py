@@ -124,9 +124,12 @@ def standard_logical_factor_rules():
       'kv_fused': FactorDim.COLUMN,
       'layer_norm_scale': FactorDim.NONE,
       'mlp_activations': FactorDim.COLUMN,
+      # extra for ViT
       '_null0': FactorDim.NONE,
       '_null1': FactorDim.NONE,
       '_null2': FactorDim.NONE,
+      'classes': FactorDim.NONE,
+      'length': FactorDim.NONE,
   })
 
 

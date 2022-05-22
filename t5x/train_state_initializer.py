@@ -77,7 +77,10 @@ def create_optimizer(config, params_names, steps_per_epoch):
 
   elif config.opt_type == 'adafactor':
     opt = t5x.adafactor.Adafactor(
-      learning_rate=1e-4, 
+      weight_decay_rate=config.opt.weight_decay,
+      weight_decay_rate_lr_exponent=1.,  # adamw style: wd * lr
+      beta1=config.opt.b1,
+      logical_factor_rules=t5x.adafactor.standard_logical_factor_rules(),
     )
     opt.metric_learning_rate_fn = learning_rate_fn  # hack for metric
   else:
