@@ -7,6 +7,7 @@ import functools
 
 import t5x.train_state as train_state_lib
 import t5x.optimizers
+import t5x.adafactor
 
 from utils import opt_util
 from utils import lrd_util
@@ -51,25 +52,37 @@ def create_optimizer(config, params_names, steps_per_epoch):
   abs_learning_rate = config.learning_rate * config.batch_size / 256.
   learning_rate_fn = create_learning_rate_fn(config, abs_learning_rate, steps_per_epoch)
 
-  # optional: exclude some wd
-  mask = None
-  if config.exclude_wd:
-    mask = jax.tree_util.tree_map(lambda x, y: bool(x and y), 
-      opt_util.filter_parameters(params_names, opt_util.filter_bias_and_norm),
-      opt_util.filter_parameters(params_names, opt_util.filter_cls_and_posembed)
+
+  if config.opt_type == 'adamw':
+    # optional: exclude some wd
+    mask = None
+    if config.exclude_wd:
+      mask = jax.tree_util.tree_map(lambda x, y: bool(x and y), 
+        opt_util.filter_parameters(params_names, opt_util.filter_bias_and_norm),
+        opt_util.filter_parameters(params_names, opt_util.filter_cls_and_posembed)
+      )
+    # logging.info('Apply wd: {}'.format(mask))
+
+    # opt = getattr(adamw_util, config.opt_type)  # optax.adamw
+    opt = adamw_util.adamw
+    opt = t5x.optimizers.wrap_optax_optimizer(opt)
+    opt = opt(learning_rate=learning_rate_fn, **config.opt, mask=mask, mu_dtype=getattr(jnp, config.opt_mu_dtype))
+    opt.metric_learning_rate_fn = learning_rate_fn  # hack for metric
+
+    if config.learning_rate_decay < 1.:
+      lrd_func = lrd_util.lrd_func(config.model.transformer.num_layers, config.learning_rate_decay)
+      lrd = lrd_util.filter_parameters(params_names, lrd_func)
+      # logging.info('Apply lrd: {}'.format(lrd))
+      opt.optax_optimizer = optax._src.combine.chain(opt.optax_optimizer, lrd_util.scale_by_lrd(lrd))
+
+  elif config.opt_type == 'adafactor':
+    opt = t5x.adafactor.Adafactor(
+      learning_rate=1e-4, 
     )
-  # logging.info('Apply wd: {}'.format(mask))
+    opt.metric_learning_rate_fn = learning_rate_fn  # hack for metric
+  else:
+    raise NotImplementedError
 
-  opt = getattr(adamw_util, config.opt_type)  # optax.adamw
-  opt = t5x.optimizers.wrap_optax_optimizer(opt)
-  opt = opt(learning_rate=learning_rate_fn, **config.opt, mask=mask, mu_dtype=getattr(jnp, config.opt_mu_dtype))
-  opt.metric_learning_rate_fn = learning_rate_fn  # hack for metric
-
-  if config.learning_rate_decay <= 1.:
-    lrd_func = lrd_util.lrd_func(config.model.transformer.num_layers, config.learning_rate_decay)
-    lrd = lrd_util.filter_parameters(params_names, lrd_func)
-    # logging.info('Apply lrd: {}'.format(lrd))
-    opt.optax_optimizer = optax._src.combine.chain(opt.optax_optimizer, lrd_util.scale_by_lrd(lrd))
 
   return opt
 
