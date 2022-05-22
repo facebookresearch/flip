@@ -10,9 +10,9 @@ warm=20
 dp=0.2
 beta2=0.95
 
-partitions=32
+partitions=8
 
-vitsize=large
+vitsize=huge4x
 CONFIG=cfg_vit_${vitsize}
 
 # source scripts/select_chkpt_${vitsize}.sh

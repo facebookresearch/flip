@@ -13,7 +13,7 @@ gcloud alpha compute tpus tpu-vm ssh ${VM_NAME} --zone europe-west4-a \
 # pip3 install timm==0.4.12
 
 # pip install cached_property
-pip install tensorstore
+# pip install tensorstore
 
 # pip3 list | grep 'jax\|flax\|tensorflow\|clu '
 
@@ -21,10 +21,10 @@ pip install tensorstore
 # python3 -c 'import jax; print(jax.device_count());'
 # python3 -c 'import flax'
 
-# sudo apt-get -y update
-# sudo apt-get -y install nfs-common
-# sudo mkdir -p /kmh_data
-# sudo mount 10.60.38.146:/kmh_data /kmh_data
-# sudo chmod go+rw /kmh_data
-# ls /kmh_data
+sudo apt-get -y update
+sudo apt-get -y install nfs-common
+sudo mkdir -p /kmh_data
+sudo mount 10.60.38.146:/kmh_data /kmh_data
+sudo chmod go+rw /kmh_data
+ls /kmh_data
 "

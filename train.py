@@ -257,9 +257,9 @@ def seed_worker(worker_id, shard_id):
     np.random.seed(worker_seed)
     _random.seed(worker_seed)
 
-    logging_util.verbose_on()
-    logging.info('worker_id: {}, shard_id: {}, worker_seed: {}'.format(worker_id, shard_id, worker_seed))
-    logging_util.verbose_off()
+    # logging_util.verbose_on()
+    # logging.info('worker_id: {}, shard_id: {}, worker_seed: {}'.format(worker_id, shard_id, worker_seed))
+    # logging_util.verbose_off()
 
 
 def set_seed_torch(seed):

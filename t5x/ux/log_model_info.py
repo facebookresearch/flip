@@ -91,4 +91,4 @@ def log_model_info(log_file: Optional[str],
 
     expected_memory = (total_num_params + total_num_states) * 4
     _log_info_and_write_to_file(writer, 'Total model memory (G): %.6f',
-                                expected_memory / 1024 / 1024)
+                                expected_memory / 1024 / 1024 / 1024)
