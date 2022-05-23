@@ -76,11 +76,17 @@ def create_optimizer(config, params_names, steps_per_epoch):
       opt.optax_optimizer = optax._src.combine.chain(opt.optax_optimizer, lrd_util.scale_by_lrd(lrd))
 
   elif config.opt_type == 'adafactor':
+    logical_factor_rules = t5x.adafactor.none_logical_factor_rules()
+    logging.info(logical_factor_rules)
     opt = t5x.adafactor.Adafactor(
       weight_decay_rate=config.opt.weight_decay,
       weight_decay_rate_lr_exponent=1.,  # adamw style: wd * lr
+      multiply_by_parameter_scale=False,
       beta1=config.opt.b1,
-      logical_factor_rules=t5x.adafactor.standard_logical_factor_rules(),
+      beta2=config.opt.b2,
+      epsilon1=1e-8,
+      clipping_threshold=None,
+      logical_factor_rules=logical_factor_rules,
     )
     opt.metric_learning_rate_fn = learning_rate_fn  # hack for metric
   else:

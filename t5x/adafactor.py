@@ -133,6 +133,32 @@ def standard_logical_factor_rules():
   })
 
 
+def none_logical_factor_rules():
+  return freeze({
+      'vocab': FactorDim.NONE,
+      'embed': FactorDim.NONE,
+      'mlp': FactorDim.NONE,
+      'heads': FactorDim.NONE,
+      'kv': FactorDim.NONE,
+      'joined_kv': FactorDim.NONE,
+      'relpos_buckets': FactorDim.NONE,
+      'layers': FactorDim.NONE,  # used in scanned layers
+      'stack': FactorDim.NONE,  # used in stacked params
+      # 'batch', 'length' should not occur in parameters
+      'q_wi_fused': FactorDim.NONE,
+      'o_wo_fused': FactorDim.NONE,
+      'multiquery_heads': FactorDim.NONE,
+      'kv_fused': FactorDim.NONE,
+      'layer_norm_scale': FactorDim.NONE,
+      'mlp_activations': FactorDim.NONE,
+      # extra for ViT
+      '_null0': FactorDim.NONE,
+      '_null1': FactorDim.NONE,
+      '_null2': FactorDim.NONE,
+      'classes': FactorDim.NONE,
+      'length': FactorDim.NONE,
+  })
+
 def factor_name_to_factordim(name):
   if not isinstance(name, str):
     return name
@@ -177,6 +203,7 @@ class _AdafactorHyperParams:
   factored: bool
   multiply_by_parameter_scale: Union[bool, HParamMap]
   beta1: Optional[float]
+  beta2: Optional[float]
   decay_rate: float
   step_offset: int
   clipping_threshold: Optional[float]
@@ -211,6 +238,7 @@ class Adafactor(OptimizerDef):
                factored: bool = True,
                multiply_by_parameter_scale: Union[bool, HParamMap] = True,
                beta1: Optional[float] = None,
+               beta2: Optional[float] = None,
                decay_rate: float = 0.8,
                step_offset: int = 0,
                clipping_threshold: Optional[float] = 1.0,
@@ -280,7 +308,7 @@ class Adafactor(OptimizerDef):
           f'{type(factor_map)}')
 
     hyper_params = _AdafactorHyperParams(
-        learning_rate, factored, multiply_by_parameter_scale, beta1, decay_rate,
+        learning_rate, factored, multiply_by_parameter_scale, beta1, beta2, decay_rate,
         step_offset, clipping_threshold, weight_decay_rate,
         min_dim_size_to_factor, epsilon1, epsilon2, factor_map,
         logical_factor_rules, weight_decay_rate_lr_exponent,
@@ -426,7 +454,8 @@ class Adafactor(OptimizerDef):
     assert hyper_params.learning_rate is not None, 'no learning rate provided.'
     learning_rate = hyper_params.learning_rate
     beta1 = hyper_params.beta1
-    decay_rate = hyper_params.decay_rate
+    beta2 = hyper_params.beta2
+    # decay_rate = hyper_params.decay_rate
     step_offset = hyper_params.step_offset
     multiply_by_parameter_scale = hyper_params.multiply_by_parameter_scale
     max_parameter_scale = hyper_params.max_parameter_scale
@@ -451,7 +480,7 @@ class Adafactor(OptimizerDef):
     grad = grad.astype(jnp.float32)
 
     updates = {k: jnp.zeros((1,)) for k in ['v_row', 'v_col', 'v', 'm']}
-    decay_rate = self._decay_rate_pow(step - step_offset, exponent=decay_rate)
+    # decay_rate = self._decay_rate_pow(step - step_offset, exponent=decay_rate)
     update_scale = learning_rate
 
     if isinstance(multiply_by_parameter_scale, HParamMap):
@@ -465,12 +494,16 @@ class Adafactor(OptimizerDef):
       if max_parameter_scale is not None:
         param_scale = jnp.minimum(param_scale, max_parameter_scale)
       update_scale *= param_scale
-    mixing_rate = 1.0 - decay_rate
+    # mixing_rate = 1.0 - decay_rate
 
-    grad_sqr = grad * grad + epsilon1
+    # --------------------------------
+    # compute first-order moment:
+    # --------------------------------
+    grad_sqr = grad * grad
     if factored_dims is HEURISTIC_RULE:
       factored_dims = self._factored_dims(param.shape)
     if factored_dims is not None:
+      raise NotImplementedError
       d1, d0 = factored_dims
       new_v_row = (
           decay_rate * state.v_row + mixing_rate * jnp.mean(grad_sqr, axis=d0))
@@ -487,28 +520,45 @@ class Adafactor(OptimizerDef):
           grad * jnp.expand_dims(row_factor, axis=d0) *
           jnp.expand_dims(col_factor, axis=d1))
     else:
-      new_v = decay_rate * state.v + mixing_rate * grad_sqr
+      new_v = beta2 * state.v + (1 - beta2) * grad_sqr
       updates['v'] = new_v
-      y = grad * (new_v)**-0.5
+      new_v_hat = _bias_correction(new_v, beta2, count=step + 1)
+      # y = grad * (new_v)**-0.5
 
-    if clipping_threshold is not None:
-      clipping_denom = (
-          jnp.maximum(
-              1.0,
-              jnp.sqrt(jnp.mean(y * y, axis=averaging_dims, keepdims=True)) /
-              clipping_threshold))
-      y /= clipping_denom
+    # --------------------------------
+    # compute first-order moment:
+    # --------------------------------
+    new_m = beta1 * state.m + (1.0 - beta1) * grad
+    updates['m'] = new_m.astype(self.dtype_momentum)
+    new_m_hat = _bias_correction(new_m, beta1, count=step + 1)
 
-    subtrahend = update_scale * y
-    if beta1 is not None:
-      new_m = beta1 * state.m + (1.0 - beta1) * subtrahend
-      subtrahend = new_m
-      updates['m'] = new_m.astype(self.dtype_momentum)
+    # --------------------------------
+    # scale by adam:
+    # --------------------------------
+    y = new_m_hat / (jnp.sqrt(new_v_hat) + epsilon1)  # scale by adam
+    y += weight_decay_rate  # add wd
+    y *= update_scale  # scale by lr
+    new_param = param - y
 
-    if weight_decay_rate is not None:
-      new_param = (1.0 - weight_decay_rate) * param - subtrahend
-    else:
-      new_param = param - subtrahend
+    # if clipping_threshold is not None:
+    #   raise NotImplementedError
+    #   clipping_denom = (
+    #       jnp.maximum(
+    #           1.0,
+    #           jnp.sqrt(jnp.mean(y * y, axis=averaging_dims, keepdims=True)) /
+    #           clipping_threshold))
+    #   y /= clipping_denom
+
+    # subtrahend = update_scale * y
+    # if beta1 is not None:
+    #   new_m = beta1 * state.m + (1.0 - beta1) * subtrahend
+    #   subtrahend = new_m
+    #   updates['m'] = new_m.astype(self.dtype_momentum)
+
+    # if weight_decay_rate is not None:
+    #   new_param = (1.0 - weight_decay_rate) * param - subtrahend
+    # else:
+    #   new_param = param - subtrahend
 
     if hyper_params.skip_nan_updates:
       updates['v_row'] = jnp.where(
@@ -619,3 +669,9 @@ class Adafactor(OptimizerDef):
         optimizer_state.state_dict()['state']['param_states'])
 
     return optimizer_state.restore_state(unfreeze(optimizer_logical_axes))
+
+
+def _bias_correction(moment, decay, count):
+  """Perform bias correction. This becomes a no-op as count goes to infinity."""
+  bias_correction = 1 - decay**count
+  return moment / bias_correction.astype(moment.dtype)

@@ -412,7 +412,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
       batch = parse_batch(batch, local_batch_size, mixup_fn)
       state, metrics = partitioned_train_step(state, batch)
 
-      if epoch == epoch_offset and i == 0:
+      if epoch == epoch_offset and i == 0 and partitioner._num_partitions > 8:
         print_sanity_check(batch, shard_id)
 
       epoch_1000x = int(step * config.batch_size / 1281167 * 1000)  # normalize to IN1K epoch anyway
