@@ -66,6 +66,8 @@ import numpy as np
 from t5x.optimizers import OptimizerDef
 from t5x.optimizers import OptimizerState
 
+import time
+
 Dtype = Any
 
 
@@ -132,32 +134,6 @@ def standard_logical_factor_rules():
       'length': FactorDim.NONE,
   })
 
-
-def none_logical_factor_rules():
-  return freeze({
-      'vocab': FactorDim.NONE,
-      'embed': FactorDim.NONE,
-      'mlp': FactorDim.NONE,
-      'heads': FactorDim.NONE,
-      'kv': FactorDim.NONE,
-      'joined_kv': FactorDim.NONE,
-      'relpos_buckets': FactorDim.NONE,
-      'layers': FactorDim.NONE,  # used in scanned layers
-      'stack': FactorDim.NONE,  # used in stacked params
-      # 'batch', 'length' should not occur in parameters
-      'q_wi_fused': FactorDim.NONE,
-      'o_wo_fused': FactorDim.NONE,
-      'multiquery_heads': FactorDim.NONE,
-      'kv_fused': FactorDim.NONE,
-      'layer_norm_scale': FactorDim.NONE,
-      'mlp_activations': FactorDim.NONE,
-      # extra for ViT
-      '_null0': FactorDim.NONE,
-      '_null1': FactorDim.NONE,
-      '_null2': FactorDim.NONE,
-      'classes': FactorDim.NONE,
-      'length': FactorDim.NONE,
-  })
 
 def factor_name_to_factordim(name):
   if not isinstance(name, str):
@@ -499,43 +475,43 @@ class Adafactor(OptimizerDef):
     # --------------------------------
     # compute first-order moment:
     # --------------------------------
-    grad_sqr = grad * grad
-    if factored_dims is HEURISTIC_RULE:
-      factored_dims = self._factored_dims(param.shape)
-    if factored_dims is not None:
-      raise NotImplementedError
-      d1, d0 = factored_dims
-      new_v_row = (
-          decay_rate * state.v_row + mixing_rate * jnp.mean(grad_sqr, axis=d0))
-      new_v_col = (
-          decay_rate * state.v_col + mixing_rate * jnp.mean(grad_sqr, axis=d1))
-      updates['v_row'] = new_v_row
-      updates['v_col'] = new_v_col
-      reduced_d1 = tuple(d - len([e for e in d0 if e < d]) for d in d1)
-
-      row_col_mean = jnp.mean(new_v_row, axis=reduced_d1, keepdims=True)
-      row_factor = (new_v_row / row_col_mean)**-0.5
-      col_factor = (new_v_col)**-0.5
-      y = (
-          grad * jnp.expand_dims(row_factor, axis=d0) *
-          jnp.expand_dims(col_factor, axis=d1))
-    else:
-      new_v = beta2 * state.v + (1 - beta2) * grad_sqr
-      updates['v'] = new_v
-      new_v_hat = _bias_correction(new_v, beta2, count=step + 1)
-      # y = grad * (new_v)**-0.5
+    new_m = beta1 * state.m + (1.0 - beta1) * grad
+    updates['m'] = new_m.astype(self.dtype_momentum)
+    new_m = _bias_correction(new_m, beta1, count=step + 1)
 
     # --------------------------------
     # compute first-order moment:
     # --------------------------------
-    new_m = beta1 * state.m + (1.0 - beta1) * grad
-    updates['m'] = new_m.astype(self.dtype_momentum)
-    new_m_hat = _bias_correction(new_m, beta1, count=step + 1)
+    grad_sqr = grad * grad
+    if factored_dims is HEURISTIC_RULE:
+      factored_dims = self._factored_dims(param.shape)
+    if factored_dims is not None:
+      d1, d0 = factored_dims
+      new_v_row = beta2 * state.v_row + (1 - beta2) * jnp.mean(grad_sqr, axis=d0)
+      new_v_col = beta2 * state.v_col + (1 - beta2) * jnp.mean(grad_sqr, axis=d1)
+      updates['v_row'] = new_v_row
+      updates['v_col'] = new_v_col
+      new_v_row = _bias_correction(new_v_row, beta2, count=step + 1)
+      new_v_col = _bias_correction(new_v_col, beta2, count=step + 1)
+
+      reduced_d1 = tuple(d - len([e for e in d0 if e < d]) for d in d1)
+      row_col_mean = jnp.mean(new_v_row, axis=reduced_d1, keepdims=True) + epsilon1
+      row_factor = (new_v_row / row_col_mean)**0.5 + epsilon1
+      col_factor = (new_v_col)**0.5 + epsilon1
+      row_factor = 1. / row_factor
+      col_factor = 1. / col_factor
+      # y = grad * jnp.expand_dims(row_factor, axis=d0) * jnp.expand_dims(col_factor, axis=d1)
+      y = new_m * jnp.expand_dims(row_factor, axis=d0) * jnp.expand_dims(col_factor, axis=d1)
+    else:
+      new_v = beta2 * state.v + (1 - beta2) * grad_sqr
+      updates['v'] = new_v
+      new_v = _bias_correction(new_v, beta2, count=step + 1)
+      # y = grad * (new_v)**-0.5
+      y = new_m / (jnp.sqrt(new_v) + epsilon1)  # scale by adam
 
     # --------------------------------
     # scale by adam:
     # --------------------------------
-    y = new_m_hat / (jnp.sqrt(new_v_hat) + epsilon1)  # scale by adam
     y += weight_decay_rate  # add wd
     y *= update_scale  # scale by lr
     new_param = param - y
