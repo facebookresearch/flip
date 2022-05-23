@@ -457,6 +457,7 @@ class Adafactor(OptimizerDef):
 
     updates = {k: jnp.zeros((1,)) for k in ['v_row', 'v_col', 'v', 'm']}
     # decay_rate = self._decay_rate_pow(step - step_offset, exponent=decay_rate)
+    # beta2 = decay_rate
     update_scale = learning_rate
 
     if isinstance(multiply_by_parameter_scale, HParamMap):
@@ -494,14 +495,29 @@ class Adafactor(OptimizerDef):
       new_v_row = _bias_correction(new_v_row, beta2, count=step + 1)
       new_v_col = _bias_correction(new_v_col, beta2, count=step + 1)
 
-      reduced_d1 = tuple(d - len([e for e in d0 if e < d]) for d in d1)
-      row_col_mean = jnp.mean(new_v_row, axis=reduced_d1, keepdims=True) + epsilon1
-      row_factor = (new_v_row / row_col_mean)**0.5 + epsilon1
-      col_factor = (new_v_col)**0.5 + epsilon1
-      row_factor = 1. / row_factor
-      col_factor = 1. / col_factor
-      # y = grad * jnp.expand_dims(row_factor, axis=d0) * jnp.expand_dims(col_factor, axis=d1)
-      y = new_m * jnp.expand_dims(row_factor, axis=d0) * jnp.expand_dims(col_factor, axis=d1)
+      # ------------------------------------------------------------------------------------------
+      # reduced_d1 = tuple(d - len([e for e in d0 if e < d]) for d in d1)
+      # row_col_mean = jnp.mean(new_v_row, axis=reduced_d1, keepdims=True) + epsilon1
+      # row_factor = (new_v_row / row_col_mean)**0.5
+      # col_factor = (new_v_col)**0.5
+      # row_factor = 1. / (row_factor + epsilon1)
+      # col_factor = 1. / (col_factor + epsilon1)
+      # y = new_m * jnp.expand_dims(row_factor, axis=d0) * jnp.expand_dims(col_factor, axis=d1)
+      # ------------------------------------------------------------------------------------------
+
+      # hack col
+      # new_v_col = jnp.expand_dims(new_v_col, axis=d1)
+      # y = new_m / (jnp.sqrt(new_v_col) + epsilon1)
+
+      # hack row
+      new_v_row = jnp.expand_dims(new_v_row, axis=d0)
+      y = new_m / (jnp.sqrt(new_v_row) + epsilon1)
+
+      # hack colrow
+      # new_v_row = jnp.expand_dims(new_v_row, axis=d0)
+      # new_v_col = jnp.expand_dims(new_v_col, axis=d1)
+      # y = new_m / jnp.sqrt(jnp.sqrt(new_v_col) + epsilon1) / jnp.sqrt(jnp.sqrt(new_v_col) + epsilon1)
+
     else:
       new_v = beta2 * state.v + (1 - beta2) * grad_sqr
       updates['v'] = new_v
