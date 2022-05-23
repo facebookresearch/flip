@@ -53,7 +53,7 @@ def create_optimizer(config, params_names, steps_per_epoch):
   learning_rate_fn = create_learning_rate_fn(config, abs_learning_rate, steps_per_epoch)
 
 
-  if config.opt_type == 'adamw':
+  if config.opt_type in {'adamw',}:
     # optional: exclude some wd
     mask = None
     if config.exclude_wd:
@@ -63,8 +63,7 @@ def create_optimizer(config, params_names, steps_per_epoch):
       )
     # logging.info('Apply wd: {}'.format(mask))
 
-    # opt = getattr(adamw_util, config.opt_type)  # optax.adamw
-    opt = adamw_util.adamw
+    opt = getattr(adamw_util, config.opt_type)  # optax.adamw
     opt = t5x.optimizers.wrap_optax_optimizer(opt)
     opt = opt(learning_rate=learning_rate_fn, **config.opt, mask=mask, mu_dtype=getattr(jnp, config.opt_mu_dtype))
     opt.metric_learning_rate_fn = learning_rate_fn  # hack for metric

@@ -402,6 +402,7 @@ class Adafactor(OptimizerDef):
     if factored_dims is HEURISTIC_RULE:
       factored_dims = self._factored_dims(shape)
     if factored_dims is not None:
+      logging.info('{}: {}, {}'.format(path, param.shape, factored_dims))
       d1, d0 = factored_dims
       vr_shape = np.delete(shape, d0)
       vc_shape = np.delete(shape, d1)

@@ -43,7 +43,7 @@ def log_model_info(log_file: Optional[str],
       partitioner.get_mesh_axes(full_train_state).state_dict())
 
   def _log_info_and_write_to_file(writer, format_str, *args):
-    logging.info(format_str, *args)
+    # logging.info(format_str, *args)
     if writer is not None:
       writer.write(format_str % args + '\n')
 
@@ -67,9 +67,11 @@ def log_model_info(log_file: Optional[str],
         shape_str = '({})'.format(', '.join(
             f'{name}={dimension}'
             for name, dimension in zip(logical_axes, arr.shape)))
-      _log_info_and_write_to_file(
-          writer, '%-96s %-20s %-40s %s',
-          name, arr.size, shape_str, mesh_axes)
+      # _log_info_and_write_to_file(
+      #     writer, '%-96s %-20s %-40s %s',
+      #     name, arr.size, shape_str, mesh_axes)
+      arr_size = '{:,d}'.format(arr.size)
+      print('{:96s} {:>16s} {:48s} {}'.format(name, arr_size, str(shape_str), str(mesh_axes)))
 
     jax.tree_map(
         _log_variable,
