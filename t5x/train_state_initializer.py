@@ -53,7 +53,7 @@ def create_optimizer(config, params_names, steps_per_epoch):
   learning_rate_fn = create_learning_rate_fn(config, abs_learning_rate, steps_per_epoch)
 
 
-  if config.opt_type in {'adamw',}:
+  if config.opt_type in {'adamw', 'adarows'}:
     # optional: exclude some wd
     mask = None
     if config.exclude_wd:

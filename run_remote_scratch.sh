@@ -69,7 +69,7 @@ python3 main.py \
     --config.model.transformer.torch_qkv=False \
     --config.model.classifier=token \
     --config.partitioning.num_partitions=${partitions} \
-    --config.opt_type=adafactor \
+    --config.opt_type=adarows \
 2>&1 | tee $LOGDIR/finetune_\$SSH_ID.log
 " 2>&1 | tee $LOGDIR/finetune.log
 
