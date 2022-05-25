@@ -66,7 +66,6 @@ def build_transform(is_train, aug):
     if is_train:
         color_jitter = 0.0 if aug.color_jit is None else aug.color_jit[0]
         aa = AUTOAUGS[aug.autoaug]
-        re_prob = aug.randerase.prob if aug.randerase.on else 0.0
         # this should always dispatch to transforms_imagenet_train
         transform = create_transform(
             input_size=IMAGE_SIZE,
@@ -76,8 +75,6 @@ def build_transform(is_train, aug):
             color_jitter=color_jitter,
             auto_augment=aa,
             interpolation='bicubic',
-            re_prob=re_prob,
-            re_mode='pixel',
             mean=mean,
             std=std,
         )

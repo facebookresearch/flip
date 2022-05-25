@@ -18,6 +18,10 @@ This file is intentionally kept short. The majority for logic is in libraries
 that can be easily tested and imported in Colab.
 """
 
+import os
+os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+
 from absl import app
 from absl import flags
 from absl import logging
@@ -25,7 +29,6 @@ from clu import platform
 import jax
 from ml_collections import config_flags
 import tensorflow as tf
-import os
 
 import train
 

@@ -302,13 +302,16 @@ class VisionTransformer(nn.Module):
     # keep the first subset
     ids_keep = ids_shuffle[:, :len_keep]    
     x_masked = vmapped_gather(x, ids_keep)
+    x_masked = t5x.layers.with_sharding_constraint(x_masked, ('batch', 'length', 'embed'))
 
     # generate the binary mask: 0 is keep, 1 is remove
     mask = jnp.ones([N, L])
+    mask = t5x.layers.with_sharding_constraint(mask, ('batch', 'length'))
     mask = mask.at[:, :len_keep].set(0)
     # unshuffle to get the binary mask
     mask = vmapped_gather(mask, ids_restore)
-
+    mask = t5x.layers.with_sharding_constraint(mask, ('batch', 'length'))
+    
     return x_masked, mask, ids_restore
 
   @nn.compact

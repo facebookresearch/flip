@@ -96,21 +96,6 @@ def get_config():
 
   config.aug.color_jit = None  # [0.4, 0.4, 0.4]  # None to disable; [brightness, contrast, saturation]
 
-  # mixup config
-  config.aug.mix = ml_collections.ConfigDict()
-  config.aug.mix.mixup = True
-  config.aug.mix.mixup_alpha = 0.8
-
-  config.aug.mix.cutmix = True
-  config.aug.mix.cutmix_alpha = 1.0
-
-  config.aug.mix.mode = 'batch'  # batch, pair, elem: for timm mixup only
-
-  # rand erase config
-  config.aug.randerase = ml_collections.ConfigDict()
-  config.aug.randerase.on = False
-  config.aug.randerase.prob = 0.25
-
   # init config
   config.rescale_init = False  # rescale initialized weights by layer id
 

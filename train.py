@@ -214,11 +214,8 @@ def eval_step(state, batch, model):
   return metrics
 
 
-def parse_batch(batch, local_batch_size, mixup_fn=None):
+def parse_batch(batch, local_batch_size):
   images, labels, labels_one_hot = batch
-  if mixup_fn is not None:
-    assert images.shape[1] == 3  # nchw
-    images, labels_one_hot = mixup_fn(images, labels)
   images = images.permute([0, 2, 3, 1])  # nchw -> nhwc
   batch = {'image': images, 'label': labels, 'label_one_hot': labels_one_hot}
   batch = prepare_pt_data(batch, local_batch_size)  # to (local_devices, device_batch_size, height, width, 3)
@@ -312,8 +309,6 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   # ------------------------------------
   data_loader_train, data_loader_val, local_batch_size = build_dataloaders(config, partitioner, rng_torch)
 
-  mixup_fn = torchloader_util.get_mixup_fn(config.aug)
-
   steps_per_epoch = len(data_loader_train)
   
   # ------------------------------------
@@ -378,7 +373,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   # ------------------------------------------
   # debug
   # batch = next(iter(data_loader_train))
-  # batch = parse_batch(batch, local_batch_size, mixup_fn)
+  # batch = parse_batch(batch, local_batch_size)
   # metrics = partitioned_eval_step(state, batch)
   # ------------------------------------------
 
@@ -409,7 +404,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # train one epoch
     # ------------------------------------------------------------
     for i, batch in enumerate(data_loader_train):
-      batch = parse_batch(batch, local_batch_size, mixup_fn)
+      batch = parse_batch(batch, local_batch_size)
       state, metrics = partitioned_train_step(state, batch)
 
       if epoch == epoch_offset and i == 0 and partitioner._num_partitions > 8:
@@ -483,7 +478,7 @@ def run_eval(state, partitioned_eval_step, data_loader_val, local_batch_size, ep
   eval_metrics = []
   tic = time.time()
   for _, batch in enumerate(data_loader_val):
-    batch = parse_batch(batch, local_batch_size, mixup_fn=None)
+    batch = parse_batch(batch, local_batch_size)
     metrics = partitioned_eval_step(state, batch)
     eval_metrics.append(metrics)
     # logging.info('{} / {}'.format(_, len(data_loader_val)))
