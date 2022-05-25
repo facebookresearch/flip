@@ -46,9 +46,9 @@ def get_config():
   config.transformer.dropout_rate = 0.0
   config.transformer.droppath_rate = 0.0
 
-#   config.decoder = vit.get_testing_config()
-#   config.decoder.transformer.dropout_rate = 0.0
-#   config.decoder.transformer.droppath_rate = 0.0
+  config.decoder = vit.get_testing_config()
+  config.decoder.transformer.dropout_rate = 0.0
+  config.decoder.transformer.droppath_rate = 0.0
 
 #   config.visualize = False
 

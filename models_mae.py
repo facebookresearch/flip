@@ -39,6 +39,7 @@ INIT_VER = 'v2'
 fixed_gaussian_init = nn.initializers.normal(stddev=0.02)
 if INIT_VER == 'v1':
   clstoken_init = nn.initializers.zeros
+  masktoken_init = fixed_gaussian_init
   posemb_init = fixed_gaussian_init
   patch_kernel_init = nn.initializers.lecun_uniform()
   patch_bias_init = nn.initializers.zeros
@@ -48,6 +49,7 @@ if INIT_VER == 'v1':
   head_kernel_init=nn.initializers.zeros
 elif INIT_VER == 'v2':
   clstoken_init = fixed_gaussian_init
+  masktoken_init = fixed_gaussian_init
   posemb_init = fixed_gaussian_init
   patch_kernel_init = fixed_gaussian_init
   patch_bias_init = fixed_gaussian_init  # bug from PyTorch code?
@@ -293,9 +295,10 @@ class Encoder(nn.Module):
   dropout_rate: float = 0.1
   attention_dropout_rate: float = 0.1
   droppath_rate: float = 0.0
+  prefix: str = 'encoder'
 
   @nn.compact
-  def __call__(self, inputs, *, train, encoder_norm=True):
+  def __call__(self, inputs, *, train):
     """Applies Transformer model on the inputs.
 
     Args:
@@ -308,19 +311,18 @@ class Encoder(nn.Module):
     assert inputs.ndim == 3  # (batch, len, emb)
 
     x = inputs
-
     # Input Encoder
     for lyr in range(self.num_layers):
       x = Encoder1DBlock(
           mlp_dim=self.mlp_dim,
           dropout_rate=self.dropout_rate,
           attention_dropout_rate=self.attention_dropout_rate,
-          droppath_rate=self.droppath_rate * lyr / (self.num_layers - 1),
-          name='encoderblock_{:02d}'.format(lyr),
+          droppath_rate=self.droppath_rate * lyr / (self.num_layers - 1) if self.droppath_rate > 0. else 0.,
+          name=self.prefix + 'block_{:02d}'.format(lyr),
           num_heads=self.num_heads,
           layer_id=lyr,
         )(x, deterministic=not train)
-    encoded = t5x.layers.LayerNorm(name='encoder_norm', axes=('embed',))(x) if encoder_norm else x
+    encoded = t5x.layers.LayerNorm(name=self.prefix + '_norm', axes=('embed',))(x)
 
     return encoded
 
@@ -352,9 +354,9 @@ class VisionTransformer(nn.Module):
   patches: Any
   transformer: Any
   hidden_size: int
-  representation_size: Optional[int] = None
   classifier: str = 'token'
   dtype: Any = jnp.float32
+  decoder: Any = None
 
   def random_mask(self, x):
 
@@ -384,7 +386,7 @@ class VisionTransformer(nn.Module):
     return x_masked, mask, ids_restore
 
   def apply_encoder(self, inputs, train):
-    use_cls_token=(self.classifier == 'token')
+    use_cls_token = (self.classifier == 'token')
     assert use_cls_token  # kaiming: TODO: support both?
 
     x = t5x.layers.Conv(
@@ -413,10 +415,36 @@ class VisionTransformer(nn.Module):
       x = jnp.concatenate([cls, x], axis=1)
 
     # apply the encoder
-    x = Encoder(name='Transformer', **self.transformer)(x, train=train, encoder_norm=(self.classifier == 'token'))
+    x = Encoder(name='Transformer', **self.transformer, prefix='encoder')(x, train=train)
 
     return x, mask, ids_restore
 
+  def apply_decoder(self, x, ids_restore, train):
+    use_cls_token = (self.classifier == 'token')
+
+    n, h, w = ids_restore.shape
+    ids_restore = jnp.reshape(ids_restore, [n, h * w])
+
+    # apply the encoder-decoder bottleneck
+    x = t5x.layers.Dense(
+      features=self.decoder.hidden_size,
+      kernel_init=mlp_kernel_init,
+      bias_init=mlp_bias_init,
+      kernel_axes=('mlp', 'embed'),  # 'mlp' is split first
+      name='bottleneck')(x)
+
+    # append mask token
+    num_clstokens = 1 if use_cls_token else 0
+    mask_token = t5x.layers.param_with_axes(
+      'mask_token', masktoken_init, (1, 1, self.decoder.hidden_size),
+      jnp.float32, axes=('_null0', '_null1', 'embed'))
+    mask_tokens = jnp.tile(mask_token, [n, ids_restore.shape[1] + num_clstokens - x.shape[1], 1])
+    x_ = jnp.concatenate([x[:, num_clstokens:, :], mask_tokens], axis=1)  # no cls token
+    x_ = gather_by_einsum(x_, ids_restore)
+
+    x = x_
+
+    return x
 
   @nn.compact
   def __call__(self, inputs, *, train):
@@ -425,33 +453,25 @@ class VisionTransformer(nn.Module):
     # apply encoder
     x, mask, ids_restore = self.apply_encoder(imgs, train=train)
 
+    # apply decoder
+    pred = self.apply_decoder(x, ids_restore, train=train)
+    x = pred
+
     if self.classifier == 'token':
       x = x[:, 0]
     elif self.classifier == 'tgap':
       x = x[:, 1:]
       x = jnp.mean(x, axis=list(range(1, x.ndim - 1)))  # (1,) or (1,2)
-      # x = nn.LayerNorm(name='fc_norm')(x)
       x = t5x.layers.LayerNorm(name='fc_norm', axes=('embed',))(x)
     elif self.classifier == 'gap':
       x = jnp.mean(x, axis=list(range(1, x.ndim - 1)))  # (1,) or (1,2)
-      # x = nn.LayerNorm(name='fc_norm')(x)
       x = t5x.layers.LayerNorm(name='fc_norm', axes=('embed',))(x)
     else:
       raise ValueError(f'Invalid classifier={self.classifier}')
 
-    if self.representation_size is not None:
-      raise NotImplementedError 
-      # x = nn.Dense(features=self.representation_size, name='pre_logits')(x)
-      # x = nn.tanh(x)
-    else:
-      x = IdentityLayer(name='pre_logits')(x)
+    x = IdentityLayer(name='pre_logits')(x)
 
     if self.num_classes:
-      # x = nn.Dense(
-      #   features=self.num_classes,
-      #   name='head',
-      #   kernel_init=head_kernel_init
-      # )(x)      
       x = t5x.layers.Dense(
           features=self.num_classes,
           kernel_init=head_kernel_init,

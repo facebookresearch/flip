@@ -55,7 +55,6 @@ def get_testing_config():
   config.transformer.attention_dropout_rate = 0.0
   config.transformer.dropout_rate = 0.1
   config.classifier = 'token'
-  config.representation_size = None
   return config
 
 
@@ -77,7 +76,6 @@ def get_ti16_config():
   config.transformer.attention_dropout_rate = 0.0
   config.transformer.dropout_rate = 0.0
   config.classifier = 'token'
-  config.representation_size = None
   return config
 
 
@@ -95,7 +93,6 @@ def get_s16_config():
   config.transformer.attention_dropout_rate = 0.0
   config.transformer.dropout_rate = 0.0
   config.classifier = 'token'
-  config.representation_size = None
   return config
 
 
@@ -113,7 +110,6 @@ def get_b16_config():
   config.transformer.attention_dropout_rate = 0.0
   config.transformer.dropout_rate = 0.0
   config.classifier = 'token'
-  config.representation_size = None
   return config
 
 
@@ -131,7 +127,6 @@ def get_l16_config():
   config.transformer.attention_dropout_rate = 0.0
   config.transformer.dropout_rate = 0.1
   config.classifier = 'token'
-  config.representation_size = None
   return config
 
 
@@ -149,7 +144,6 @@ def get_h14_config():
   config.transformer.attention_dropout_rate = 0.0
   config.transformer.dropout_rate = 0.1
   config.classifier = 'token'
-  config.representation_size = None
   return config
 
 
