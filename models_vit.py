@@ -161,7 +161,6 @@ class Encoder1DBlock(nn.Module):
   attention_dropout_rate: float = 0.1
   droppath_rate: float = 0.0
   layer_id: int = None
-  torch_qkv: bool = False
 
   @nn.compact
   def __call__(self, inputs, *, deterministic):
@@ -180,26 +179,18 @@ class Encoder1DBlock(nn.Module):
     x = t5x.layers.LayerNorm(dtype=self.dtype, axes=('embed',))(inputs)
 
     # ----------------------------------------------------
-    if self.torch_qkv:
-      # revised, QKV
-      # we do not need to specify init in finetune
-      raise NotImplementedError
-      # MsaBlock = functools.partial(
-      #   attention_util.MultiHeadDotProductAttentionQKV,
-      #   out_kernel_init=msa_kernel_init)
-    else:
-      # t5x
-      MsaBlock = functools.partial(
-        t5x.layers.MultiHeadDotProductAttention,
-        kernel_init=msa_kernel_init,
-      )
-      # original
-      # MsaBlock = functools.partial(
-      #   nn.MultiHeadDotProductAttention,
-      #   kernel_init=msa_kernel_init,
-      #   broadcast_dropout=False,
-      #   deterministic=deterministic,
-      # )
+    # t5x
+    MsaBlock = functools.partial(
+      t5x.layers.MultiHeadDotProductAttention,
+      kernel_init=msa_kernel_init,
+    )
+    # original
+    # MsaBlock = functools.partial(
+    #   nn.MultiHeadDotProductAttention,
+    #   kernel_init=msa_kernel_init,
+    #   broadcast_dropout=False,
+    #   deterministic=deterministic,
+    # )
     # ----------------------------------------------------
 
     x = MsaBlock(
@@ -242,7 +233,6 @@ class Encoder(nn.Module):
   dropout_rate: float = 0.1
   attention_dropout_rate: float = 0.1
   droppath_rate: float = 0.0
-  torch_qkv: bool = False
 
   @nn.compact
   def __call__(self, inputs, *, train, encoder_norm=True):
@@ -274,8 +264,7 @@ class Encoder(nn.Module):
           name='encoderblock_{:02d}'.format(lyr),
           num_heads=self.num_heads,
           layer_id=lyr,
-          torch_qkv=self.torch_qkv)(
-              x, deterministic=not train)
+        )(x, deterministic=not train)
     encoded = t5x.layers.LayerNorm(name='encoder_norm', axes=('embed',))(x) if encoder_norm else x
 
     return encoded

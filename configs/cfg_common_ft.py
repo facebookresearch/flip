@@ -66,7 +66,6 @@ def get_config():
   config.model = vit.get_b16_config()  # ViT-B/16
   config.model.transformer.dropout_rate = 0.0
   config.model.transformer.droppath_rate = 0.1
-  config.model.transformer.torch_qkv = False  # torch_qkv=True means using **one** qkv conv and then seperate it (JAX default is torch_qkv=False)
   config.model.num_classes = 1000
 
   # optimizer config

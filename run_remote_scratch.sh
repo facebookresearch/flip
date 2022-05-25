@@ -66,7 +66,6 @@ python3 main.py \
     --config.seed_tf=${seed} \
     --config.seed_jax=${seed} \
     --config.seed_pt=${seed} \
-    --config.model.transformer.torch_qkv=False \
     --config.model.classifier=token \
     --config.partitioning.num_partitions=${partitions} \
     --config.opt_type=adamw \

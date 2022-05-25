@@ -67,7 +67,6 @@ python3 main.py \
     --config.seed_tf=${seed} \
     --config.seed_jax=${seed} \
     --config.seed_pt=${seed} \
-    --config.model.transformer.torch_qkv=False \
     --config.model.classifier=tgap \
     --config.partitioning.num_partitions=${partitions} \
 2>&1 | tee $LOGDIR/finetune_\$SSH_ID.log

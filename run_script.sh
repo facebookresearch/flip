@@ -17,7 +17,6 @@ python3 main.py \
     --config.aug.mix.mixup=True \
     --config.aug.mix.cutmix=True \
     --config.aug.autoaug=autoaug \
-    --config.model.transformer.torch_qkv=False \
     --config.eval_only=False \
     --config.model.classifier=token \
     --config.learning_rate_decay=1. \
