@@ -23,6 +23,9 @@ import flax.linen as nn
 
 import t5x.layers
 
+from utils import posembed_util
+from utils import initializers_util
+
 
 Array = Any
 PRNGKey = Any
@@ -103,9 +106,6 @@ class IdentityLayer(nn.Module):
 
 class AddPositionEmbs(nn.Module):
   """Adds (optionally learned) positional embeddings to the inputs.
-
-  Attributes:
-    posemb_init: positional embedding initializer.
   """
   sincos: bool
   use_cls_token: bool
@@ -119,14 +119,11 @@ class AddPositionEmbs(nn.Module):
     pos_emb_shape = (1, num_clstokens + h * w, c)  # (batch_size, seq_len, emb_dim).
 
     if not self.sincos:
-      init_fn = posemb_init
-      # self.pe = self.param('pos_embedding', posemb_init, pos_emb_shape)
-    else:
       raise NotImplementedError
+      init_fn = posemb_init
+    else:
       pe_array = posembed_util.get_2d_sincos_pos_embed(c, (h, w), cls_token=self.use_cls_token)  # in numpy array
-
       init_fn = initializers_util.constant(value=pe_array, dtype=self.dtype)
-      # self.pe = self.param('pos_embedding', sincos_init, pos_emb_shape)
 
     self.pe = t5x.layers.param_with_axes(
         'pos_embedding',
@@ -351,6 +348,7 @@ class VisionTransformer(nn.Module):
 
   num_classes: int
   mask_ratio: float
+  sincos: bool
   patches: Any
   transformer: Any
   hidden_size: int
@@ -403,7 +401,7 @@ class VisionTransformer(nn.Module):
     n, h, w, c = x.shape
     x = jnp.reshape(x, [n, h * w, c])
 
-    x = AddPositionEmbs(sincos=False, use_cls_token=use_cls_token, img_shape=(h, w, c), name='posembed_encoder')(x)
+    x = AddPositionEmbs(sincos=self.sincos, use_cls_token=use_cls_token, img_shape=(h, w, c), name='posembed_encoder')(x)
 
     # masking: length -> length * mask_ratio
     x, mask, ids_restore = self.random_mask(x)

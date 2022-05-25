@@ -29,7 +29,7 @@
 
 import ml_collections
 
-import configs.vit as vit
+import configs.mae as mae
 
 
 def get_config():
@@ -63,7 +63,7 @@ def get_config():
   config.cache = True
 
   # model config
-  config.model = vit.get_b16_config()  # ViT-B/16
+  config.model = mae.get_config()  # ViT-B/16
   config.model.transformer.dropout_rate = 0.0
   config.model.transformer.droppath_rate = 0.1
   config.model.num_classes = 1000
@@ -78,10 +78,6 @@ def get_config():
   config.opt_mu_dtype = 'float32'
 
   config.exclude_wd = True  # exclude some weight decays (bias, norm, cls, posembed)
-
-  # config.ema = False
-  # config.ema_decay = 0.9999
-  # config.ema_eval = False
 
   # aug config
   config.aug = ml_collections.ConfigDict()
