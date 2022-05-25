@@ -64,8 +64,8 @@ def build_transform(is_train, aug):
     std = IMAGENET_DEFAULT_STD
     # train transform
     if is_train:
-        color_jitter = 0.0 if aug.color_jit is None else aug.color_jit[0]
-        aa = AUTOAUGS[aug.autoaug]
+        color_jitter = None if aug.color_jit is None else aug.color_jit[0]
+        aa = AUTOAUGS[aug.autoaug] if aug.autoaug else None
         # this should always dispatch to transforms_imagenet_train
         transform = create_transform(
             input_size=IMAGE_SIZE,

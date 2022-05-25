@@ -13,6 +13,8 @@ import tensorflow as tf
 from tensorflow.io import gfile
 import time
 
+from utils import logging_util
+
 
 Array = Union[np.ndarray, jnp.ndarray, jax.pxla.ShardedDeviceArray, tf.Tensor]
 PyTreeDef = type(jax.tree_structure(None))
@@ -72,7 +74,9 @@ def log_model_info(log_file: Optional[str],
       #     writer, '%-96s %-20s %-40s %s',
       #     name, arr.size, shape_str, mesh_axes)
       arr_size = '{:,d}'.format(arr.size)
-      print('{:96s} {:>16s} {:48s} {}'.format(name, arr_size, str(shape_str), str(mesh_axes)))
+      logging.info('{:96s} {:>16s} {:48s} {}'.format(name, arr_size, str(shape_str), str(mesh_axes)))
+
+    logging_util.set_time_logging_short(logging)  # make the logging shorter
 
     jax.tree_map(
         _log_variable,
@@ -87,7 +91,7 @@ def log_model_info(log_file: Optional[str],
         state_utils.get_name_tree(state_dict['state'], keep_empty_nodes=True),
         state_dict['state'], logical_axes['state'], mesh_axes['state'])
     
-    time.sleep(1)  # hack to wait for print
+    logging_util.set_time_logging(logging)  # restore the logging
 
     _log_info_and_write_to_file(writer, 'Total number of parameters (1e6): %.6f',
                                 total_num_params / 1e6)

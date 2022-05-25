@@ -11,7 +11,6 @@ python3 main.py \
     --config.num_epochs=1000 \
     --config.profile_memory=True \
     --config.donate=True \
-    --config.aug.autoaug=autoaug \
     --config.eval_only=False \
     --config.model.classifier=token \
     --config.learning_rate_decay=1. \

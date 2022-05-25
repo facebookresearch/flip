@@ -18,7 +18,7 @@ vitsize=large
 CONFIG=cfg_mae_${vitsize}
 
 
-JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maedbg_${VM_NAME}_${CONFIG}_${ep}ep_fttl_b${batch}_wd${wd}_lr${lr}_mk${mask}_lrd${lrd}_dp${dp}_warm${warm}_s${seed}_beta${beta2}_p${partitions}_speeddbg_noerase
+JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maedbg_${VM_NAME}_${CONFIG}_${ep}ep_fttl_b${batch}_wd${wd}_lr${lr}_mk${mask}_lrd${lrd}_dp${dp}_warm${warm}_s${seed}_beta${beta2}_p${partitions}_speeddbg_noautoaug
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
 LOGDIR=/kmh_data/logs/${JOBNAME}
@@ -55,7 +55,6 @@ python3 main.py \
     --config.profile_memory=True \
     --config.donate=True \
     --config.init_backend=tpu \
-    --config.aug.autoaug=randaugv2 \
     --config.model.mask_ratio=${mask} \
     --config.model.transformer.droppath_rate=${dp} \
     --config.seed_tf=${seed} \

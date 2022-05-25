@@ -14,6 +14,13 @@ def set_time_logging(logger):
   logger.get_absl_handler().setFormatter(_logging.Formatter(str, datefmt='%m%d %H:%M:%S'))
 
 
+def set_time_logging_short(logger):
+  pid = jax.process_index()
+  prefix = "[p{:02d} %(asctime)s] ".format(pid)
+  str = colored(prefix, "green") + '%(message)s'
+  logger.get_absl_handler().setFormatter(_logging.Formatter(str, datefmt='%m%d %H:%M:%S'))
+
+
 def verbose_on():
   logging.set_verbosity(logging.INFO)  # show all processes
 
