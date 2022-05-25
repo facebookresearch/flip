@@ -272,8 +272,8 @@ class Encoder(nn.Module):
 
 
 def gather(x, ids):
-  return x[ids]
-vmapped_gather = jax.jit(jax.vmap(gather, in_axes=(0, 0), out_axes=0))
+  return x[ids, :]
+vmapped_gather = jax.vmap(gather, in_axes=(0, 0), out_axes=0, axis_name='batch')
 
 
 class VisionTransformer(nn.Module):
@@ -289,29 +289,39 @@ class VisionTransformer(nn.Module):
   dtype: Any = jnp.float32
 
   def random_mask(self, x):
-    
+    # see https://colab.research.google.com/drive/1pwIi5CPkaZOe0RgOWHogPhQ12NWrS88z?usp=sharing
+
     N, L, _ = x.shape  # batch, length, dim
     len_keep = int(L * (1 - self.mask_ratio))
 
+    # x_masked = x[:, :len_keep, :]
+
     rng = self.make_rng('dropout')
-    noise = random.uniform(rng, shape=(N, L))
+    noise = random.uniform(rng, shape=x.shape[:2])
 
     ids_shuffle = jnp.argsort(noise, axis=1)  # ascend: small is keep, large is remove
-    ids_restore = jnp.argsort(ids_shuffle, axis=1)
+
+    mat_shuffle = jax.nn.one_hot(ids_shuffle, L, dtype=x.dtype)  # [N, L, L]
+    mat_keep = mat_shuffle[:, :len_keep, :]  # [N, K, L]
+
+    x_masked = jnp.einsum('nlc,nkl->nkc', x, mat_keep)
 
     # keep the first subset
-    ids_keep = ids_shuffle[:, :len_keep]    
-    x_masked = vmapped_gather(x, ids_keep)
+    # ids_keep = ids_shuffle[:, :len_keep]  
+    # x_masked = vmapped_gather(x, ids_keep)
+
     x_masked = t5x.layers.with_sharding_constraint(x_masked, ('batch', 'length', 'embed'))
 
     # generate the binary mask: 0 is keep, 1 is remove
-    mask = jnp.ones([N, L])
-    mask = t5x.layers.with_sharding_constraint(mask, ('batch', 'length'))
-    mask = mask.at[:, :len_keep].set(0)
+    # mask = jnp.ones([N, L])
+    # mask = t5x.layers.with_sharding_constraint(mask, ('batch', 'length'))
+    # mask = mask.at[:, :len_keep].set(0)
     # unshuffle to get the binary mask
-    mask = vmapped_gather(mask, ids_restore)
-    mask = t5x.layers.with_sharding_constraint(mask, ('batch', 'length'))
-    
+    # mask = vmapped_gather(mask, ids_restore)
+    # mask = t5x.layers.with_sharding_constraint(mask, ('batch', 'length'))
+
+    mask = None
+    ids_restore = None
     return x_masked, mask, ids_restore
 
   @nn.compact
@@ -336,7 +346,7 @@ class VisionTransformer(nn.Module):
 
     # masking: length -> length * mask_ratio
     x, mask, ids_restore = self.random_mask(x)
-    ids_restore = jnp.reshape(ids_restore, [n, h, w])  # carries the shape info
+    # ids_restore = jnp.reshape(ids_restore, [n, h, w])  # carries the shape info
 
     # If we want to add a class token, add it here.
     if self.classifier in {'token', 'tgap'}:
