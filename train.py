@@ -49,7 +49,7 @@ from utils import logging_util
 from t5x.train_state_initializer import create_train_state
 import t5x.partitioning
 import t5x.rng
-from t5x.ux.log_model_info import log_model_info
+from t5x.model_info import log_model_info
 import t5x.checkpoints
 
 import jax.profiler
