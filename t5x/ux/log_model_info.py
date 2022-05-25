@@ -11,6 +11,7 @@ from t5x import state_utils
 from t5x import train_state as train_state_lib
 import tensorflow as tf
 from tensorflow.io import gfile
+import time
 
 
 Array = Union[np.ndarray, jnp.ndarray, jax.pxla.ShardedDeviceArray, tf.Tensor]
@@ -71,7 +72,7 @@ def log_model_info(log_file: Optional[str],
       #     writer, '%-96s %-20s %-40s %s',
       #     name, arr.size, shape_str, mesh_axes)
       arr_size = '{:,d}'.format(arr.size)
-      logging.info('{:96s} {:>16s} {:48s} {}'.format(name, arr_size, str(shape_str), str(mesh_axes)))
+      print('{:96s} {:>16s} {:48s} {}'.format(name, arr_size, str(shape_str), str(mesh_axes)))
 
     jax.tree_map(
         _log_variable,
@@ -85,6 +86,8 @@ def log_model_info(log_file: Optional[str],
         _log_variable,
         state_utils.get_name_tree(state_dict['state'], keep_empty_nodes=True),
         state_dict['state'], logical_axes['state'], mesh_axes['state'])
+    
+    time.sleep(1)  # hack to wait for print
 
     _log_info_and_write_to_file(writer, 'Total number of parameters (1e6): %.6f',
                                 total_num_params / 1e6)
