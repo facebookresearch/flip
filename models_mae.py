@@ -65,16 +65,80 @@ class IdentityLayer(nn.Module):
     return x
 
 
+# class AddPositionEmbs(nn.Module):
+#   """Adds (optionally learned) positional embeddings to the inputs.
+
+#   Attributes:
+#     posemb_init: positional embedding initializer.
+#   """
+
+#   posemb_init: Callable[[PRNGKey, Shape, Dtype], Array]
+
+#   @nn.compact
+#   def __call__(self, inputs):
+#     """Applies AddPositionEmbs module.
+
+#     By default this layer uses a fixed sinusoidal embedding table. If a
+#     learned position embedding is desired, pass an initializer to
+#     posemb_init.
+
+#     Args:
+#       inputs: Inputs to the layer.
+
+#     Returns:
+#       Output tensor with shape `(bs, timesteps, in_dim)`.
+#     """
+#     # inputs.shape is (batch_size, seq_len, emb_dim).
+#     assert inputs.ndim == 3, ('Number of dimensions should be 3,'
+#                               ' but it is: %d' % inputs.ndim)
+#     pos_emb_shape = (1, inputs.shape[1], inputs.shape[2])
+#     pe = t5x.layers.param_with_axes(
+#         'pos_embedding',
+#         self.posemb_init,
+#         pos_emb_shape,
+#         jnp.float32,
+#         axes=('_null0', 'length', 'embed'))
+#     return inputs + pe
+
+
 class AddPositionEmbs(nn.Module):
   """Adds (optionally learned) positional embeddings to the inputs.
 
   Attributes:
     posemb_init: positional embedding initializer.
   """
+  sincos: bool
+  use_cls_token: bool
+  img_shape: Shape  # [h, w, c]
+  dtype: Any = jnp.float32
 
-  posemb_init: Callable[[PRNGKey, Shape, Dtype], Array]
+  def setup(self):
+    h, w, c = self.img_shape
 
-  @nn.compact
+    num_clstokens = 1 if self.use_cls_token else 0
+    pos_emb_shape = (1, num_clstokens + h * w, c)  # (batch_size, seq_len, emb_dim).
+
+    if not self.sincos:
+      init_fn = posemb_init
+      # self.pe = self.param('pos_embedding', posemb_init, pos_emb_shape)
+    else:
+      raise NotImplementedError
+      pe_array = posembed_util.get_2d_sincos_pos_embed(c, (h, w), cls_token=self.use_cls_token)  # in numpy array
+
+      init_fn = initializers_util.constant(value=pe_array, dtype=self.dtype)
+      # self.pe = self.param('pos_embedding', sincos_init, pos_emb_shape)
+
+    self.pe = t5x.layers.param_with_axes(
+        'pos_embedding',
+        init_fn,
+        pos_emb_shape,
+        jnp.float32,
+        axes=('_null0', 'length', 'embed'))
+
+    # kaiming: in MAE, we should always set posembed for cls_token as zero.
+    # when loading for finetuning, this zero posembed can be tuned.
+    # but this is not addressed here if sincos=False
+
   def __call__(self, inputs):
     """Applies AddPositionEmbs module.
 
@@ -88,17 +152,15 @@ class AddPositionEmbs(nn.Module):
     Returns:
       Output tensor with shape `(bs, timesteps, in_dim)`.
     """
-    # inputs.shape is (batch_size, seq_len, emb_dim).
-    assert inputs.ndim == 3, ('Number of dimensions should be 3,'
-                              ' but it is: %d' % inputs.ndim)
-    pos_emb_shape = (1, inputs.shape[1], inputs.shape[2])
-    pe = t5x.layers.param_with_axes(
-        'pos_embedding',
-        self.posemb_init,
-        pos_emb_shape,
-        jnp.float32,
-        axes=('_null0', 'length', 'embed'))
-    return inputs + pe
+    
+    pe = jax.lax.stop_gradient(self.pe) if self.sincos else self.pe
+
+    if self.use_cls_token:
+      output = inputs + pe[:, 1:, :]
+    else:
+      output = inputs + pe
+
+    return output
 
 
 class MlpBlock(nn.Module):
@@ -249,11 +311,6 @@ class Encoder(nn.Module):
     assert inputs.ndim == 3  # (batch, len, emb)
 
     x = inputs
-    # x = AddPositionEmbs(
-    #     posemb_init=posemb_init,  # from BERT.
-    #     name='posembed_input')(
-    #         inputs)
-    # x = nn.Dropout(rate=self.dropout_rate)(x, deterministic=not train)
 
     # Input Encoder
     for lyr in range(self.num_layers):
@@ -271,19 +328,21 @@ class Encoder(nn.Module):
     return encoded
 
 
+# the implemention for pmap
 def gather(x, ids):
   return x[ids, :]
 vmapped_gather = jax.vmap(gather, in_axes=(0, 0), out_axes=0, axis_name='batch')
 
 
+# the implemention for pjit
 def gather_by_einsum(x, ids):
-  """
-  kaiming: vmap + gather is slow with pjit; use einsum instead
-  x: [N, L, C]
-  ids: [N, K]
+  """kaiming: vmap + gather is slow with pjit; use einsum instead
+  Args:
+    x: [N, L, ...]
+    ids: [N, K]
   """
   mat = jax.nn.one_hot(ids, x.shape[1])  # [N, K, L]
-  x = jnp.einsum('nlc,nkl->nkc', x, mat)
+  x = jnp.einsum('nl...,nkl->nk...', x, mat)
   return x
 
 
@@ -300,12 +359,9 @@ class VisionTransformer(nn.Module):
   dtype: Any = jnp.float32
 
   def random_mask(self, x):
-    # see https://colab.research.google.com/drive/1pwIi5CPkaZOe0RgOWHogPhQ12NWrS88z?usp=sharing
 
     N, L, _ = x.shape  # batch, length, dim
     len_keep = int(L * (1 - self.mask_ratio))
-
-    # x_masked = x[:, :len_keep, :]
 
     rng = self.make_rng('dropout')
     noise = random.uniform(rng, shape=x.shape[:2])
@@ -320,22 +376,19 @@ class VisionTransformer(nn.Module):
     x_masked = t5x.layers.with_sharding_constraint(x_masked, ('batch', 'length', 'embed'))
 
     # generate the binary mask: 0 is keep, 1 is remove
-    # mask = jnp.ones([N, L])
-    # mask = t5x.layers.with_sharding_constraint(mask, ('batch', 'length'))
-    # mask = mask.at[:, :len_keep].set(0)
+    mask = jnp.ones([N, L])
+    mask = t5x.layers.with_sharding_constraint(mask, ('batch', 'length'))
+    mask = mask.at[:, :len_keep].set(0)
     # unshuffle to get the binary mask
-    # mask = vmapped_gather(mask, ids_restore)
-    # mask = t5x.layers.with_sharding_constraint(mask, ('batch', 'length'))
+    mask = gather_by_einsum(mask, ids_restore)
+    mask = t5x.layers.with_sharding_constraint(mask, ('batch', 'length'))
 
-    mask = None
-    ids_restore = None
     return x_masked, mask, ids_restore
 
-  @nn.compact
-  def __call__(self, inputs, *, train):
-    x = inputs
+  def apply_encoder(self, inputs, train):
+    use_cls_token=(self.classifier == 'token')
+    assert use_cls_token  # kaiming: TODO: support both?
 
-    n, h, w, c = x.shape
     x = t5x.layers.Conv(
         features=self.hidden_size,
         kernel_size=self.patches.size,
@@ -345,26 +398,34 @@ class VisionTransformer(nn.Module):
         kernel_init=patch_kernel_init,
         bias_init=patch_bias_init,
         kernel_axes=('_null0', '_null1', '_null2', 'embed'),
-        )(x)
+        )(inputs)
 
-    # Transformer.
     n, h, w, c = x.shape
     x = jnp.reshape(x, [n, h * w, c])
 
+    x = AddPositionEmbs(sincos=False, use_cls_token=use_cls_token, img_shape=(h, w, c), name='posembed_encoder')(x)
+
     # masking: length -> length * mask_ratio
     x, mask, ids_restore = self.random_mask(x)
-    # ids_restore = jnp.reshape(ids_restore, [n, h, w])  # carries the shape info
+    ids_restore = jnp.reshape(ids_restore, [n, h, w])  # carries the shape info
 
-    # If we want to add a class token, add it here.
-    if self.classifier in {'token', 'tgap'}:
+    if use_cls_token:
       cls = t5x.layers.param_with_axes('cls', clstoken_init, (1, 1, c), jnp.float32, axes=('_null0', '_null1', 'embed'))
       cls = jnp.tile(cls, [n, 1, 1])
       x = jnp.concatenate([cls, x], axis=1)
 
-    # we add posemb here
-    x = AddPositionEmbs(posemb_init=posemb_init, name='posembed_encoder')(x)
-
+    # apply the encoder
     x = Encoder(name='Transformer', **self.transformer)(x, train=train, encoder_norm=(self.classifier == 'token'))
+
+    return x, mask, ids_restore
+
+
+  @nn.compact
+  def __call__(self, inputs, *, train):
+    imgs = inputs
+
+    # apply encoder
+    x, mask, ids_restore = self.apply_encoder(imgs, train=train)
 
     if self.classifier == 'token':
       x = x[:, 0]
@@ -386,24 +447,6 @@ class VisionTransformer(nn.Module):
       # x = nn.tanh(x)
     else:
       x = IdentityLayer(name='pre_logits')(x)
-    
-    # ------------------------------------------------
-    # debugging BN or state
-    # x = nn.BatchNorm(
-    #   use_running_average=not train,
-    #   momentum=0.9,
-    #   epsilon=1e-5,
-    #   name='bn_debug'
-    # )(x)
-    # var_bias = t5x.layers.variable_with_axes(
-    #   'debug_vars', 'var_bias',
-    #   lambda s: jnp.zeros(s, jnp.float32),
-    #   (x.shape[-1],),
-    #   axes=('embed',))
-    # x += var_bias.value
-    # if train:
-    #   var_bias.value += 1.
-    # ------------------------------------------------
 
     if self.num_classes:
       # x = nn.Dense(
