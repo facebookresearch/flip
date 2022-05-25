@@ -18,6 +18,11 @@ This script trains a ViT on the ImageNet dataset.
 The data is loaded using tensorflow_datasets.
 """
 
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=DeprecationWarning) 
+warnings.filterwarnings("ignore", category=FutureWarning) 
+
 import functools
 import time, datetime
 from typing import Any
@@ -55,10 +60,6 @@ import random as _random
 
 import torch
 import torch.utils.data
-import warnings
-warnings.filterwarnings("ignore", category=UserWarning)
-warnings.filterwarnings("ignore", category=DeprecationWarning) 
-warnings.filterwarnings("ignore", category=FutureWarning) 
 
 
 def build_dataloaders(config, partitioner, rng_torch):

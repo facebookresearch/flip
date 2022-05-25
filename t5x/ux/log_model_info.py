@@ -43,7 +43,7 @@ def log_model_info(log_file: Optional[str],
       partitioner.get_mesh_axes(full_train_state).state_dict())
 
   def _log_info_and_write_to_file(writer, format_str, *args):
-    # logging.info(format_str, *args)
+    logging.info(format_str, *args)
     if writer is not None:
       writer.write(format_str % args + '\n')
 

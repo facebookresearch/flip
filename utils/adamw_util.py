@@ -118,7 +118,7 @@ def _scale_by_adam(
     mu = _update_moment(updates, state.mu, b1, 1)
     nu = _update_moment(updates, state.nu, b2, 2)
     count_inc = numerics.safe_int32_increment(state.count)
-    mu_hat = utils.cast_tree(_bias_correction(mu, b1, count_inc), mu_dtype)
+    mu_hat = _bias_correction(mu, b1, count_inc)
     nu_hat = _bias_correction(nu, b2, count_inc)
     updates = jax.tree_map(
         lambda m, v: m / (jnp.sqrt(v + eps_root) + eps), mu_hat, nu_hat)
@@ -162,7 +162,7 @@ def adarows(
 
 
 def PartitionRuleScaleByAdaRowsState(state, params_axes):
-  nu_params_axes = jax.tree_map(lambda a: a if len(a) != 2 else type(a)('_null0',), params_axes)
+  nu_params_axes = jax.tree_map(lambda g: g if len(g) != 2 else type(g)('_null0',), params_axes)
   return ScaleByAdaRowsState(count=None, mu=params_axes, nu=nu_params_axes)
 
 
@@ -173,19 +173,7 @@ def _scale_by_adam_per_rows(
     eps_root: float = 0.0,
     mu_dtype: Optional[Any] = None,
 ) -> base.GradientTransformation:
-  """Rescale updates according to the Adam algorithm.
-
-  References:
-    [Kingma et al, 2014](https://arxiv.org/abs/1412.6980)
-
-  Args:
-    b1: decay rate for the exponentially weighted average of grads.
-    b2: decay rate for the exponentially weighted average of squared grads.
-    eps: term added to the denominator to improve numerical stability.
-    eps_root: term added to the denominator inside the square-root to improve
-      numerical stability when backpropagating gradients through the rescaling.
-    mu_dtype: optional `dtype` to be used for the first order accumulator; if
-      `None` then the `dtype is inferred from `params` and `updates`.
+  """Rescale updates per row according to the Adam algorithm.
 
   Returns:
     An (init_fn, update_fn) tuple.
@@ -204,18 +192,21 @@ def _scale_by_adam_per_rows(
     mu = jax.tree_map(lambda t: jnp.zeros_like(t, dtype=mu_dtype), params)  # First moment
 
     nu = jax.tree_map(lambda t: jnp.zeros_like(
-      t if len(t.shape) != 2 else jnp.mean(t, axis=axis_row),
+      t if t.ndim != 2 else jnp.mean(t, axis=axis_row, keepdims=True),
       dtype=nu_dtype), params)  # Second moment
-    # nu = jax.tree_map(lambda t: jnp.zeros_like(t, dtype=nu_dtype), params)  # Second moment
 
     return ScaleByAdaRowsState(count=jnp.zeros([], jnp.int32), mu=mu, nu=nu)
 
   def update_fn(updates, state, params=None):
     del params
-    mu = _update_moment(updates, state.mu, b1, 1)
-    nu = _update_moment(updates, state.nu, b2, 2)
+    mu = _update_moment(updates, state.mu, b1, 1)  # no change
+    # nu = _update_moment(updates, state.nu, b2, 2)  # original adam
+
+    nu = jax.tree_map(lambda g: g**2 if g.ndim != 2 else jnp.mean(g**2, axis=axis_row, keepdims=True), updates)
+    nu = jax.tree_map(lambda g, t: (1 - b2) * g + b2 * t, nu, state.nu)
+
     count_inc = numerics.safe_int32_increment(state.count)
-    mu_hat = utils.cast_tree(_bias_correction(mu, b1, count_inc), mu_dtype)
+    mu_hat = _bias_correction(mu, b1, count_inc)
     nu_hat = _bias_correction(nu, b2, count_inc)
     updates = jax.tree_map(
         lambda m, v: m / (jnp.sqrt(v + eps_root) + eps), mu_hat, nu_hat)
@@ -223,3 +214,9 @@ def _scale_by_adam_per_rows(
     return updates, ScaleByAdaRowsState(count=count_inc, mu=mu, nu=nu)
 
   return base.GradientTransformation(init_fn, update_fn)
+
+
+def _update_moment(updates, moments, decay, order):
+  """Compute the exponential moving average of the `order`-th moment."""
+  return jax.tree_map(
+      lambda g, t: (1 - decay) * (g ** order) + decay * t, updates, moments)
