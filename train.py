@@ -39,7 +39,7 @@ import ml_collections
 import optax
 import tensorflow as tf
 
-import models_vit
+import models_mae
 
 from utils import summary_util as summary_util  # must be after 'from clu import metric_writers'
 from utils import checkpoint_util as ckp
@@ -319,7 +319,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   # ------------------------------------
   # Create model
   # ------------------------------------
-  model = models_vit.VisionTransformer(**config.model)
+  model = models_mae.VisionTransformer(**config.model)
   
   p_init_fn, state_axes, state_shape = create_train_state(config, model, image_size, steps_per_epoch, partitioner)
   rng_init, rng = jax.random.split(rng)
@@ -369,11 +369,11 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
         out_axis_resources=(state_axes, None),
         donate_argnums=(0,))
 
-  eval_step_fn = functools.partial(eval_step, model=model)  # (state, batch) -> metrics
-  partitioned_eval_step = partitioner.partition(
-        eval_step_fn,
-        in_axis_resources=(state_axes, partitioner.data_partition_spec),
-        out_axis_resources=None)
+  # eval_step_fn = functools.partial(eval_step, model=model)  # (state, batch) -> metrics
+  # partitioned_eval_step = partitioner.partition(
+  #       eval_step_fn,
+  #       in_axis_resources=(state_axes, partitioner.data_partition_spec),
+  #       out_axis_resources=None)
 
   # ------------------------------------------
   # debug
@@ -388,11 +388,11 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   train_metrics_last_t = time.time()
   logging.info('Initial compilation, this might take some minutes...')
 
-  if config.eval_only:
-    # run eval only and return
-    logging.info('Evaluating...')
-    run_eval(state, partitioned_eval_step, data_loader_val, local_batch_size, epoch=-1)
-    return
+  # if config.eval_only:
+  #   # run eval only and return
+  #   logging.info('Evaluating...')
+  #   run_eval(state, partitioned_eval_step, data_loader_val, local_batch_size, epoch=-1)
+  #   return
 
   epoch_offset = (step_offset + 1) // steps_per_epoch
   step = epoch_offset * steps_per_epoch
@@ -408,7 +408,6 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # ------------------------------------------------------------
     # train one epoch
     # ------------------------------------------------------------
-    logging_util.sync_and_delay(10)
     for i, batch in enumerate(data_loader_train):
       batch = parse_batch(batch, local_batch_size, mixup_fn)
       state, metrics = partitioned_train_step(state, batch)
@@ -449,15 +448,15 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # ------------------------------------------------------------
     # finished one epoch: eval
     # ------------------------------------------------------------
-    if True:
-      summary = run_eval(state, partitioned_eval_step, data_loader_val, local_batch_size, epoch)
-      best_acc = max(best_acc, summary['test_acc1'])
+    # if True:
+    #   summary = run_eval(state, partitioned_eval_step, data_loader_val, local_batch_size, epoch)
+    #   best_acc = max(best_acc, summary['test_acc1'])
 
-      # to make it consistent with PyTorch log
-      summary['step_tensorboard'] = epoch  # step for tensorboard (no need to minus 1)
+    #   # to make it consistent with PyTorch log
+    #   summary['step_tensorboard'] = epoch  # step for tensorboard (no need to minus 1)
 
-      writer.write_scalars(step + 1, summary)
-      writer.flush()
+    #   writer.write_scalars(step + 1, summary)
+    #   writer.flush()
 
     # ------------------------------------------------------------
     # finished one epoch: eval

@@ -15,14 +15,14 @@ from utils import adamw
 
 def init_fn(rng, image_size, model):
   input_shape = (1, image_size, image_size, 3)
-  variables = model.init({'params': rng}, jnp.ones(input_shape, model.dtype), train=False)
+  variables = model.init({'params': rng, 'dropout': jax.random.PRNGKey(0)}, jnp.ones(input_shape, model.dtype), train=True)
   return variables
 
 
 def init_shapes(rng, image_size, model):
   input_shape = (1, image_size, image_size, 3)
-  init = functools.partial(model.init, train=False) 
-  variables_shape = jax.eval_shape(init, {'params': rng}, jnp.ones(input_shape, model.dtype))
+  init = functools.partial(model.init, train=True) 
+  variables_shape = jax.eval_shape(init, {'params': rng, 'dropout': jax.random.PRNGKey(0)}, jnp.ones(input_shape, model.dtype))
   return variables_shape
 
 

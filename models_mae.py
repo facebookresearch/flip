@@ -15,12 +15,13 @@
 import functools
 from typing import Any, Callable, Optional, Tuple
 
-import flax.linen as nn
+import jax
 import jax.numpy as jnp
+import jax.random as random
+
+import flax.linen as nn
 
 import t5x.layers
-
-from utils import attention_util
 
 
 Array = Any
@@ -270,36 +271,51 @@ class Encoder(nn.Module):
     return encoded
 
 
+def gather(x, ids):
+  return x[ids]
+vmapped_gather = jax.jit(jax.vmap(gather, in_axes=(0, 0), out_axes=0))
+
+
 class VisionTransformer(nn.Module):
   """VisionTransformer."""
 
   num_classes: int
+  mask_ratio: float
   patches: Any
   transformer: Any
   hidden_size: int
-  resnet: Optional[Any] = None
   representation_size: Optional[int] = None
   classifier: str = 'token'
   dtype: Any = jnp.float32
-  rescale_head_init: float = 1.
+
+  def random_mask(self, x):
+    
+    N, L, _ = x.shape  # batch, length, dim
+    len_keep = int(L * (1 - self.mask_ratio))
+
+    rng = self.make_rng('dropout')
+    noise = random.uniform(rng, shape=(N, L))
+
+    ids_shuffle = jnp.argsort(noise, axis=1)  # ascend: small is keep, large is remove
+    ids_restore = jnp.argsort(ids_shuffle, axis=1)
+
+    # keep the first subset
+    ids_keep = ids_shuffle[:, :len_keep]    
+    x_masked = vmapped_gather(x, ids_keep)
+
+    # generate the binary mask: 0 is keep, 1 is remove
+    mask = jnp.ones([N, L])
+    mask = mask.at[:, :len_keep].set(0)
+    # unshuffle to get the binary mask
+    mask = vmapped_gather(mask, ids_restore)
+
+    return x_masked, mask, ids_restore
 
   @nn.compact
   def __call__(self, inputs, *, train):
     x = inputs
-    # (Possibly partial) ResNet root.
-    assert self.resnet == None
 
     n, h, w, c = x.shape
-    # We can merge s2d+emb into a single conv; it's the same.
-    # x = nn.Conv(
-    #     features=self.hidden_size,
-    #     kernel_size=self.patches.size,
-    #     strides=self.patches.size,
-    #     padding='VALID',
-    #     name='embedding',
-    #     kernel_init=patch_kernel_init,
-    #     bias_init=patch_bias_init,
-    #     )(x)
     x = t5x.layers.Conv(
         features=self.hidden_size,
         kernel_size=self.patches.size,
@@ -311,11 +327,13 @@ class VisionTransformer(nn.Module):
         kernel_axes=('_null0', '_null1', '_null2', 'embed'),
         )(x)
 
-    # Here, x is a grid of embeddings.
-
     # Transformer.
     n, h, w, c = x.shape
     x = jnp.reshape(x, [n, h * w, c])
+
+    # masking: length -> length * mask_ratio
+    x, mask, ids_restore = self.random_mask(x)
+    ids_restore = jnp.reshape(ids_restore, [n, h, w])  # carries the shape info
 
     # If we want to add a class token, add it here.
     if self.classifier in {'token', 'tgap'}:
@@ -375,7 +393,7 @@ class VisionTransformer(nn.Module):
       # )(x)      
       x = t5x.layers.Dense(
           features=self.num_classes,
-          kernel_init=lambda *args: head_kernel_init(*args) * self.rescale_head_init,
+          kernel_init=head_kernel_init,
           kernel_axes=('embed', 'classes'),
           name='head',
       )(x)

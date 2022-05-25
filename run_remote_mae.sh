@@ -2,26 +2,28 @@ echo 'code dir: '$STAGEDIR
 
 # seed=0
 batch=1024
-lr=1e-3
-wd=0.05
-lrd=0.75
+lr=1e-4
+wd=0.3
+lrd=1.0
 ep=50
-warm=5
+warm=20
 dp=0.2
-beta2=0.999
+beta2=0.95
+
+mask=0.75
 
 partitions=1
 
 vitsize=large
 CONFIG=cfg_vit_${vitsize}
 
-source scripts/select_chkpt_${vitsize}.sh
-name=`basename ${PRETRAIN_DIR}`
-
+# source scripts/select_chkpt_${vitsize}.sh
+# name=`basename ${PRETRAIN_DIR}`
+# --config.pretrain_dir=${PRETRAIN_DIR} \
 
 # finetune_pytorch_recipe (ftpy): lb0.1_b0.999_cropv4_exwd_initv2_headinit0.001_tgap_dp_mixup32_cutmix32_noerase_warmlr_minlr_autoaug
 # finetune_torch_loader (fttl): randaugv2erase_TorchLoader
-JOBNAME=flax/${name}_finetune/$(date +%Y%m%d_%H%M%S)_${VM_NAME}_${CONFIG}_${ep}ep_fttl_b${batch}_wd${wd}_lr${lr}_lrd${lrd}_dp${dp}_warm${warm}_s${seed}_beta${beta2}_p${partitions}_cleanupsanity
+JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maedbg_${VM_NAME}_${CONFIG}_${ep}ep_fttl_b${batch}_wd${wd}_lr${lr}_mk${mask}_lrd${lrd}_dp${dp}_warm${warm}_s${seed}_beta${beta2}_p${partitions}_maskspeedcheck
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
 LOGDIR=/kmh_data/logs/${JOBNAME}
@@ -46,7 +48,6 @@ source run_get_ssh_id.sh
 python3 main.py \
     --workdir=${WORKDIR} \
     --config=configs/$CONFIG.py \
-    --config.pretrain_dir=${PRETRAIN_DIR} \
     --config.batch_size=${batch} \
     --config.learning_rate=${lr} \
     --config.learning_rate_decay=${lrd} \
@@ -63,12 +64,15 @@ python3 main.py \
     --config.aug.mix.cutmix=True \
     --config.aug.randerase.on=True \
     --config.aug.autoaug=randaugv2 \
+    --config.model.mask_ratio=${mask} \
     --config.model.transformer.droppath_rate=${dp} \
     --config.seed_tf=${seed} \
     --config.seed_jax=${seed} \
     --config.seed_pt=${seed} \
-    --config.model.classifier=tgap \
+    --config.model.classifier=token \
     --config.partitioning.num_partitions=${partitions} \
+    --config.opt_type=adamw \
+    --config.opt_mu_dtype=float32 \
 2>&1 | tee $LOGDIR/finetune_\$SSH_ID.log
 " 2>&1 | tee $LOGDIR/finetune.log
 

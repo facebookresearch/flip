@@ -5,7 +5,7 @@ rm -rf tmp
 export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets
 python3 main.py \
     --workdir=./tmp \
-    --config=configs/cfg_vit_dbg.py \
+    --config=configs/cfg_mae_dbg.py \
     --config.batch_size=32 \
     --config.log_every_steps=10 \
     --config.num_epochs=1000 \
@@ -13,7 +13,6 @@ python3 main.py \
     --config.donate=True \
     --config.aug.randerase.on=True \
     --config.aug.randerase.prob=0.25 \
-    --config.model.rescale_head_init=0.001 \
     --config.aug.mix.mixup=True \
     --config.aug.mix.cutmix=True \
     --config.aug.autoaug=autoaug \
