@@ -276,6 +276,17 @@ def gather(x, ids):
 vmapped_gather = jax.vmap(gather, in_axes=(0, 0), out_axes=0, axis_name='batch')
 
 
+def gather_by_einsum(x, ids):
+  """
+  kaiming: vmap + gather is slow with pjit; use einsum instead
+  x: [N, L, C]
+  ids: [N, K]
+  """
+  mat = jax.nn.one_hot(ids, x.shape[1])  # [N, K, L]
+  x = jnp.einsum('nlc,nkl->nkc', x, mat)
+  return x
+
+
 class VisionTransformer(nn.Module):
   """VisionTransformer."""
 
@@ -300,15 +311,11 @@ class VisionTransformer(nn.Module):
     noise = random.uniform(rng, shape=x.shape[:2])
 
     ids_shuffle = jnp.argsort(noise, axis=1)  # ascend: small is keep, large is remove
-
-    mat_shuffle = jax.nn.one_hot(ids_shuffle, L, dtype=x.dtype)  # [N, L, L]
-    mat_keep = mat_shuffle[:, :len_keep, :]  # [N, K, L]
-
-    x_masked = jnp.einsum('nlc,nkl->nkc', x, mat_keep)
+    ids_restore = jnp.argsort(ids_shuffle, axis=1)
 
     # keep the first subset
-    # ids_keep = ids_shuffle[:, :len_keep]  
-    # x_masked = vmapped_gather(x, ids_keep)
+    ids_keep = ids_shuffle[:, :len_keep]
+    x_masked = gather_by_einsum(x, ids_keep)
 
     x_masked = t5x.layers.with_sharding_constraint(x_masked, ('batch', 'length', 'embed'))
 
