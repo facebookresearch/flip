@@ -311,7 +311,6 @@ class Encoder(nn.Module):
     assert inputs.ndim == 3  # (batch, len, emb)
 
     x = inputs
-    # Input Encoder
     for lyr in range(self.num_layers):
       x = Encoder1DBlock(
           mlp_dim=self.mlp_dim,
@@ -442,9 +441,26 @@ class VisionTransformer(nn.Module):
     x_ = jnp.concatenate([x[:, num_clstokens:, :], mask_tokens], axis=1)  # no cls token
     x_ = gather_by_einsum(x_, ids_restore)
 
-    x = x_
+    # add decoder posembed (before cls token)
+    x_ = AddPositionEmbs(sincos=self.sincos, use_cls_token=use_cls_token, img_shape=(h, w, self.decoder.hidden_size), name='posembed_decoder')(x_)
 
-    return x
+    x = jnp.concatenate([x[:, :num_clstokens, :], x_], axis=1)  # append cls token
+
+    # apply the decoder
+    x = Encoder(name='TransformerDecoder', **self.decoder.transformer, prefix='decoder')(x, train=train)
+
+    # apply the predictor
+    x = t5x.layers.Dense(
+      features=self.patches.size[0] * self.patches.size[1] * 3,
+      kernel_init=mlp_kernel_init,
+      bias_init=mlp_bias_init,
+      kernel_axes=('embed', 'classes'),  # 'mlp' is split first
+      name='pred')(x)
+
+    # remove cls token
+    pred = x[:, num_clstokens:, :]
+
+    return pred
 
   @nn.compact
   def __call__(self, inputs, *, train):
