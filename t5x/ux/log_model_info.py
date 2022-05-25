@@ -71,7 +71,7 @@ def log_model_info(log_file: Optional[str],
       #     writer, '%-96s %-20s %-40s %s',
       #     name, arr.size, shape_str, mesh_axes)
       arr_size = '{:,d}'.format(arr.size)
-      print('{:96s} {:>16s} {:48s} {}'.format(name, arr_size, str(shape_str), str(mesh_axes)))
+      logging.info('{:96s} {:>16s} {:48s} {}'.format(name, arr_size, str(shape_str), str(mesh_axes)))
 
     jax.tree_map(
         _log_variable,
