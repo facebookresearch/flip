@@ -35,7 +35,7 @@ import jax
 import jax.numpy as jnp
 import optax
 
-import utils.adamw_util
+import utils.adamw
 
 
 freeze = flax.core.frozen_dict.freeze
@@ -207,8 +207,8 @@ class OptaxStatePartitionRules:
       optax.ScaleByAdamState:
           lambda state, params_axes: optax.ScaleByAdamState(
               count=None, mu=params_axes, nu=params_axes),
-      utils.adamw_util.ScaleByAdaRowsState:
-          utils.adamw_util.PartitionRuleScaleByAdaRowsState,
+      utils.adamw.ScaleByAdaRowsState:
+          utils.adamw.PartitionRuleScaleByAdaRowsState,
       optax.ScaleByBeliefState:
           lambda state, params_axes: optax.ScaleByBeliefState(
               count=None, mu=params_axes, nu=params_axes),

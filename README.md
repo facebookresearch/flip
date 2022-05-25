@@ -1,8 +1,8 @@
-## MAE fine-tuning in JAX
+## ViT supervised training and fine-tuning in t5x
 
 Written by Kaiming.
 
-The MAE pre-training branch is `mae.torchloader` using PyTorch dataloader.
+This branch: `t5x.dev.vit`.
 
 ### Getting Started
 - **Warning**: This repo is under development and not well documented yet

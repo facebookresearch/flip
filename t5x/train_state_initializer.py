@@ -7,11 +7,10 @@ import functools
 
 import t5x.train_state as train_state_lib
 import t5x.optimizers
-import t5x.adafactor
 
 from utils import opt_util
 from utils import lrd_util
-from utils import adamw_util
+from utils import adamw
 
 
 def init_fn(rng, image_size, model):
@@ -52,7 +51,6 @@ def create_optimizer(config, params_names, steps_per_epoch):
   abs_learning_rate = config.learning_rate * config.batch_size / 256.
   learning_rate_fn = create_learning_rate_fn(config, abs_learning_rate, steps_per_epoch)
 
-
   if config.opt_type in {'adamw', 'adarows'}:
     # optional: exclude some wd
     mask = None
@@ -63,7 +61,7 @@ def create_optimizer(config, params_names, steps_per_epoch):
       )
     # logging.info('Apply wd: {}'.format(mask))
 
-    opt = getattr(adamw_util, config.opt_type)  # optax.adamw
+    opt = getattr(adamw, config.opt_type)  # optax.adamw
     opt = t5x.optimizers.wrap_optax_optimizer(opt)
     opt = opt(learning_rate=learning_rate_fn, **config.opt, mask=mask, mu_dtype=getattr(jnp, config.opt_mu_dtype))
     opt.metric_learning_rate_fn = learning_rate_fn  # hack for metric
@@ -73,24 +71,8 @@ def create_optimizer(config, params_names, steps_per_epoch):
       lrd = lrd_util.filter_parameters(params_names, lrd_func)
       # logging.info('Apply lrd: {}'.format(lrd))
       opt.optax_optimizer = optax._src.combine.chain(opt.optax_optimizer, lrd_util.scale_by_lrd(lrd))
-
-  elif config.opt_type == 'adafactor':
-    logical_factor_rules = t5x.adafactor.standard_logical_factor_rules()
-    opt = t5x.adafactor.Adafactor(
-      factored=True,
-      weight_decay_rate=config.opt.weight_decay,
-      weight_decay_rate_lr_exponent=1.,  # adamw style: wd * lr
-      multiply_by_parameter_scale=False,
-      beta1=config.opt.b1,
-      beta2=config.opt.b2,
-      epsilon1=1e-8,
-      clipping_threshold=None,
-      logical_factor_rules=logical_factor_rules,
-    )
-    opt.metric_learning_rate_fn = learning_rate_fn  # hack for metric
   else:
     raise NotImplementedError
-
 
   return opt
 
