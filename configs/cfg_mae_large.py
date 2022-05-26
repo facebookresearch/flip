@@ -39,7 +39,7 @@ def get_config():
 
   # mae config
   config.model.mask_ratio = 0.75
-  # config.model.norm_pix_loss = True
+  config.model.norm_pix_loss = True
 
   config.model.update(vit.get_l16_config())
   config.model.hidden_size = 1024

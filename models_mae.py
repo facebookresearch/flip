@@ -350,12 +350,58 @@ class VisionTransformer(nn.Module):
   num_classes: int
   mask_ratio: float
   sincos: bool
+  norm_pix_loss: bool
   patches: Any
   transformer: Any
   hidden_size: int
   classifier: str = 'token'
   dtype: Any = jnp.float32
   decoder: Any = None
+
+  def patchify(self, imgs):
+      """
+      imgs: (N, H, W, 3)
+      x: (N, L, patch_size**2 *3)
+      """
+      p, q = self.patches.size
+      h, w = imgs.shape[1] // p, imgs.shape[2] // q 
+
+      x = jnp.reshape(imgs, (imgs.shape[0], h, p, w, q, 3))
+      x = jnp.einsum('nhpwqc->nhwpqc', x)
+      x = jnp.reshape(x, (imgs.shape[0], h * w, p * q * 3))
+      return x
+
+  def unpatchify(self, x):
+      """
+      x: (N, L, patch_size**2 *3)
+      imgs: (N, H, W, 3)
+      """
+      p, q = self.patches.size
+      h = w = int(x.shape[1]**.5)
+
+      x = jnp.reshape(x, (x.shape[0], h, w, p, q, 3))
+      x = jnp.einsum('nhwpqc->nhpwqc', x)
+      imgs = jnp.reshape(x, (x.shape[0], h * p, w * q, 3))
+      return imgs
+
+  def compute_loss(self, imgs, pred, mask):
+    """
+    imgs: [N, H, W, 3]
+    pred: [N, L, p*p*3]
+    mask: [N, L], 0 is keep, 1 is remove, 
+    """
+    target = self.patchify(imgs)
+    if self.norm_pix_loss:
+      # target = jax.nn.normalize(target, axis=-1, epsilon=1.e-6)
+      mean = jnp.mean(target, axis=-1, keepdims=True)
+      var = jnp.var(target, axis=-1, keepdims=True)
+      target = (target - mean) / (var + 1.e-6)**.5
+
+    loss = jnp.square(pred - target)
+    loss = jnp.mean(loss, axis=-1)  # [N, L], mean loss per patch
+
+    loss = jnp.sum(loss * mask) / jnp.sum(mask)  # mean loss on removed patches
+    return loss
 
   def random_mask(self, x):
 
@@ -473,26 +519,29 @@ class VisionTransformer(nn.Module):
     pred = self.apply_decoder(x, ids_restore, train=train)
     x = pred
 
-    if self.classifier == 'token':
-      x = x[:, 0]
-    elif self.classifier == 'tgap':
-      x = x[:, 1:]
-      x = jnp.mean(x, axis=list(range(1, x.ndim - 1)))  # (1,) or (1,2)
-      x = t5x.layers.LayerNorm(name='fc_norm', axes=('embed',))(x)
-    elif self.classifier == 'gap':
-      x = jnp.mean(x, axis=list(range(1, x.ndim - 1)))  # (1,) or (1,2)
-      x = t5x.layers.LayerNorm(name='fc_norm', axes=('embed',))(x)
-    else:
-      raise ValueError(f'Invalid classifier={self.classifier}')
+    # compute loss
+    loss = self.compute_loss(imgs, pred, mask)
 
-    x = IdentityLayer(name='pre_logits')(x)
+    # if self.classifier == 'token':
+    #   x = x[:, 0]
+    # elif self.classifier == 'tgap':
+    #   x = x[:, 1:]
+    #   x = jnp.mean(x, axis=list(range(1, x.ndim - 1)))  # (1,) or (1,2)
+    #   x = t5x.layers.LayerNorm(name='fc_norm', axes=('embed',))(x)
+    # elif self.classifier == 'gap':
+    #   x = jnp.mean(x, axis=list(range(1, x.ndim - 1)))  # (1,) or (1,2)
+    #   x = t5x.layers.LayerNorm(name='fc_norm', axes=('embed',))(x)
+    # else:
+    #   raise ValueError(f'Invalid classifier={self.classifier}')
 
-    if self.num_classes:
-      x = t5x.layers.Dense(
-          features=self.num_classes,
-          kernel_init=head_kernel_init,
-          kernel_axes=('embed', 'classes'),
-          name='head',
-      )(x)
+    # x = IdentityLayer(name='pre_logits')(x)
 
-    return x
+    # if self.num_classes:
+    #   x = t5x.layers.Dense(
+    #       features=self.num_classes,
+    #       kernel_init=head_kernel_init,
+    #       kernel_axes=('embed', 'classes'),
+    #       name='head',
+    #   )(x)
+
+    return loss

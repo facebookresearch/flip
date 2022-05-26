@@ -181,16 +181,15 @@ def train_step(state, batch, model, rng):
         mutable=mutable,
         rngs=dict(dropout=dropout_rng),
         train=True)
-    logits, new_mutables = outcome
-
-    loss = cross_entropy_loss(logits, batch['label_one_hot'])
-    return loss, (new_mutables, logits)
+    loss, new_mutables = outcome
+    return loss, (new_mutables, loss)
 
   grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
   aux, grads = grad_fn(state.params)
 
-  new_mutables, logits = aux[1]
-  metrics = compute_metrics(logits, batch['label'], batch['label_one_hot'])
+  new_mutables, loss = aux[1]
+  # metrics = compute_metrics(logits, batch['label'], batch['label_one_hot'])
+  metrics = {'loss': loss}
 
   # only for metric logging
   lr = state._optimizer.optimizer_def.metric_learning_rate_fn(state.step)
@@ -432,7 +431,6 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
           # to make it consistent with PyTorch log
           summary['loss'] = summary['train_loss']  # add extra name
           summary['lr'] = summary.pop('train_learning_rate')  # rename
-          summary['class_acc'] = summary.pop('train_accuracy')  # this is [0, 1]
           summary['step_tensorboard'] = epoch_1000x  # step for tensorboard
 
           writer.write_scalars(step + 1, summary)
