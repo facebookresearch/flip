@@ -45,6 +45,7 @@ from utils import summary_util as summary_util  # must be after 'from clu import
 from utils import checkpoint_util as ckp
 from utils import torchloader_util
 from utils import logging_util
+from utils.torchloader_util import MEAN_RGB, STDDEV_RGB
 
 from t5x.train_state_initializer import create_train_state
 import t5x.partitioning
@@ -79,6 +80,7 @@ def build_dataloaders(config, partitioner, rng_torch):
     raise ValueError('Batch size must be divisible by the number of devices')
   local_batch_size = config.batch_size // num_shards
 
+  dataset_val = torchloader_util.build_dataset(is_train=False, data_dir=config.torchload.data_dir, aug=config.aug)
   dataset_train = torchloader_util.build_dataset(is_train=True, data_dir=config.torchload.data_dir, aug=config.aug)
 
   sampler_train = torch.utils.data.DistributedSampler(
@@ -87,6 +89,12 @@ def build_dataloaders(config, partitioner, rng_torch):
     rank=shard_id, # jax.process_index(),
     shuffle=True,
     seed=config.seed_pt,
+  )
+  sampler_val = torch.utils.data.DistributedSampler(
+    dataset_val,
+    num_replicas=num_shards, # jax.process_count(),
+    rank=shard_id, # jax.process_index(),
+    shuffle=False,
   )
   
   data_loader_train = torch.utils.data.DataLoader(
@@ -100,9 +108,18 @@ def build_dataloaders(config, partitioner, rng_torch):
     persistent_workers=True,
     timeout=60.,
   )
+  data_loader_val = torch.utils.data.DataLoader(
+    dataset_val, sampler=sampler_val,
+    batch_size=local_batch_size,
+    num_workers=config.torchload.num_workers,
+    pin_memory=True,
+    drop_last=False,
+    persistent_workers=True,
+    timeout=60.,
+  )
 
   assert len(data_loader_train) == len(dataset_train) // config.batch_size
-  return data_loader_train, local_batch_size
+  return data_loader_train, data_loader_val, local_batch_size
 
 
 def print_sanity_check(batch, shard_id):
@@ -135,7 +152,7 @@ def train_step(state, batch, model, rng):
         mutable=mutable,
         rngs=dict(dropout=dropout_rng),
         train=True)
-    loss, new_mutables = outcome
+    (loss, _), new_mutables = outcome
     return loss, (new_mutables, loss)
 
   grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
@@ -153,6 +170,20 @@ def train_step(state, batch, model, rng):
     learning_rate=None,  # TODO: not used in adamw
     flax_mutables=new_mutables)
   return new_state, metrics
+
+
+def eval_step(state, batch, model, rng):
+  variables = {'params': state.params, **state.flax_mutables}
+
+  dropout_rng = jax.random.fold_in(rng, state.step)
+
+  outcome = model.apply(variables, batch['image'], train=False, mutable=False, rngs=dict(dropout=dropout_rng),)
+  loss, imgs_vis = outcome
+
+  metrics = {'test_loss': loss}
+  metrics['imgs_vis'] = imgs_vis
+
+  return metrics
 
 
 def parse_batch(batch, local_batch_size):
@@ -248,7 +279,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   # ------------------------------------
   # Create data loader
   # ------------------------------------
-  data_loader_train, local_batch_size = build_dataloaders(config, partitioner, rng_torch)
+  data_loader_train, data_loader_val, local_batch_size = build_dataloaders(config, partitioner, rng_torch)
 
   steps_per_epoch = len(data_loader_train)
   
@@ -299,6 +330,12 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
         in_axis_resources=(state_axes, partitioner.data_partition_spec),
         out_axis_resources=(state_axes, None),
         donate_argnums=(0,))
+
+  eval_step_fn = functools.partial(eval_step, model=model, rng=rng)  # (state, batch) -> metrics
+  partitioned_eval_step = partitioner.partition(
+        eval_step_fn,
+        in_axis_resources=(state_axes, partitioner.data_partition_spec),
+        out_axis_resources=None)
 
   # ------------------------------------------
   # debug
@@ -361,6 +398,24 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
           train_metrics_last_t = time.time()
 
       step += 1  
+
+    # ------------------------------------------------------------
+    # finished one epoch: eval
+    # ------------------------------------------------------------
+    if ((epoch + 1) % config.vis_every_epochs == 0 or epoch == epoch_offset) and config.model.visualize:
+      data_loader_val.sampler.set_epoch(epoch)
+      eval_batch = next(iter(data_loader_val))
+      eval_batch = parse_batch(eval_batch, local_batch_size)
+      metrics = partitioned_eval_step(state, eval_batch)
+
+      imgs_vis = metrics.pop('imgs_vis')[0]  # keep the master device
+      imgs_vis = imgs_vis * jnp.asarray(STDDEV_RGB) + jnp.asarray(MEAN_RGB)
+      imgs_vis = jnp.uint8(jnp.clip(imgs_vis, 0, 255.))
+      writer.write_images(step=epoch_1000x, images=dict(imgs_vis=imgs_vis))
+
+      summary = jax.tree_map(lambda x: x.mean(), metrics)
+      values = [f"{k}: {v:.6f}" for k, v in sorted(summary.items())]
+      logging.info('eval epoch: %d, %s', epoch, ', '.join(values))
 
     # ------------------------------------------------------------
     # finished one epoch: save

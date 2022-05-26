@@ -348,6 +348,34 @@ class VisionTransformer(nn.Module):
   classifier: str = 'token'
   dtype: Any = jnp.float32
   decoder: Any = None
+  visualize: bool = False
+
+  def random_mask(self, x):
+
+    N, L, _ = x.shape  # batch, length, dim
+    len_keep = int(L * (1 - self.mask_ratio))
+
+    rng = self.make_rng('dropout')
+    noise = random.uniform(rng, shape=x.shape[:2])
+
+    ids_shuffle = jnp.argsort(noise, axis=1)  # ascend: small is keep, large is remove
+    ids_restore = jnp.argsort(ids_shuffle, axis=1)
+
+    # keep the first subset
+    ids_keep = ids_shuffle[:, :len_keep]
+    x_masked = gather_by_einsum(x, ids_keep)
+
+    x_masked = t5x.layers.with_sharding_constraint(x_masked, ('batch', 'length', 'embed'))
+
+    # generate the binary mask: 0 is keep, 1 is remove
+    mask = jnp.ones([N, L])
+    mask = t5x.layers.with_sharding_constraint(mask, ('batch', 'length'))
+    mask = mask.at[:, :len_keep].set(0)
+    # unshuffle to get the binary mask
+    mask = gather_by_einsum(mask, ids_restore)
+    mask = t5x.layers.with_sharding_constraint(mask, ('batch', 'length'))
+
+    return x_masked, mask, ids_restore
 
   def patchify(self, imgs):
       """
@@ -394,32 +422,25 @@ class VisionTransformer(nn.Module):
     loss = jnp.sum(loss * mask) / jnp.sum(mask)  # mean loss on removed patches
     return loss
 
-  def random_mask(self, x):
+  def visualization(self, imgs, pred, mask):
+    """
+    imgs: [N, H, W, 3]
+    pred: [N, L, p*p*3]
+    mask: [N, L], 0 is keep, 1 is remove, 
+    """
+    imgs_pred = self.unpatchify(pred)
 
-    N, L, _ = x.shape  # batch, length, dim
-    len_keep = int(L * (1 - self.mask_ratio))
+    mask = jnp.repeat(jnp.expand_dims(mask, axis=-1), repeats=pred.shape[-1], axis=-1)
+    mask = self.unpatchify(mask)  # 0 is keep, 1 is remove
+    imgs_mask = imgs * (1 - mask)
 
-    rng = self.make_rng('dropout')
-    noise = random.uniform(rng, shape=x.shape[:2])
+    imgs_plus = imgs * (1 - mask) + imgs_pred * mask
 
-    ids_shuffle = jnp.argsort(noise, axis=1)  # ascend: small is keep, large is remove
-    ids_restore = jnp.argsort(ids_shuffle, axis=1)
-
-    # keep the first subset
-    ids_keep = ids_shuffle[:, :len_keep]
-    x_masked = gather_by_einsum(x, ids_keep)
-
-    x_masked = t5x.layers.with_sharding_constraint(x_masked, ('batch', 'length', 'embed'))
-
-    # generate the binary mask: 0 is keep, 1 is remove
-    mask = jnp.ones([N, L])
-    mask = t5x.layers.with_sharding_constraint(mask, ('batch', 'length'))
-    mask = mask.at[:, :len_keep].set(0)
-    # unshuffle to get the binary mask
-    mask = gather_by_einsum(mask, ids_restore)
-    mask = t5x.layers.with_sharding_constraint(mask, ('batch', 'length'))
-
-    return x_masked, mask, ids_restore
+    imgs_vis = jnp.concatenate(
+    [jnp.concatenate([imgs, imgs_mask], axis=2),
+     jnp.concatenate([imgs_pred, imgs_plus], axis=2)],
+    axis=1)
+    return imgs_vis
 
   def apply_encoder(self, inputs, train):
     use_cls_token = (self.classifier == 'token')
@@ -513,4 +534,9 @@ class VisionTransformer(nn.Module):
     # compute loss
     loss = self.compute_loss(imgs, pred, mask)
 
-    return loss
+    if self.visualize: # and not train:
+      outcome = self.visualization(imgs, pred, mask)
+    else:
+      outcome = pred  # not used
+
+    return loss, outcome

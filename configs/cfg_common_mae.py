@@ -91,6 +91,7 @@ def get_config():
 
   # utils
   config.resume_dir = ''
+  config.vis_every_epochs = 20.
 
   config.pretrain_dir = ''
   config.pretrain_fmt = 'jax'  # 't5x'
