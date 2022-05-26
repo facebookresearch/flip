@@ -46,8 +46,6 @@ def get_config():
   config.min_abs_lr = 0.  # this is abs lr
   config.warmup_abs_lr = 0.  # this is abs lr
 
-  config.learning_rate_decay = 1.0  # lrd
-
   config.num_epochs = 100.0
   config.log_every_steps = 100
   config.save_every_epochs = 10
@@ -90,8 +88,6 @@ def get_config():
 
   # memory
   config.profile_memory = False
-  config.donate = False
-  config.init_backend = 'tpu'
 
   # utils
   config.resume_dir = ''

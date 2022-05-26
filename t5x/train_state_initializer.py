@@ -9,7 +9,6 @@ import t5x.train_state as train_state_lib
 import t5x.optimizers
 
 from utils import opt_util
-from utils import lrd_util
 from utils import adamw
 
 
@@ -66,11 +65,6 @@ def create_optimizer(config, params_names, steps_per_epoch):
     opt = opt(learning_rate=learning_rate_fn, **config.opt, mask=mask, mu_dtype=getattr(jnp, config.opt_mu_dtype))
     opt.metric_learning_rate_fn = learning_rate_fn  # hack for metric
 
-    if config.learning_rate_decay < 1.:
-      lrd_func = lrd_util.lrd_func(config.model.transformer.num_layers, config.learning_rate_decay)
-      lrd = lrd_util.filter_parameters(params_names, lrd_func)
-      # logging.info('Apply lrd: {}'.format(lrd))
-      opt.optax_optimizer = optax._src.combine.chain(opt.optax_optimizer, lrd_util.scale_by_lrd(lrd))
   else:
     raise NotImplementedError
 

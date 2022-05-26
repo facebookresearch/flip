@@ -10,10 +10,8 @@ python3 main.py \
     --config.log_every_steps=10 \
     --config.num_epochs=1000 \
     --config.profile_memory=True \
-    --config.donate=True \
     --config.model.classifier=token \
     --config.model.norm_pix_loss=False \
-    --config.learning_rate_decay=1. \
     --config.partitioning.num_partitions=1 \
     --config.opt_type=adarows \
 

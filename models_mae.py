@@ -338,7 +338,7 @@ def gather_by_einsum(x, ids):
 class VisionTransformer(nn.Module):
   """VisionTransformer."""
 
-  num_classes: int
+  # num_classes: int
   mask_ratio: float
   sincos: bool
   norm_pix_loss: bool

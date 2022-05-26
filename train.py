@@ -79,7 +79,6 @@ def build_dataloaders(config, partitioner, rng_torch):
     raise ValueError('Batch size must be divisible by the number of devices')
   local_batch_size = config.batch_size // num_shards
 
-  dataset_val = torchloader_util.build_dataset(is_train=False, data_dir=config.torchload.data_dir, aug=config.aug)
   dataset_train = torchloader_util.build_dataset(is_train=True, data_dir=config.torchload.data_dir, aug=config.aug)
 
   sampler_train = torch.utils.data.DistributedSampler(
@@ -88,12 +87,6 @@ def build_dataloaders(config, partitioner, rng_torch):
     rank=shard_id, # jax.process_index(),
     shuffle=True,
     seed=config.seed_pt,
-  )
-  sampler_val = torch.utils.data.DistributedSampler(
-    dataset_val,
-    num_replicas=num_shards, # jax.process_count(),
-    rank=shard_id, # jax.process_index(),
-    shuffle=False,
   )
   
   data_loader_train = torch.utils.data.DataLoader(
@@ -107,18 +100,9 @@ def build_dataloaders(config, partitioner, rng_torch):
     persistent_workers=True,
     timeout=60.,
   )
-  data_loader_val = torch.utils.data.DataLoader(
-    dataset_val, sampler=sampler_val,
-    batch_size=local_batch_size,
-    num_workers=config.torchload.num_workers,
-    pin_memory=True,
-    drop_last=False,
-    persistent_workers=True,
-    timeout=60.,
-  )
 
   assert len(data_loader_train) == len(dataset_train) // config.batch_size
-  return data_loader_train, data_loader_val, local_batch_size
+  return data_loader_train, local_batch_size
 
 
 def print_sanity_check(batch, shard_id):
@@ -136,36 +120,6 @@ def print_sanity_check(batch, shard_id):
   logging.info('shard: {}, image: {}'.format(shard_id, str))
   logging_util.verbose_off()
   return
-
-
-
-def cross_entropy_loss(logits, labels_one_hot):
-  xentropy = optax.softmax_cross_entropy(logits=logits, labels=labels_one_hot)
-  return jnp.mean(xentropy)
-
-
-def compute_metrics(logits, labels, labels_one_hot):
-  loss = cross_entropy_loss(logits, labels_one_hot)
-  accuracy = jnp.mean(jnp.argmax(logits, -1) == labels)
-  metrics = {
-      'loss': loss,
-      'accuracy': accuracy,
-  }
-  return metrics
-
-
-def compute_eval_metrics(logits, labels, labels_one_hot):
-  """kaiming: we do not average here (to support the reminder batch)
-  """
-  loss = optax.softmax_cross_entropy(logits=logits, labels=labels_one_hot)
-  accuracy = (jnp.argmax(logits, -1) == labels)
-  metrics = {
-      'loss': loss,
-      'accuracy': accuracy,
-      'label': labels
-  }
-  metrics = jax.tree_map(lambda x: jnp.reshape(x, [-1,]), metrics)
-  return metrics
 
 
 def train_step(state, batch, model, rng):
@@ -188,7 +142,6 @@ def train_step(state, batch, model, rng):
   aux, grads = grad_fn(state.params)
 
   new_mutables, loss = aux[1]
-  # metrics = compute_metrics(logits, batch['label'], batch['label_one_hot'])
   metrics = {'loss': loss}
 
   # only for metric logging
@@ -200,17 +153,6 @@ def train_step(state, batch, model, rng):
     learning_rate=None,  # TODO: not used in adamw
     flax_mutables=new_mutables)
   return new_state, metrics
-
-
-def eval_step(state, batch, model):
-  variables = {'params': state.params, **state.flax_mutables}
-  logits = model.apply(variables, batch['image'], train=False, mutable=False)
-  metrics = compute_eval_metrics(logits, batch['label'], batch['label_one_hot'])
-  metrics['test_acc1'] = metrics.pop('accuracy') * 100  # rename
-  metrics['perf/test_acc1'] = metrics['test_acc1']  # for comparing with pytorch
-  metrics['test_loss'] = metrics.pop('loss')  # rename
-
-  return metrics
 
 
 def parse_batch(batch, local_batch_size):
@@ -306,7 +248,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   # ------------------------------------
   # Create data loader
   # ------------------------------------
-  data_loader_train, data_loader_val, local_batch_size = build_dataloaders(config, partitioner, rng_torch)
+  data_loader_train, local_batch_size = build_dataloaders(config, partitioner, rng_torch)
 
   steps_per_epoch = len(data_loader_train)
   
@@ -341,8 +283,6 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     logging.info('Initializing train_state done.')
     stds = jax.tree_util.tree_map(lambda x: (x.shape, np.array(x).std()), state.params)
     logging.info('std: {}'.format(stds))
-    from IPython import embed; embed();
-    if (0 == 0): raise NotImplementedError
 
   # debug
   # checkpointer.save(state)
@@ -360,17 +300,10 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
         out_axis_resources=(state_axes, None),
         donate_argnums=(0,))
 
-  # eval_step_fn = functools.partial(eval_step, model=model)  # (state, batch) -> metrics
-  # partitioned_eval_step = partitioner.partition(
-  #       eval_step_fn,
-  #       in_axis_resources=(state_axes, partitioner.data_partition_spec),
-  #       out_axis_resources=None)
-
   # ------------------------------------------
   # debug
   # batch = next(iter(data_loader_train))
   # batch = parse_batch(batch, local_batch_size)
-  # metrics = partitioned_eval_step(state, batch)
   # ------------------------------------------
 
   train_metrics = []
@@ -428,21 +361,9 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
           train_metrics_last_t = time.time()
 
       step += 1  
-    # ------------------------------------------------------------
-    # finished one epoch: eval
-    # ------------------------------------------------------------
-    # if True:
-    #   summary = run_eval(state, partitioned_eval_step, data_loader_val, local_batch_size, epoch)
-    #   best_acc = max(best_acc, summary['test_acc1'])
-
-    #   # to make it consistent with PyTorch log
-    #   summary['step_tensorboard'] = epoch  # step for tensorboard (no need to minus 1)
-
-    #   writer.write_scalars(step + 1, summary)
-    #   writer.flush()
 
     # ------------------------------------------------------------
-    # finished one epoch: eval
+    # finished one epoch: save
     # ------------------------------------------------------------
     if (epoch + 1) % config.save_every_epochs == 0 or epoch + 1 == int(config.num_epochs):
       logging.info('Saving checkpoint: {}'.format(workdir))
@@ -460,31 +381,3 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   return state
 
-
-def run_eval(state, partitioned_eval_step, data_loader_val, local_batch_size, epoch):
-  eval_metrics = []
-  tic = time.time()
-  for _, batch in enumerate(data_loader_val):
-    batch = parse_batch(batch, local_batch_size)
-    metrics = partitioned_eval_step(state, batch)
-    eval_metrics.append(metrics)
-    # logging.info('{} / {}'.format(_, len(data_loader_val)))
-
-  # eval_metrics = jax.tree_map(lambda x: x, eval_metrics)
-  eval_metrics = jax.device_get(eval_metrics)
-  eval_metrics = jax.tree_map(lambda *args: np.concatenate(args), *eval_metrics)
-
-  valid = np.where(eval_metrics['label'] >= 0)  # remove padded patch
-  eval_metrics.pop('label')
-  eval_metrics = jax.tree_util.tree_map(lambda x: x[valid], eval_metrics)
-
-  toc = time.time() - tic
-  logging.info('Eval time: {}, {} steps, {} samples'.format(
-    str(datetime.timedelta(seconds=int(toc))),
-    len(data_loader_val),
-    len(eval_metrics['test_acc1'])))
-
-  summary = jax.tree_map(lambda x: x.mean(), eval_metrics)
-  values = [f"{k}: {v:.6f}" for k, v in sorted(summary.items())]
-  logging.info('eval epoch: %d, %s', epoch, ', '.join(values))
-  return summary
