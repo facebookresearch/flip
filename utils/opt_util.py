@@ -44,6 +44,15 @@ def filter_cls_and_posembed(path: Tuple[Any], val: jnp.ndarray):
     return True
 
 
+def filter_posembed(path: Tuple[Any], val: jnp.ndarray):
+    """Filter to exclude pos emb."""
+    del val
+    name = '.'.join(path)
+    if 'pos_embedding' in name:
+        return False
+    return True
+
+
 # ---------------------------------------------------------
 # the entrance function:
 # ---------------------------------------------------------

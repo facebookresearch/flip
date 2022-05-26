@@ -312,8 +312,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     logging.info('Initializing train_state...')
     state = p_init_fn(rng_init)
     logging.info('Initializing train_state done.')
-    stds = jax.tree_util.tree_map(lambda x: (x.shape, np.array(x).std()), state.params)
-    logging.info('std: {}'.format(stds))
+    # stds = jax.tree_util.tree_map(lambda x: (x.shape, np.array(x).std()), state.params)
+    # logging.info('std: {}'.format(stds))
 
   # debug
   # checkpointer.save(state)

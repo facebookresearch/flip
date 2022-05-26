@@ -13,7 +13,7 @@ vitsize=large
 CONFIG=cfg_mae_${vitsize}
 
 
-JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}_s${seed}_p${partitions}_vis
+JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}_s${seed}_p${partitions}_normpix_exwd
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
 LOGDIR=/kmh_data/logs/${JOBNAME}
@@ -44,7 +44,7 @@ python3 main.py \
     --config.learning_rate=${lr} \
     --config.save_every_epochs=50 \
     --config.profile_memory=True \
-    --config.model.norm_pix_loss=False \
+    --config.model.norm_pix_loss=True \
     --config.model.sincos=True \
     --config.model.mask_ratio=${mask} \
     --config.seed_tf=${seed} \
