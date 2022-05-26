@@ -35,6 +35,7 @@ from flax.training import train_state
 import jax
 import jax.numpy as jnp
 from jax import random
+from jax.interpreters.sharded_jit import PartitionSpec
 import ml_collections
 import optax
 import tensorflow as tf
@@ -180,8 +181,7 @@ def eval_step(state, batch, model, rng):
   outcome = model.apply(variables, batch['image'], train=False, mutable=False, rngs=dict(dropout=dropout_rng),)
   loss, imgs_vis = outcome
 
-  metrics = {'test_loss': loss}
-  metrics['imgs_vis'] = imgs_vis
+  metrics = {'test_loss': loss, 'imgs_vis': imgs_vis}
 
   return metrics
 
@@ -324,7 +324,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   logging.info('step_offset: {}'.format(step_offset))
 
   # to create partitioned train_step
-  train_step_fn = functools.partial(train_step, model=model, rng=rng)  # (state, batch, rng) -> (state, metrics)
+  train_step_fn = functools.partial(train_step, model=model, rng=rng)  # (state, batch) -> (state, metrics)
   partitioned_train_step = partitioner.partition(
         train_step_fn,
         in_axis_resources=(state_axes, partitioner.data_partition_spec),
@@ -332,15 +332,19 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
         donate_argnums=(0,))
 
   eval_step_fn = functools.partial(eval_step, model=model, rng=rng)  # (state, batch) -> metrics
+  eval_axes = {'test_loss': PartitionSpec(), 'imgs_vis': PartitionSpec('data', None, None, None)}
   partitioned_eval_step = partitioner.partition(
         eval_step_fn,
         in_axis_resources=(state_axes, partitioner.data_partition_spec),
-        out_axis_resources=None)
+        out_axis_resources=eval_axes)
 
   # ------------------------------------------
   # debug
-  # batch = next(iter(data_loader_train))
+  # batch = next(iter(data_loader_val))
   # batch = parse_batch(batch, local_batch_size)
+  # logging.info('To run partitioned_eval_step:')
+  # outcome = partitioned_eval_step(state, batch)
+  # logging.info(jax.tree_map(lambda x: x.shape, outcome))
   # ------------------------------------------
 
   train_metrics = []
