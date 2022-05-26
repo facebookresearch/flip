@@ -84,9 +84,6 @@ def create_train_state(config, model, image_size, steps_per_epoch, partitioner):
   params_shapes = init_shapes(rng, image_size, model)
   opt = create_optimizer(config, params_shapes['params'], steps_per_epoch)
 
-  # optional: rescale
-  assert not config.rescale_init  # TODO: move to model
-
   # ---------------------------------------------------------------------------
   def initialize_train_state(rng_init):
     # split rng for init and for state

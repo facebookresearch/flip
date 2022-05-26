@@ -41,12 +41,12 @@ def get_config():
   # `name` argument of tensorflow_datasets.builder()
   config.dataset = 'imagenet2012:5.*.*'
 
-  config.learning_rate = 1e-3  # this is the base lr
-  config.warmup_epochs = 5.0
-  config.min_abs_lr = 1e-6  # this is abs lr
-  config.warmup_abs_lr = 1e-6  # this is abs lr
+  config.learning_rate = 1.5e-4  # this is the base lr
+  config.warmup_epochs = 40.0
+  config.min_abs_lr = 0.  # this is abs lr
+  config.warmup_abs_lr = 0.  # this is abs lr
 
-  config.learning_rate_decay = 0.75  # lrd
+  config.learning_rate_decay = 1.0  # lrd
 
   config.num_epochs = 100.0
   config.log_every_steps = 100
@@ -64,15 +64,12 @@ def get_config():
 
   # model config
   config.model = mae.get_config()  # ViT-B/16
-  config.model.transformer.dropout_rate = 0.0
-  config.model.transformer.droppath_rate = 0.1
-  config.model.num_classes = 1000
 
   # optimizer config
   config.opt_type = 'adamw'
   config.opt = ml_collections.ConfigDict()
   config.opt.b1 = 0.9
-  config.opt.b2 = 0.999
+  config.opt.b2 = 0.95
   config.opt.weight_decay = 0.05
   
   config.opt_mu_dtype = 'float32'
@@ -82,18 +79,14 @@ def get_config():
   # aug config
   config.aug = ml_collections.ConfigDict()
 
-  config.aug.area_range = (0.08, 1)
+  config.aug.area_range = (0.2, 1)
   config.aug.aspect_ratio_range = (3. / 4, 4. / 3.)
-  config.aug.crop_ver = 'v4'  # v1, v3
 
-  config.aug.label_smoothing = 0.1
+  config.aug.label_smoothing = 0.0  # not used
 
   config.aug.autoaug = None  # autoaug, randaug, or None
 
   config.aug.color_jit = None  # [0.4, 0.4, 0.4]  # None to disable; [brightness, contrast, saturation]
-
-  # init config
-  config.rescale_init = False  # rescale initialized weights by layer id
 
   # memory
   config.profile_memory = False
@@ -105,8 +98,6 @@ def get_config():
 
   config.pretrain_dir = ''
   config.pretrain_fmt = 'jax'  # 't5x'
-
-  config.eval_only = False
 
   # seeds
   config.seed_jax = 0

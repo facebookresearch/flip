@@ -33,31 +33,28 @@ Shape = Tuple[int]
 Dtype = Any
 
 # init hacks
-# v1: JAX ViT; v2: PyTorch ViT; v3: v2 with fix
-INIT_VER = 'v2'
+INIT_VER = 'mae_jax_v2'
 
 fixed_gaussian_init = nn.initializers.normal(stddev=0.02)
-if INIT_VER == 'v1':
-  clstoken_init = nn.initializers.zeros
-  masktoken_init = fixed_gaussian_init
-  posemb_init = fixed_gaussian_init
-  patch_kernel_init = nn.initializers.lecun_uniform()
-  patch_bias_init = nn.initializers.zeros
-  msa_kernel_init = nn.initializers.xavier_uniform()
-  mlp_kernel_init = nn.initializers.xavier_uniform()
-  mlp_bias_init = nn.initializers.normal(stddev=1e-6)
-  head_kernel_init=nn.initializers.zeros
-elif INIT_VER == 'v2':
+if INIT_VER == 'mae_jax_v2':
   clstoken_init = fixed_gaussian_init
   masktoken_init = fixed_gaussian_init
-  posemb_init = fixed_gaussian_init
-  patch_kernel_init = fixed_gaussian_init
-  patch_bias_init = fixed_gaussian_init  # bug from PyTorch code?
-  msa_kernel_init = fixed_gaussian_init
-  mlp_kernel_init = fixed_gaussian_init
+  posemb_init = fixed_gaussian_init  # not used if sincos
+  
+  # patch_kernel_init = fixed_gaussian_init
+  patch_kernel_init = initializers_util.patch_kernel()
+  patch_bias_init = nn.initializers.zeros  # different from PyTorch?
+
+  # msa_kernel_init = fixed_gaussian_init
+
+  # TF/PyTorch: qkv is [D, 3*D], fan_in + fan_out = 4*D.
+  # JAX: q, k, v each is [D, D], fan_in + fan_out = 2*D. So we compensate by scale=0.5
+  qkv_kernel_init = functools.partial(nn.initializers.variance_scaling, 0.5, "fan_avg", "uniform")()
+  out_kernel_init = nn.initializers.xavier_uniform()
+
+  mlp_kernel_init = nn.initializers.xavier_uniform()
   mlp_bias_init = nn.initializers.zeros
-  # head_kernel_init = nn.initializers.normal(stddev=2e-5)
-  head_kernel_init = fixed_gaussian_init
+
 else:
   raise NotImplementedError
 
@@ -244,15 +241,9 @@ class Encoder1DBlock(nn.Module):
     # t5x
     MsaBlock = functools.partial(
       t5x.layers.MultiHeadDotProductAttention,
-      kernel_init=msa_kernel_init,
+      qkv_kernel_init=qkv_kernel_init,
+      out_kernel_init=out_kernel_init,
     )
-    # original
-    # MsaBlock = functools.partial(
-    #   nn.MultiHeadDotProductAttention,
-    #   kernel_init=msa_kernel_init,
-    #   broadcast_dropout=False,
-    #   deterministic=deterministic,
-    # )
     # ----------------------------------------------------
 
     x = MsaBlock(
@@ -521,27 +512,5 @@ class VisionTransformer(nn.Module):
 
     # compute loss
     loss = self.compute_loss(imgs, pred, mask)
-
-    # if self.classifier == 'token':
-    #   x = x[:, 0]
-    # elif self.classifier == 'tgap':
-    #   x = x[:, 1:]
-    #   x = jnp.mean(x, axis=list(range(1, x.ndim - 1)))  # (1,) or (1,2)
-    #   x = t5x.layers.LayerNorm(name='fc_norm', axes=('embed',))(x)
-    # elif self.classifier == 'gap':
-    #   x = jnp.mean(x, axis=list(range(1, x.ndim - 1)))  # (1,) or (1,2)
-    #   x = t5x.layers.LayerNorm(name='fc_norm', axes=('embed',))(x)
-    # else:
-    #   raise ValueError(f'Invalid classifier={self.classifier}')
-
-    # x = IdentityLayer(name='pre_logits')(x)
-
-    # if self.num_classes:
-    #   x = t5x.layers.Dense(
-    #       features=self.num_classes,
-    #       kernel_init=head_kernel_init,
-    #       kernel_axes=('embed', 'classes'),
-    #       name='head',
-    #   )(x)
 
     return loss

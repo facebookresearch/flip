@@ -153,7 +153,8 @@ class MultiHeadDotProductAttention(nn.Module):
   qkv_features: Optional[int] = None
   out_features: Optional[int] = None
   dropout_rate: float = 0.
-  kernel_init: Initializer = nn.initializers.variance_scaling(1.0, 'fan_in', 'normal')
+  qkv_kernel_init: Initializer = nn.initializers.variance_scaling(1.0, 'fan_in', 'normal')
+  out_kernel_init: Initializer = nn.initializers.variance_scaling(1.0, 'fan_in', 'normal')
   bias_init: Initializer = nn.initializers.zeros
   float32_logits: bool = False  # computes logits in float32 for stability.
 
@@ -218,9 +219,9 @@ class MultiHeadDotProductAttention(nn.Module):
 
     # Project inputs_q to multi-headed q/k/v
     # dimensions are then [batch, length, num_heads, head_dim]
-    query = projection(kernel_init=self.kernel_init, name='query')(inputs_q)
-    key = projection(kernel_init=self.kernel_init, name='key')(inputs_kv)
-    value = projection(kernel_init=self.kernel_init, name='value')(inputs_kv)
+    query = projection(kernel_init=self.qkv_kernel_init, name='query')(inputs_q)
+    key = projection(kernel_init=self.qkv_kernel_init, name='key')(inputs_kv)
+    value = projection(kernel_init=self.qkv_kernel_init, name='value')(inputs_kv)
 
     query = with_sharding_constraint(query, ('batch', 'length', 'heads', 'kv'))
     key = with_sharding_constraint(key, ('batch', 'length', 'heads', 'kv'))
@@ -333,7 +334,7 @@ class MultiHeadDotProductAttention(nn.Module):
     out = DenseGeneral(
         features=features,
         axis=(-2, -1),
-        kernel_init=self.kernel_init,
+        kernel_init=self.out_kernel_init,
         kernel_axes=('joined_kv', 'embed'),
         dtype=self.dtype,
         name='out')(x)

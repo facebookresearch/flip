@@ -49,11 +49,11 @@ def get_config():
   config.model.transformer.num_layers = 3
 
   config.model.decoder = ml_collections.ConfigDict()
-  config.model.decoder.hidden_size = 16
+  config.model.decoder.hidden_size = 64
   config.model.decoder.transformer = ml_collections.ConfigDict()
   config.model.decoder.transformer.mlp_dim = config.model.decoder.hidden_size * 4
   config.model.decoder.transformer.num_heads = 16
-  config.model.decoder.transformer.num_layers = 2
+  config.model.decoder.transformer.num_layers = 3
   config.model.decoder.transformer.attention_dropout_rate = 0.0
   config.model.decoder.transformer.dropout_rate = 0.0
   config.model.decoder.transformer.droppath_rate = 0.0

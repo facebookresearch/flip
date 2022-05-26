@@ -334,18 +334,15 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   if config.resume_dir != '':
     state = ckp.restore_checkpoint(checkpointer, path=config.resume_dir)
   elif config.pretrain_dir != '':
-    # When fine-tuning, we run initialization anyway
-    logging.info('Initializing train_state...')
-    state = p_init_fn(rng_init)
-    logging.info('Initializing train_state done.')
-
-    state = ckp.restore_from_pretrain(state, config, partitioner, state_axes)
+    raise NotImplementedError
   else:
     logging.info('Initializing train_state...')
     state = p_init_fn(rng_init)
     logging.info('Initializing train_state done.')
-    # stds = jax.tree_util.tree_map(lambda x: np.array(x).std(), state.params)
-    # logging.info('std: {}'.format(stds))
+    stds = jax.tree_util.tree_map(lambda x: (x.shape, np.array(x).std()), state.params)
+    logging.info('std: {}'.format(stds))
+    from IPython import embed; embed();
+    if (0 == 0): raise NotImplementedError
 
   # debug
   # checkpointer.save(state)
@@ -382,12 +379,6 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   train_metrics_last_t = time.time()
   logging.info('Initial compilation, this might take some minutes...')
 
-  # if config.eval_only:
-  #   # run eval only and return
-  #   logging.info('Evaluating...')
-  #   run_eval(state, partitioned_eval_step, data_loader_val, local_batch_size, epoch=-1)
-  #   return
-
   epoch_offset = (step_offset + 1) // steps_per_epoch
   step = epoch_offset * steps_per_epoch
 
@@ -395,7 +386,6 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   data_layout = partitioner.get_data_layout(config.batch_size)
   shard_id = data_layout.shard_id
 
-  best_acc = 0.
   for epoch in range(epoch_offset, int(config.num_epochs)):
     data_loader_train.sampler.set_epoch(epoch)  # reset random seed
     
@@ -462,7 +452,6 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
   total_time = time.time() - start_time
   total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-  logging.info('Last accuracy: {}, best accuracy: {}'.format(summary['test_acc1'], best_acc))
   logging.info('Elapsed time: {}'.format(total_time_str))
 
   if config.profile_memory:

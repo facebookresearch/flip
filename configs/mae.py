@@ -38,7 +38,7 @@ def get_config():
 
 
   config.mask_ratio = 0.75
-#   config.norm_pix_loss = True
+  config.norm_pix_loss = True
 
   config.sincos = True
 
