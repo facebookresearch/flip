@@ -412,7 +412,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
       eval_batch = parse_batch(eval_batch, local_batch_size)
       metrics = partitioned_eval_step(state, eval_batch)
 
-      imgs_vis = metrics.pop('imgs_vis')[0]  # keep the master device
+      imgs_vis = metrics.pop('imgs_vis')
       imgs_vis = imgs_vis * jnp.asarray(STDDEV_RGB) + jnp.asarray(MEAN_RGB)
       imgs_vis = jnp.uint8(jnp.clip(imgs_vis, 0, 255.))
       writer.write_images(step=epoch_1000x, images=dict(imgs_vis=imgs_vis))
