@@ -291,7 +291,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   p_init_fn, state_axes, state_shape = create_train_state(config, model, image_size, steps_per_epoch, partitioner)
   rng_init, rng = jax.random.split(rng)
 
-  log_model_info(None, state_shape, partitioner)
+  log_model_info(None, state_shape, state_axes, partitioner)
   # profile_memory(workdir)
 
   # ------------------------------------

@@ -27,6 +27,7 @@ Shape = Tuple[int, ...]
 # -----------------------------------------------------------------------------
 def log_model_info(log_file: Optional[str],
                    full_train_state: train_state_lib.TrainState,
+                   logical_axes: train_state_lib.TrainState,
                    partitioner: partitioning.BasePartitioner):
   """Log the variable shapes information and optionally write it to a file."""
   # Only write logs on host 0.

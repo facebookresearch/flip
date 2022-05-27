@@ -5,6 +5,9 @@ import jax.numpy as jnp
 import optax
 import functools
 
+from flax import traverse_util
+from jax.interpreters.sharded_jit import PartitionSpec
+
 import t5x.train_state as train_state_lib
 import t5x.optimizers
 
@@ -94,5 +97,3 @@ def create_train_state(config, model, image_size, steps_per_epoch, partitioner):
       out_axis_resources=train_state_axes)
 
   return p_init_fn, train_state_axes, train_state_shape
-  
-

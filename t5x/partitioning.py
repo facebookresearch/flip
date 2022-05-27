@@ -895,6 +895,26 @@ class PjitPartitioner(BasePjitPartitioner):
     flat_mesh_axes = {
         k: _logical_to_mesh_axes(k, v) for k, v in flat_logical_axes.items()
     }
+    # --------------------------------------------------------------------------------
+    # the hack
+    logging.info('Revising axes...')
+    flat_mesh_axes = {k: revise_axes(k, v) for k, v in flat_mesh_axes.items()}
+    # --------------------------------------------------------------------------------
 
     return logical_axes.restore_state(
         traverse_util.unflatten_dict(flat_mesh_axes, sep='/'))
+
+
+def revise_axes(name, axes):
+  if not name.startswith('state/param_states'):
+    return axes
+  if type(axes) is not PartitionSpec:
+    return axes
+  if len(axes) == 2:
+    if axes[0] == None and axes[1] == 'model':
+      axes = PartitionSpec('data', 'model')
+    elif axes[0] == 'model' and axes[1] == None:
+      axes = PartitionSpec('model', 'data')
+    return axes
+  else:
+    return axes

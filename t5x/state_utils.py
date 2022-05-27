@@ -76,8 +76,8 @@ def intersect_state(
   Returns:
     nested dict like `state_dict` but with extra keys removed
   """
-  state_dict_flat = flatten_state_dict(state_dict)
-  intersect_state_dict_flat = flatten_state_dict(intersect_state_dict)
+  state_dict_flat = flatten_state_dict(state_dict, keep_empty_nodes=True)
+  intersect_state_dict_flat = flatten_state_dict(intersect_state_dict, keep_empty_nodes=True)
 
   for k in list(state_dict_flat):
     if k not in intersect_state_dict_flat:
@@ -101,8 +101,8 @@ def merge_state(state_dict: Mapping[str, Any],
     a nested dict like `state_dict` but with extra entries from
       `from_scratch_state` inserted
   """
-  state_dict_flat = flatten_state_dict(state_dict)
-  from_scratch_state_flat = flatten_state_dict(from_scratch_state)
+  state_dict_flat = flatten_state_dict(state_dict, keep_empty_nodes=True)
+  from_scratch_state_flat = flatten_state_dict(from_scratch_state, keep_empty_nodes=True)
 
   for k in from_scratch_state_flat:
     if k not in state_dict_flat:
