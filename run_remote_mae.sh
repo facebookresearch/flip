@@ -9,11 +9,11 @@ mask=0.75
 
 partitions=8
 
-vitsize=huge3x_p16
+vitsize=large
 CONFIG=cfg_mae_${vitsize}
 
 
-JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}_s${seed}_p${partitions}_normpix_exwd_adarows16
+JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}_s${seed}_p${partitions}_normpix_exwd_splitstate_dbg
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
 LOGDIR=/kmh_data/logs/${JOBNAME}
@@ -50,8 +50,8 @@ python3 main.py \
     --config.seed_jax=${seed} \
     --config.seed_pt=${seed} \
     --config.partitioning.num_partitions=${partitions} \
-    --config.opt_type=adarows \
-    --config.opt_mu_dtype=bfloat16 \
+    --config.opt_type=adamw \
+    --config.opt_mu_dtype=float32 \
 2>&1 | tee $LOGDIR/finetune_\$SSH_ID.log
 " 2>&1 | tee $LOGDIR/finetune.log
 

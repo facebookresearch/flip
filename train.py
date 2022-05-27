@@ -292,7 +292,6 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   rng_init, rng = jax.random.split(rng)
 
   log_model_info(None, state_shape, state_axes, partitioner)
-  # profile_memory(workdir)
 
   # ------------------------------------
   # Create checkpointer
