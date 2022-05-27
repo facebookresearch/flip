@@ -63,7 +63,7 @@ def get_config():
   config.opt_mu_dtype = 'bfloat16'
 
   # save
-  config.save_every_epochs = 10
+  config.save_every_epochs = 20
 
   # vis
   # config.model.visualize = True
