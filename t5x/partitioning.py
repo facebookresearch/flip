@@ -897,8 +897,8 @@ class PjitPartitioner(BasePjitPartitioner):
     }
     # --------------------------------------------------------------------------------
     # the hack
-    logging.info('Revising axes...')
-    flat_mesh_axes = {k: revise_axes(k, v) for k, v in flat_mesh_axes.items()}
+    # logging.info('Splitting optimizer states...')
+    # flat_mesh_axes = {k: revise_axes(k, v) for k, v in flat_mesh_axes.items()}
     # --------------------------------------------------------------------------------
 
     return logical_axes.restore_state(
