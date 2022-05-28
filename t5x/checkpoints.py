@@ -640,7 +640,10 @@ class Checkpointer(object):
     logging.info('Saving checkpoint for step %d to %s', step, tmp_dir)
 
     if jax.process_index() == 0:
+      logging.info('Before gfile.makedirs...')
       gfile.makedirs(tmp_dir)
+    
+    logging.info('Done gfile.makedirs...')
     # Block all hosts until directory is ready.
     multihost_utils.sync_global_devices(f'checkpointer:make_dir:{tmp_dir}')
 

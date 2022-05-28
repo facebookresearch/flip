@@ -35,8 +35,6 @@ echo Current dir: $(pwd)
 export GOOGLE_APPLICATION_CREDENTIALS=~/gcp_credential.json
 export TCMALLOC_LARGE_ALLOC_REPORT_THRESHOLD=8589934592
 export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets
-export TF_CPP_MIN_LOG_LEVEL=3
-export CUDA_VISIBLE_DEVICES=-1
 
 source run_get_ssh_id.sh
 
