@@ -380,6 +380,10 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
         logging.info('Initial compilation completed.')
         start_time = time.time()  # log the time after compilation
 
+      if epoch == epoch_offset and i == 0 and config.save_after_init:
+        logging.info('Saving init checkpoint: {}'.format(workdir))
+        checkpointer.save(state)
+
       if config.get('log_every_steps'):
         train_metrics.append(metrics)
         if (step + 1) % config.log_every_steps == 0:
