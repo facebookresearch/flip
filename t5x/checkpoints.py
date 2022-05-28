@@ -618,11 +618,13 @@ class Checkpointer(object):
     """
     step = train_state.step
     step = step.get() if isinstance(step, LazyArray) else step
+    logging.info('Before _get_local_data...')
     step = _get_local_data(step)
     # Integer, to avoid side effects in the checkpoint path.
     step = int(step)
 
     # Share a timestamp across devices.
+    logging.info('Before broadcast_one_to_all...')
     timestamp = multihost_utils.broadcast_one_to_all(np.int32(time.time()))
 
     final_dir = os.path.join(self.checkpoints_dir, f'checkpoint_{step}')
