@@ -93,6 +93,8 @@ def get_config():
   config.resume_dir = ''
   config.vis_every_epochs = 20.
 
+  config.save_after_init = False
+  
   config.pretrain_dir = ''
   config.pretrain_fmt = 'jax'  # 't5x'
 
@@ -109,6 +111,7 @@ def get_config():
   # partitioning
   config.partitioning = ml_collections.ConfigDict()
   config.partitioning.num_partitions = 1
+  config.partitioning.partition_states = False
 
 
   return config

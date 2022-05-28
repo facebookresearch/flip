@@ -185,6 +185,11 @@ class FlaxOptimTrainState(flax.struct.PyTreeNode):
     state_dict['state']['step'] = step
     return self.restore_state(state_dict)
 
+  def replace_param_states(self, param_states: VariableDict) -> 'FlaxOptimTrainState':
+    state_dict = self.state_dict()
+    state_dict['state']['param_states'] = param_states
+    return self.restore_state(state_dict)
+
   def restore_state(self, state_dict: VariableDict) -> 'FlaxOptimTrainState':
     new_optimizer = self._optimizer.restore_state(state_dict)
     return self.replace(

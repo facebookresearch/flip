@@ -51,7 +51,7 @@ from utils.torchloader_util import MEAN_RGB, STDDEV_RGB
 from t5x.train_state_initializer import create_train_state
 import t5x.partitioning
 import t5x.rng
-from t5x.model_info import log_model_info
+import t5x.model_info
 import t5x.checkpoints
 
 import jax.profiler
@@ -291,8 +291,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   p_init_fn, state_axes, state_shape = create_train_state(config, model, image_size, steps_per_epoch, partitioner)
   rng_init, rng = jax.random.split(rng)
 
-  log_model_info(None, state_shape, partitioner)
-  # profile_memory(workdir)
+  t5x.model_info.log_model_info(None, state_shape, partitioner)
 
   # ------------------------------------
   # Create checkpointer
@@ -314,6 +313,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     logging.info('Initializing train_state done.')
     # stds = jax.tree_util.tree_map(lambda x: (x.shape, np.array(x).std()), state.params)
     # logging.info('std: {}'.format(stds))
+
+  t5x.model_info.log_state_info(state)
 
   # debug
   # checkpointer.save(state)
@@ -379,6 +380,10 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
         logging.info('Initial compilation completed.')
         start_time = time.time()  # log the time after compilation
 
+      if epoch == epoch_offset and i == 0 and config.save_after_init:
+        logging.info('Saving init checkpoint: {}'.format(workdir))
+        checkpointer.save(state)
+
       if config.get('log_every_steps'):
         train_metrics.append(metrics)
         if (step + 1) % config.log_every_steps == 0:
@@ -424,7 +429,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # ------------------------------------------------------------
     # finished one epoch: save
     # ------------------------------------------------------------
-    if (epoch + 1) % config.save_every_epochs == 0 or epoch + 1 == int(config.num_epochs):
+    if (epoch + 1) % config.save_every_epochs == 0 or epoch + 1 == int(config.num_epochs) or epoch == epoch_offset:
       logging.info('Saving checkpoint: {}'.format(workdir))
       checkpointer.save(state)
 

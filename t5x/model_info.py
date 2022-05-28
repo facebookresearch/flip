@@ -11,7 +11,6 @@ from t5x import state_utils
 from t5x import train_state as train_state_lib
 import tensorflow as tf
 from tensorflow.io import gfile
-import time
 
 from utils import logging_util
 
@@ -99,5 +98,36 @@ def log_model_info(log_file: Optional[str],
                                 total_num_states / 1e6)
 
     expected_memory = (total_num_params + total_num_states) * 4
-    _log_info_and_write_to_file(writer, 'Total model memory (G): %.6f',
+    _log_info_and_write_to_file(writer, 'Estimated model memory (G) with all float32: %.6f',
                                 expected_memory / 1024 / 1024 / 1024)
+
+
+def log_state_info(real_train_state: train_state_lib.TrainState,):
+  """Log the variable shapes information and optionally write it to a file."""
+  # Only write logs on host 0.
+  if jax.process_index() != 0:
+    return
+
+  state_dict = real_train_state.state_dict()
+
+  def parse_sharding(x):
+    return np.array([i.chunks[0] if hasattr(i, 'chunks') else 1 for i in x.sharding_spec.sharding] if hasattr(x, 'sharding_spec') else [1,])
+
+  shards = jax.tree_map(parse_sharding, state_dict)
+  splits = jax.tree_map(lambda x: np.prod(x), shards)
+
+  sizes = jax.tree_map(lambda x: x.size if hasattr(x, 'size') else 1, state_dict)
+
+  jax.tree_util.tree_reduce(np.add, sizes['target']) / 1e6
+  jax.tree_util.tree_reduce(np.add, sizes['state']) / 1e6
+
+  types = jax.tree_map(lambda x: x.dtype if hasattr(x, 'dtype') else None, state_dict)
+  bytes = jax.tree_map(lambda x: 4 if x == jnp.float32 else (2 if x == jnp.bfloat16 else 4), types)
+  memory = jax.tree_map(lambda x, y, z: x * y / z, sizes, bytes, splits)
+
+  total_mem_params = jax.tree_util.tree_reduce(np.add, memory['target'])
+  total_mem_states = jax.tree_util.tree_reduce(np.add, memory['state'])
+
+  logging.info('Est. memory of parameters per device (G): %.6f', total_mem_params / 1024 / 1024 / 1024)
+  logging.info('Est. memory of parameter_states per device (G): %.6f', total_mem_states / 1024 / 1024 / 1024)
+  logging.info('Est. memory of both per device (G): %.6f', (total_mem_params + total_mem_states) / 1024 / 1024 / 1024)
