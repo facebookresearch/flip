@@ -417,8 +417,7 @@ class Checkpointer(object):
                keep: Optional[int] = None,
                save_dtype: jnp.dtype = np.float32,
                restore_dtype: Optional[jnp.dtype] = None,
-               use_gda: Optional[bool] = False,
-               multihost_writing: Optional[bool] = False):
+               use_gda: Optional[bool] = False):
     """Checkpointer constructor.
 
     Args:
@@ -468,8 +467,6 @@ class Checkpointer(object):
     self._parameter_infos = self._get_parameter_infos()
 
     asyncio.set_event_loop(asyncio.new_event_loop())
-
-    self._multihost_writing = multihost_writing
 
   def _get_state_dict_for_save(self,
                                state_dict: Dict[str, Any],
@@ -624,17 +621,15 @@ class Checkpointer(object):
     """
     step = train_state.step
     step = step.get() if isinstance(step, LazyArray) else step
-    logging.info('Before _get_local_data...')
     step = _get_local_data(step)
     # Integer, to avoid side effects in the checkpoint path.
     step = int(step)
 
     # Share a timestamp across devices.
-    logging.info('Before broadcast_one_to_all...')
-    timestamp = multihost_utils.broadcast_one_to_all(np.int32(time.time()))
+    # timestamp = multihost_utils.broadcast_one_to_all(np.int32(time.time()))
 
     final_dir = os.path.join(self.checkpoints_dir, f'checkpoint_{step}')
-    tmp_dir = final_dir + f'.tmp-{timestamp}'
+    tmp_dir = final_dir # + f'.tmp-{timestamp}'  # do not create a different
 
     if gfile.exists(final_dir):
       logging.info(
@@ -668,9 +663,7 @@ class Checkpointer(object):
     multihost_utils.sync_global_devices(
         f'checkpointer:tensorstore_write_complete:{tmp_dir}')
 
-    if self._multihost_writing:
-      self._multihost_write_state(written_state_dict, tmp_dir, final_dir, step)
-    elif jax.process_index() == 0:
+    if jax.process_index() == 0:
       logging.info('Before _get_local_data...')
       written_state_dict = jax.tree_map(_get_local_data, written_state_dict)
 
@@ -684,13 +677,7 @@ class Checkpointer(object):
       with gfile.GFile(os.path.join(tmp_dir, 'checkpoint'), 'wb') as fp:
         fp.write(msgpack_bytes)
 
-      logging.info('Before renaming...')
-      # Finalize checkpoint directory.
-      if final_dir.startswith('gs://'):
-        gfile.rename(tmp_dir, final_dir, overwrite=False)
-      else:
-        gfile.rename(tmp_dir, final_dir)
-      logging.info('Saved checkpoint for step %d to %s', step, final_dir)
+      logging.info('Saved checkpoint for step %d to %s', step, tmp_dir)
 
       # Remove old checkpoints, if necessary.
       self._remove_old_checkpoints()
@@ -698,68 +685,6 @@ class Checkpointer(object):
     # Block until complete on all hosts.
     multihost_utils.sync_global_devices(
         f'checkpointer:write_complete:{final_dir}')
-
-  # ----------------------------------------------------------------------------------------
-  def _multihost_write_state(self, written_state_dict, tmp_dir, final_dir, step):
-    logging_util.verbose_on()
-    logging.info('Running _multihost_write_state...')
-
-    hosts = jax.process_count()
-    host_id = jax.process_index()
-
-    written_state_dict = jax.tree_map(_get_local_data, written_state_dict)  # dict
-    flatten_written_state_dict = state_utils.flatten_state_dict(written_state_dict, keep_empty_nodes=True)
-
-    # sort tensors by size    
-    def get_size(x):
-      if isinstance(x, ts.Spec):
-        return np.prod(x.to_json()['metadata']['shape'])
-      elif isinstance(x, np.ndarray):
-        return x.size
-      else:
-        return 1
-
-    sorted_written_state_dict = OrderedDict(sorted(flatten_written_state_dict.items(), key=lambda x: get_size(x[1])))
-    partial_written_state_dict = OrderedDict(list(sorted_written_state_dict.items())[host_id::hosts])
-
-    logging.info('Tensors to be saved in this host: {} / {}'.format(len(partial_written_state_dict), len(flatten_written_state_dict)))
-
-    new_written_state_dict = traverse_util.unflatten_dict(partial_written_state_dict, sep="/")
-
-    # Write msgpack file in host 0 only
-    msgpack_bytes = serialization.to_bytes({
-        'version': VERSION,
-        'optimizer': new_written_state_dict
-    })
-
-    tmp_dir = tmp_dir + '_host{:03d}'.format(host_id)
-    gfile.makedirs(tmp_dir)
-    logging.info('Before fp.write(msgpack_bytes)...: {}'.format(tmp_dir))
-
-    with gfile.GFile(os.path.join(tmp_dir, 'checkpoint'), 'wb') as fp:
-      fp.write(msgpack_bytes)
-
-    # Block until complete on all hosts.
-    multihost_utils.sync_global_devices(f'checkpointer:multihost_write_complete')
-    logging.info('Host {} done...'.format(host_id))
-
-    # gfile.copy(os.path.join(tmp_dir, 'checkpoint'), os.path.join(final_dir, 'checkpoint'), overwrite=False)
-    # from IPython import embed; embed();
-    # if (0 == 0): raise NotImplementedError
-
-    if jax.process_index() == 0:
-      # Finalize checkpoint directory.
-      # if final_dir.startswith('gs://'):
-      #   gfile.rename(tmp_dir, final_dir, overwrite=False)
-      # else:
-      #   gfile.rename(tmp_dir, final_dir)
-      logging.info('Saved checkpoint for step %d to %s', step, final_dir)
-
-      # Remove old checkpoints, if necessary.
-      self._remove_old_checkpoints()
-    logging_util.verbose_off()
-
-  # ----------------------------------------------------------------------------------------
 
   def _write_state_to_tensorstore(
       self,
