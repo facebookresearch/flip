@@ -9,11 +9,13 @@ mask=0.75
 
 partitions=8
 
+rescale=0.5
+
 vitsize=huge4x_p16
 CONFIG=cfg_mae_${vitsize}
 
 
-JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}_s${seed}_p${partitions}_normpix_exwd_splitstate_resumedbg
+JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}_s${seed}_p${partitions}_re${rescale}_normpix_exwd_splitstate
 RESUME='gs://kmh-gcp/checkpoints/flax/20220528_074753_maet5x_kmh-tpuvm-v3-256-1_cfg_mae_huge4x_p16_800ep_b4096_lr1e-4_mk0.75_s100_p8_normpix_exwd_splitstate'
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
@@ -43,6 +45,7 @@ python3 main.py \
     --config.log_every_steps=100 \
     --config.num_epochs=${ep} \
     --config.learning_rate=${lr} \
+    --config.model.transformer.rescale_init=${rescale} \
     --config.profile_memory=True \
     --config.model.norm_pix_loss=True \
     --config.model.sincos=True \
@@ -55,7 +58,7 @@ python3 main.py \
     --config.opt_mu_dtype=float32 \
     --config.partitioning.partition_states=True \
     --config.model.visualize=False \
-    --config.save_after_init=True \
+    --config.save_after_init=False \
     --config.resume_dir=${RESUME} \
 2>&1 | tee $LOGDIR/finetune_\$SSH_ID.log
 " 2>&1 | tee $LOGDIR/finetune.log
