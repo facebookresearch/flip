@@ -14,6 +14,7 @@ CONFIG=cfg_mae_${vitsize}
 
 
 JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}_s${seed}_p${partitions}_normpix_exwd_adarows16
+RESUME=''
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
 LOGDIR=/kmh_data/logs/${JOBNAME}
@@ -52,6 +53,7 @@ python3 main.py \
     --config.partitioning.num_partitions=${partitions} \
     --config.opt_type=adarows \
     --config.opt_mu_dtype=bfloat16 \
+    --config.resume_dir=${RESUME} \
 2>&1 | tee $LOGDIR/finetune_\$SSH_ID.log
 " 2>&1 | tee $LOGDIR/finetune.log
 
