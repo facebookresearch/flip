@@ -62,6 +62,9 @@ def get_config():
   config.opt_type = 'adarows'
   config.opt_mu_dtype = 'bfloat16'
 
+  # partition
+  config.partitioning.partition_states = True
+
   # save
   config.save_every_epochs = 10
 

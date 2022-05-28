@@ -806,7 +806,8 @@ class PjitPartitioner(BasePjitPartitioner):
                model_parallel_submesh: Optional[HardwareMesh] = None,
                params_on_devices: bool = True,
                backend: Optional[str] = None,
-               logical_axis_rules: Optional[LogicalAxisRules] = None):
+               logical_axis_rules: Optional[LogicalAxisRules] = None,
+               partition_states: bool = False,):
     """PjitPartitioner constructor.
 
     See https://github.com/google-research/text-to-text-transfer-transformer/blob/main/README.mdx/user/partitioning for details.
@@ -851,6 +852,7 @@ class PjitPartitioner(BasePjitPartitioner):
     self._logical_axis_rules = tuple(logical_axis_rules)
     self._data_axis, = flax_partitioning.logical_to_mesh_axes(
         ['batch'], logical_axis_rules)
+    self._partition_states = partition_states
 
   def partition(
       self,
@@ -897,8 +899,9 @@ class PjitPartitioner(BasePjitPartitioner):
     }
     # --------------------------------------------------------------------------------
     # the hack
-    # logging.info('Splitting optimizer states...')
-    # flat_mesh_axes = {k: revise_axes(k, v) for k, v in flat_mesh_axes.items()}
+    if self._partition_states:
+      logging.info('Splitting optimizer states...')
+      flat_mesh_axes = {k: revise_axes(k, v) for k, v in flat_mesh_axes.items()}
     # --------------------------------------------------------------------------------
 
     return logical_axes.restore_state(

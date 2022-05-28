@@ -110,10 +110,6 @@ def log_state_info(real_train_state: train_state_lib.TrainState,):
 
   state_dict = real_train_state.state_dict()
 
-  x = state_dict['state']['param_states']['0']['nu']['Transformer']['encoderblock_00']['MultiHeadDotProductAttention_0']['query']['kernel']
-  x.sharding_spec.sharding[1].chunks
-  x.sharding_spec.sharding[0]
-
   def parse_sharding(x):
     return np.array([i.chunks[0] if hasattr(i, 'chunks') else 1 for i in x.sharding_spec.sharding] if hasattr(x, 'sharding_spec') else [1,])
 

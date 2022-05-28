@@ -9,7 +9,7 @@ mask=0.75
 
 partitions=8
 
-vitsize=large
+vitsize=huge4x_p16
 CONFIG=cfg_mae_${vitsize}
 
 
@@ -52,6 +52,7 @@ python3 main.py \
     --config.partitioning.num_partitions=${partitions} \
     --config.opt_type=adamw \
     --config.opt_mu_dtype=float32 \
+    --config.partitioning.partition_states=True \
 2>&1 | tee $LOGDIR/finetune_\$SSH_ID.log
 " 2>&1 | tee $LOGDIR/finetune.log
 
