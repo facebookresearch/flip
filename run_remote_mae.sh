@@ -16,7 +16,7 @@ CONFIG=cfg_mae_${vitsize}
 
 
 JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}_s${seed}_p${partitions}_re${rescale}_normpix_exwd_splitstate
-RESUME='gs://kmh-gcp/checkpoints/flax/20220528_074753_maet5x_kmh-tpuvm-v3-256-1_cfg_mae_huge4x_p16_800ep_b4096_lr1e-4_mk0.75_s100_p8_normpix_exwd_splitstate'
+RESUME=''
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
 LOGDIR=/kmh_data/logs/${JOBNAME}
