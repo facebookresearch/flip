@@ -305,9 +305,9 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   )
   
   if config.resume_dir != '':
-    logging.info('Initializing train_state before resume...')
-    state = p_init_fn(rng_init)
-    logging.info('Initializing train_state done.')
+    # logging.info('Initializing train_state before resume...')
+    # state = p_init_fn(rng_init)
+    # logging.info('Initializing train_state done.')
     state = ckp.restore_checkpoint(checkpointer, path=config.resume_dir)
   elif config.pretrain_dir != '':
     raise NotImplementedError
@@ -317,12 +317,6 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     logging.info('Initializing train_state done.')
     # stds = jax.tree_util.tree_map(lambda x: (x.shape, np.array(x).std()), state.params)
     # logging.info('std: {}'.format(stds))
-
-  # debug
-   
-  if config.save_after_init:
-    logging.info('Saving init checkpoint: {}'.format(workdir))
-    checkpointer.save(state)
 
   # step_offset > 0 if restarting from checkpoint
   step_offset = int(state.step)
@@ -378,9 +372,9 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
       if epoch == epoch_offset and i == 0 and partitioner._num_partitions > 8:
         print_sanity_check(batch, shard_id)
       
-      if i == 10 and epoch == epoch_offset:
-        logging.info('break for debugging...')
-        break
+      if config.save_after_init and i == 0 and epoch == epoch_offset:
+        logging.info('Saving init checkpoint: {}'.format(workdir))
+        checkpointer.save(state)
 
       epoch_1000x = int(step * config.batch_size / 1281167 * 1000)  # normalize to IN1K epoch anyway
 
