@@ -53,6 +53,7 @@ python3 main.py \
     --config.opt_type=adamw \
     --config.opt_mu_dtype=float32 \
     --config.partitioning.partition_states=True \
+    --config.model.visualize=False \
 2>&1 | tee $LOGDIR/finetune_\$SSH_ID.log
 " 2>&1 | tee $LOGDIR/finetune.log
 
