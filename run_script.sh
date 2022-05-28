@@ -14,6 +14,7 @@ python3 main.py \
     --config.model.norm_pix_loss=False \
     --config.partitioning.num_partitions=1 \
     --config.opt_type=adarows \
+    --config.save_after_init=True \
 
 
     # --config.resume_dir='gs://kmh-gcp/checkpoints/flax/20220521_221137_scratch_kmh-tpuvm-v3-256-1_cfg_vit_large_50ep_fttl_b1024_wd0.3_lr1e-4_lrd1.0_dp0.2_warm20_s0_beta0.95_p16_dbgp16/checkpoint_62550'

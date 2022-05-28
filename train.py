@@ -316,8 +316,10 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # logging.info('std: {}'.format(stds))
 
   # debug
-  # checkpointer.save(state)
-  # state = checkpointer.restore(path=checkpointer.checkpoints_dir + '/checkpoint_0')
+   
+  if config.save_after_init:
+    logging.info('Saving init checkpoint: {}'.format(workdir))
+    checkpointer.save(state)
 
   # step_offset > 0 if restarting from checkpoint
   step_offset = int(state.step)
@@ -424,7 +426,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # ------------------------------------------------------------
     # finished one epoch: save
     # ------------------------------------------------------------
-    if (epoch + 1) % config.save_every_epochs == 0 or epoch + 1 == int(config.num_epochs):
+    if (epoch + 1) % config.save_every_epochs == 0 or epoch + 1 == int(config.num_epochs) or epoch == epoch_offset:
       logging.info('Saving checkpoint: {}'.format(workdir))
       checkpointer.save(state)
 
