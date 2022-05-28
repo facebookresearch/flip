@@ -28,3 +28,9 @@ sudo mount 10.60.38.146:/kmh_data /kmh_data
 sudo chmod go+rw /kmh_data
 ls /kmh_data
 "
+
+# gcloud alpha compute tpus tpu-vm ssh ${VM_NAME} --zone europe-west4-a \
+#     --worker=all --command "
+# gsutil cp \"gs://kmh-gcp/configs/gcp_credential.json\" ~/.
+# export GOOGLE_APPLICATION_CREDENTIALS=~/gcp_credential.json
+# "

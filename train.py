@@ -301,6 +301,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     partitioner=partitioner,
     checkpoints_dir=workdir,
     keep=None,  # TODO: move to config
+    multihost_writing=True
   )
   
   if config.resume_dir != '':
@@ -317,8 +318,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   t5x.model_info.log_state_info(state)
 
   # --------------------------------------------------------
-  # logging.info('Saving debug checkpoint: {}'.format(workdir))
-  # checkpointer.save(state)
+  logging.info('Saving debug checkpoint: {}'.format(workdir))
+  checkpointer.save(state)
   # --------------------------------------------------------
 
   # step_offset > 0 if restarting from checkpoint
