@@ -374,6 +374,10 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
       if epoch == epoch_offset and i == 0 and partitioner._num_partitions > 8:
         print_sanity_check(batch, shard_id)
+      
+      if i > 10:
+        logging.info('break for debugging...')
+        break
 
       epoch_1000x = int(step * config.batch_size / 1281167 * 1000)  # normalize to IN1K epoch anyway
 
