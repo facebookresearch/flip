@@ -18,6 +18,11 @@ This file is intentionally kept short. The majority for logic is in libraries
 that can be easily tested and imported in Colab.
 """
 
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=DeprecationWarning) 
+warnings.filterwarnings("ignore", category=FutureWarning) 
+
 
 from absl import app
 from absl import flags
