@@ -9,7 +9,7 @@ mask=0.75
 
 partitions=8
 
-vitsize=large
+vitsize=huge4x_p16
 CONFIG=cfg_mae_${vitsize}
 
 
@@ -32,6 +32,7 @@ git config --global --add safe.directory $STAGEDIR
 echo Current commit: $(git show -s --format=%h)
 echo Current dir: $(pwd)
 
+export GOOGLE_APPLICATION_CREDENTIALS=~/gcp_credential.json
 export TCMALLOC_LARGE_ALLOC_REPORT_THRESHOLD=8589934592
 export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets
 

@@ -684,6 +684,7 @@ class Checkpointer(object):
       with gfile.GFile(os.path.join(tmp_dir, 'checkpoint'), 'wb') as fp:
         fp.write(msgpack_bytes)
 
+      logging.info('Before renaming...')
       # Finalize checkpoint directory.
       if final_dir.startswith('gs://'):
         gfile.rename(tmp_dir, final_dir, overwrite=False)
@@ -704,6 +705,7 @@ class Checkpointer(object):
     logging.info('Running _multihost_write_state...')
 
     hosts = jax.process_count()
+    host_id = jax.process_index()
 
     written_state_dict = jax.tree_map(_get_local_data, written_state_dict)  # dict
     flatten_written_state_dict = state_utils.flatten_state_dict(written_state_dict, keep_empty_nodes=True)
@@ -718,9 +720,9 @@ class Checkpointer(object):
         return 1
 
     sorted_written_state_dict = OrderedDict(sorted(flatten_written_state_dict.items(), key=lambda x: get_size(x[1])))
-    partial_written_state_dict = OrderedDict(list(sorted_written_state_dict.items())[::hosts])
+    partial_written_state_dict = OrderedDict(list(sorted_written_state_dict.items())[host_id::hosts])
 
-    logging.info('Tensors to be saved in this host: {}'.format(len(partial_written_state_dict)))
+    logging.info('Tensors to be saved in this host: {} / {}'.format(len(partial_written_state_dict), len(flatten_written_state_dict)))
 
     new_written_state_dict = traverse_util.unflatten_dict(partial_written_state_dict, sep="/")
 
@@ -729,19 +731,28 @@ class Checkpointer(object):
         'version': VERSION,
         'optimizer': new_written_state_dict
     })
-    logging.info('Before fp.write(msgpack_bytes)...')
+
+    tmp_dir = tmp_dir + '_host{:03d}'.format(host_id)
+    gfile.makedirs(tmp_dir)
+    logging.info('Before fp.write(msgpack_bytes)...: {}'.format(tmp_dir))
+
     with gfile.GFile(os.path.join(tmp_dir, 'checkpoint'), 'wb') as fp:
       fp.write(msgpack_bytes)
 
     # Block until complete on all hosts.
     multihost_utils.sync_global_devices(f'checkpointer:multihost_write_complete')
+    logging.info('Host {} done...'.format(host_id))
+
+    # gfile.copy(os.path.join(tmp_dir, 'checkpoint'), os.path.join(final_dir, 'checkpoint'), overwrite=False)
+    # from IPython import embed; embed();
+    # if (0 == 0): raise NotImplementedError
 
     if jax.process_index() == 0:
       # Finalize checkpoint directory.
-      if final_dir.startswith('gs://'):
-        gfile.rename(tmp_dir, final_dir, overwrite=False)
-      else:
-        gfile.rename(tmp_dir, final_dir)
+      # if final_dir.startswith('gs://'):
+      #   gfile.rename(tmp_dir, final_dir, overwrite=False)
+      # else:
+      #   gfile.rename(tmp_dir, final_dir)
       logging.info('Saved checkpoint for step %d to %s', step, final_dir)
 
       # Remove old checkpoints, if necessary.

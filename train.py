@@ -301,7 +301,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     partitioner=partitioner,
     checkpoints_dir=workdir,
     keep=None,  # TODO: move to config
-    multihost_writing=True
+    multihost_writing=False
   )
   
   if config.resume_dir != '':
