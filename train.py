@@ -305,9 +305,11 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   )
   
   if config.resume_dir != '':
-    # logging.info('Initializing train_state before resume...')
-    # state = p_init_fn(rng_init)
-    # logging.info('Initializing train_state done.')
+    logging.info('Initializing train_state before resume...')
+    state = p_init_fn(rng_init)
+    logging.info('Initializing train_state done.')
+    del state
+    logging.info('Initialized train_state deleted.')
     state = ckp.restore_checkpoint(checkpointer, path=config.resume_dir)
   elif config.pretrain_dir != '':
     raise NotImplementedError
