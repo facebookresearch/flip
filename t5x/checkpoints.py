@@ -643,6 +643,7 @@ class Checkpointer(object):
     # Block all hosts until directory is ready.
     multihost_utils.sync_global_devices(f'checkpointer:make_dir:{tmp_dir}')
 
+    logging.info('Before _write_state_to_tensorstore...')
     written_state_dict = self._write_state_to_tensorstore(
         tmp_dir, train_state, concurrent_gb, state_transformation_fns)
 
@@ -662,13 +663,18 @@ class Checkpointer(object):
         f'checkpointer:tensorstore_write_complete:{tmp_dir}')
 
     if jax.process_index() == 0:
+      logging.info('Before _get_local_data...')
       written_state_dict = jax.tree_map(_get_local_data, written_state_dict)
 
       # Write msgpack file in host 0 only
+      logging.info('Before to_bytes...')
       msgpack_bytes = serialization.to_bytes({
           'version': VERSION,
           'optimizer': written_state_dict
       })
+      logging.info('Before fp.write(msgpack_bytes)...')
+      from IPython import embed; embed();
+      if (0 == 0): raise NotImplementedError
       with gfile.GFile(os.path.join(tmp_dir, 'checkpoint'), 'wb') as fp:
         fp.write(msgpack_bytes)
 

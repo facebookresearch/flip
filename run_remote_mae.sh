@@ -56,7 +56,7 @@ python3 main.py \
     --config.opt_mu_dtype=float32 \
     --config.partitioning.partition_states=True \
     --config.model.visualize=False \
-    --config.save_after_init=False \
+    --config.save_after_init=True \
     --config.resume_dir=${RESUME} \
 2>&1 | tee $LOGDIR/finetune_\$SSH_ID.log
 " 2>&1 | tee $LOGDIR/finetune.log
