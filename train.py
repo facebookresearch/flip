@@ -425,7 +425,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # ------------------------------------------------------------
     # finished one epoch: save
     # ------------------------------------------------------------
-    if (epoch + 1) % config.save_every_epochs == 0 or epoch + 1 == int(config.num_epochs):
+    if (epoch + 1) % config.save_every_epochs == 0 or epoch + 1 == int(config.num_epochs) or epoch == epoch_offset:
       logging.info('Saving checkpoint: {}'.format(workdir))
       checkpointer.save(state)
 
