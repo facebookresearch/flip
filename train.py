@@ -316,14 +316,11 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   t5x.model_info.log_state_info(state)
 
-<<<<<<< HEAD
   # --------------------------------------------------------
   # logging.info('Saving debug checkpoint: {}'.format(workdir))
   # checkpointer.save(state)
   # --------------------------------------------------------
 
-=======
->>>>>>> t5x.dev.mae
   # step_offset > 0 if restarting from checkpoint
   step_offset = int(state.step)
   logging.info('step_offset: {}'.format(step_offset))

@@ -646,11 +646,7 @@ class Checkpointer(object):
     # Block all hosts until directory is ready.
     multihost_utils.sync_global_devices(f'checkpointer:make_dir:{tmp_dir}')
 
-<<<<<<< HEAD
     logging.info('Running _write_state_to_tensorstore...')
-=======
-    logging.info('Start _write_state_to_tensorstore...')
->>>>>>> t5x.dev.mae
     written_state_dict = self._write_state_to_tensorstore(
         tmp_dir, train_state, concurrent_gb, state_transformation_fns)
 
