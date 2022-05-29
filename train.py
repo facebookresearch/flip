@@ -317,8 +317,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   t5x.model_info.log_state_info(state)
 
   # --------------------------------------------------------
-  logging.info('Saving debug checkpoint: {}'.format(workdir))
-  checkpointer.save(state)
+  # logging.info('Saving debug checkpoint: {}'.format(workdir))
+  # checkpointer.save(state)
   # --------------------------------------------------------
 
   # step_offset > 0 if restarting from checkpoint
@@ -381,10 +381,10 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
         logging.info('Initial compilation completed.')
         start_time = time.time()  # log the time after compilation
 
-      if epoch == epoch_offset and i == 0 and config.save_after_init:
-        jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
-        logging.info('Saving init checkpoint: {}'.format(workdir))
-        checkpointer.save(state)
+      # if epoch == epoch_offset and i == 0:
+      #   jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
+      #   logging.info('Saving init debug checkpoint: {}'.format(workdir))
+      #   checkpointer.save(state)
 
       if config.get('log_every_steps'):
         train_metrics.append(metrics)
