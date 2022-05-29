@@ -9,13 +9,14 @@ mask=0.75
 
 partitions=8
 
-vitsize=huge4x_p16 # huge4x_p16
+rescale=0.5
+
+vitsize=huge4x_p16
 CONFIG=cfg_mae_${vitsize}
 
 
-JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}_s${seed}_p${partitions}_normpix_exwd_splitstate_fastsave
+JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}_s${seed}_p${partitions}_re${rescale}_normpix_exwd_splitstate_fastsave
 RESUME=''
-# RESUME='gs://kmh-gcp/checkpoints/flax/20220528_074753_maet5x_kmh-tpuvm-v3-256-1_cfg_mae_huge4x_p16_800ep_b4096_lr1e-4_mk0.75_s100_p8_normpix_exwd_splitstate'
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
 LOGDIR=/kmh_data/logs/${JOBNAME}
@@ -45,6 +46,7 @@ python3 main.py \
     --config.log_every_steps=100 \
     --config.num_epochs=${ep} \
     --config.learning_rate=${lr} \
+    --config.model.transformer.rescale_init=${rescale} \
     --config.profile_memory=True \
     --config.model.norm_pix_loss=True \
     --config.model.sincos=True \

@@ -646,7 +646,11 @@ class Checkpointer(object):
     # Block all hosts until directory is ready.
     multihost_utils.sync_global_devices(f'checkpointer:make_dir:{tmp_dir}')
 
+<<<<<<< HEAD
     logging.info('Running _write_state_to_tensorstore...')
+=======
+    logging.info('Start _write_state_to_tensorstore...')
+>>>>>>> t5x.dev.mae
     written_state_dict = self._write_state_to_tensorstore(
         tmp_dir, train_state, concurrent_gb, state_transformation_fns)
 
@@ -666,6 +670,7 @@ class Checkpointer(object):
         f'checkpointer:tensorstore_write_complete:{tmp_dir}')
 
     if jax.process_index() == 0:
+      logging.info('Start _get_local_data...')
       written_state_dict = jax.tree_map(_get_local_data, written_state_dict)
 
       # Write msgpack file in host 0 only

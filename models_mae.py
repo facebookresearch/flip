@@ -67,42 +67,6 @@ class IdentityLayer(nn.Module):
     return x
 
 
-# class AddPositionEmbs(nn.Module):
-#   """Adds (optionally learned) positional embeddings to the inputs.
-
-#   Attributes:
-#     posemb_init: positional embedding initializer.
-#   """
-
-#   posemb_init: Callable[[PRNGKey, Shape, Dtype], Array]
-
-#   @nn.compact
-#   def __call__(self, inputs):
-#     """Applies AddPositionEmbs module.
-
-#     By default this layer uses a fixed sinusoidal embedding table. If a
-#     learned position embedding is desired, pass an initializer to
-#     posemb_init.
-
-#     Args:
-#       inputs: Inputs to the layer.
-
-#     Returns:
-#       Output tensor with shape `(bs, timesteps, in_dim)`.
-#     """
-#     # inputs.shape is (batch_size, seq_len, emb_dim).
-#     assert inputs.ndim == 3, ('Number of dimensions should be 3,'
-#                               ' but it is: %d' % inputs.ndim)
-#     pos_emb_shape = (1, inputs.shape[1], inputs.shape[2])
-#     pe = t5x.layers.param_with_axes(
-#         'pos_embedding',
-#         self.posemb_init,
-#         pos_emb_shape,
-#         jnp.float32,
-#         axes=('_null0', 'length', 'embed'))
-#     return inputs + pe
-
-
 class AddPositionEmbs(nn.Module):
   """Adds (optionally learned) positional embeddings to the inputs.
   """
@@ -220,6 +184,7 @@ class Encoder1DBlock(nn.Module):
   attention_dropout_rate: float = 0.1
   droppath_rate: float = 0.0
   layer_id: int = None
+  rescale_init: float = 1.
 
   @nn.compact
   def __call__(self, inputs, *, deterministic):
@@ -241,8 +206,8 @@ class Encoder1DBlock(nn.Module):
     # t5x
     MsaBlock = functools.partial(
       t5x.layers.MultiHeadDotProductAttention,
-      qkv_kernel_init=qkv_kernel_init,
-      out_kernel_init=out_kernel_init,
+      qkv_kernel_init=lambda *args: qkv_kernel_init(*args) * self.rescale_init,
+      out_kernel_init=lambda *args: out_kernel_init(*args) * self.rescale_init,
     )
     # ----------------------------------------------------
 
@@ -260,7 +225,7 @@ class Encoder1DBlock(nn.Module):
     y = t5x.layers.LayerNorm(dtype=self.dtype, axes=('embed',))(x)
     y = MlpBlock(
         mlp_dim=self.mlp_dim, dtype=self.dtype, dropout_rate=self.dropout_rate,
-        kernel_init=mlp_kernel_init,
+        kernel_init=lambda *args: mlp_kernel_init(*args) * self.rescale_init,
         bias_init=mlp_bias_init,
         )(y, deterministic=deterministic)
     # droppath
@@ -287,6 +252,7 @@ class Encoder(nn.Module):
   attention_dropout_rate: float = 0.1
   droppath_rate: float = 0.0
   prefix: str = 'encoder'
+  rescale_init: float = 1.0
 
   @nn.compact
   def __call__(self, inputs, *, train):
@@ -311,6 +277,7 @@ class Encoder(nn.Module):
           name=self.prefix + 'block_{:02d}'.format(lyr),
           num_heads=self.num_heads,
           layer_id=lyr,
+          rescale_init=self.rescale_init,
         )(x, deterministic=not train)
     encoded = t5x.layers.LayerNorm(name=self.prefix + '_norm', axes=('embed',))(x)
 
