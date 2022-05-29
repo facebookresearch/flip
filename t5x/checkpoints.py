@@ -626,28 +626,27 @@ class Checkpointer(object):
     step = int(step)
 
     # Share a timestamp across devices.
-    # timestamp = multihost_utils.broadcast_one_to_all(np.int32(time.time()))
+    timestamp = multihost_utils.broadcast_one_to_all(np.int32(time.time()))
 
     final_dir = os.path.join(self.checkpoints_dir, f'checkpoint_{step}')
     tmp_dir = final_dir # + f'.tmp-{timestamp}'  # do not create a different
 
     if gfile.exists(final_dir):
-      logging.info(
-          'Skipping save checkpoint for step %d (directory %s already exists)',
-          step, final_dir)
-      return
+      logging.warning('Directory %s already exists.', final_dir)
+      # final_dir = tmp_dir
+      # km: we cannt return here, which can break sync_global_devices barrier
+      # return
 
-    logging.info('Saving checkpoint for step %d to %s', step, tmp_dir)
+    logging.info('Saving checkpoint for step %d to: %s', step, tmp_dir)
 
-    if jax.process_index() == 0:
-      logging.info('Before gfile.makedirs...')
+    if jax.process_index() == 0:  
       gfile.makedirs(tmp_dir)
     
-    logging.info('Done gfile.makedirs...')
+    # logging.info('Created dir: %s', tmp_dir)
     # Block all hosts until directory is ready.
     multihost_utils.sync_global_devices(f'checkpointer:make_dir:{tmp_dir}')
 
-    logging.info('Before _write_state_to_tensorstore...')
+    logging.info('Running _write_state_to_tensorstore...')
     written_state_dict = self._write_state_to_tensorstore(
         tmp_dir, train_state, concurrent_gb, state_transformation_fns)
 
@@ -667,20 +666,30 @@ class Checkpointer(object):
         f'checkpointer:tensorstore_write_complete:{tmp_dir}')
 
     if jax.process_index() == 0:
-      logging.info('Before _get_local_data...')
       written_state_dict = jax.tree_map(_get_local_data, written_state_dict)
 
       # Write msgpack file in host 0 only
-      logging.info('Before to_bytes...')
       msgpack_bytes = serialization.to_bytes({
           'version': VERSION,
           'optimizer': written_state_dict
       })
-      logging.info('Before fp.write(msgpack_bytes)...')
       with gfile.GFile(os.path.join(tmp_dir, 'checkpoint'), 'wb') as fp:
         fp.write(msgpack_bytes)
 
       logging.info('Saved checkpoint for step %d to %s', step, tmp_dir)
+
+      # logging.info('Before renaming...')
+      # # Finalize checkpoint directory.
+      # if final_dir.startswith('gs://'):
+      #   # gfile.rename(tmp_dir, final_dir, overwrite=False)
+      #   subprocess.run(['gsutil', '-m', 'mv', tmp_dir, final_dir],
+      #                 #  stdout=subprocess.DEVNULL,
+      #                  capture_output=True,
+      #                  check=True)
+      # else:
+      #   raise NotImplementedError
+      #   gfile.rename(tmp_dir, final_dir)
+      # logging.info('Saved checkpoint for step %d to %s', step, final_dir)
 
       # Remove old checkpoints, if necessary.
       self._remove_old_checkpoints()

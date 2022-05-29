@@ -71,10 +71,10 @@ def build_dataloaders(config, partitioner, rng_torch):
   num_shards = data_layout.num_shards
 
   # ----------------------------------------
-  logging_util.verbose_on()
-  logging_util.sync_and_delay()
-  logging.info(data_layout)
-  logging_util.verbose_off()
+  # logging_util.verbose_on()
+  # logging_util.sync_and_delay()
+  # logging.info(data_layout)
+  # logging_util.verbose_off()
   # ----------------------------------------
 
   if config.batch_size % num_shards > 0:
