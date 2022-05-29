@@ -84,10 +84,6 @@ def main(argv):
 if __name__ == '__main__':
   if jax.process_count() > 1:
     time.sleep(2)  # wait for all the tf warnings
-
-  from tensorflow.io import gfile
-  gfile.makedirs('gs://kmh-gcp/checkpoints/flax/t5x_tmp_1653783236')
-
   logging_util.verbose_off()
   logging_util.set_time_logging(logging)
   flags.mark_flags_as_required(['config', 'workdir'])

@@ -29,7 +29,6 @@ partitioned reads so loading will be slower than that `Checkpointer` class.
 """
 import asyncio
 import dataclasses
-from collections import OrderedDict
 import functools
 import os
 import re
@@ -666,7 +665,6 @@ class Checkpointer(object):
         f'checkpointer:tensorstore_write_complete:{tmp_dir}')
 
     if jax.process_index() == 0:
-      logging.info('Start _get_local_data...')
       written_state_dict = jax.tree_map(_get_local_data, written_state_dict)
 
       # Write msgpack file in host 0 only
