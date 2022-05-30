@@ -11,7 +11,7 @@ partitions=8
 
 rescale=0.5
 
-vitsize=huge4x_p16
+vitsize=large
 CONFIG=cfg_mae_${vitsize}
 
 
@@ -60,7 +60,7 @@ python3 main.py \
     --config.partitioning.partition_states=True \
     --config.model.visualize=False \
     --config.resume_dir=${RESUME} \
-2>&1 | tee $LOGDIR/finetune_\$SSH_ID.log
-" 2>&1 | tee $LOGDIR/finetune.log
+2>&1 | tee -a $LOGDIR/finetune_\$SSH_ID.log
+" 2>&1 | tee -a $LOGDIR/finetune.log
 
 echo ${VM_NAME}
