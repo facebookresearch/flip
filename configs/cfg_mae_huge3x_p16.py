@@ -47,6 +47,7 @@ def get_config():
   config.model.transformer.dropout_rate = 0.0
   config.model.transformer.droppath_rate = 0.0
   config.model.transformer.num_layers = 32
+  config.model.transformer.rescale_init = 1.0
 
   config.model.decoder = ml_collections.ConfigDict()
   config.model.decoder.hidden_size = 512

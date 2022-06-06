@@ -7,11 +7,11 @@ ep=1600
 
 mask=0.75
 
-partitions=8
+partitions=4
 
-rescale=0.5
+rescale=1.0
 
-vitsize=huge4x_p16
+vitsize=huge3x_p16
 CONFIG=cfg_mae_${vitsize}
 
 
