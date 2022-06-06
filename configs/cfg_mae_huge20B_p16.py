@@ -42,11 +42,12 @@ def get_config():
   config.model.norm_pix_loss = True
 
   config.model.update(vit.get_l16_config())
-  config.model.hidden_size = 1280 * 6
+  config.model.hidden_size = int(1280 * 5.6)  # 7168
   config.model.transformer.mlp_dim = config.model.hidden_size * 4
   config.model.transformer.dropout_rate = 0.0
   config.model.transformer.droppath_rate = 0.0
   config.model.transformer.num_layers = 32
+  config.model.transformer.rescale_init = 0.5
 
   config.model.decoder = ml_collections.ConfigDict()
   config.model.decoder.hidden_size = 512
@@ -59,8 +60,8 @@ def get_config():
   config.model.decoder.transformer.droppath_rate = 0.0
 
   # opt config
-  config.opt_type = 'adarows'
-  config.opt_mu_dtype = 'bfloat16'
+  config.opt_type = 'adamw'
+  config.opt_mu_dtype = 'float32'
 
   # partition
   config.partitioning.partition_states = True
