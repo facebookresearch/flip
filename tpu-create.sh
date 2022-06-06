@@ -1,1 +1,0 @@
-/home/kaiminghe/tpu-create.sh

@@ -12,6 +12,5 @@ build/
 .pytype
 .vscode/*
 /.devcontainer
-
 tmp/*
 dbg/*
