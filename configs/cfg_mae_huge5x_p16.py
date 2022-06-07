@@ -42,7 +42,7 @@ def get_config():
   config.model.norm_pix_loss = True
 
   config.model.update(vit.get_l16_config())
-  config.model.hidden_size = 1280 * 4
+  config.model.hidden_size = 1280 * 5
   config.model.transformer.mlp_dim = config.model.hidden_size * 4
   config.model.transformer.dropout_rate = 0.0
   config.model.transformer.droppath_rate = 0.0

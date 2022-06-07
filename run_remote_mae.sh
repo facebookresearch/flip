@@ -5,13 +5,13 @@ batch=4096
 lr=1e-4
 ep=1600
 
-mask=0.75
+mask=0.9
 
-partitions=4
+partitions=8
 
-rescale=1.0
+rescale=0.5
 
-vitsize=huge3x_p16
+vitsize=huge4x_p16
 CONFIG=cfg_mae_${vitsize}
 
 
