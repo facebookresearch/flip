@@ -43,18 +43,43 @@ class ImageFolder(datasets.ImageFolder):
         self.num_classes = len(self.classes)
 
     def __getitem__(self, index: int):
-        image, label = super(ImageFolder, self).__getitem__(index)
+        try:
+            image, label = super(ImageFolder, self).__getitem__(index)
+        except Exception as e:
+            logging.info('Replacing image due to error: {}'.format(e))
+            image, label = super(ImageFolder, self).__getitem__((index + 1) % self.__len__())  # offset
         label_one_hot = torch.nn.functional.one_hot(torch.tensor(label), self.num_classes).float()
         label_one_hot = label_one_hot * (1 - self.label_smoothing) + self.label_smoothing / self.num_classes
 
         return image, label, label_one_hot
+
+    def __repr__(self) -> str:
+        head = "Dataset " + self.__class__.__name__
+        body = ["Number of datapoints: {}".format(self.__len__())]
+        body.append("Number of classes: {}".format(self.num_classes))
+        if self.root is not None:
+            body.append("Root location: {}".format(self.root))
+        if self.target_transform is not None:
+            body.append("Target transform: {}".format(self.target_transform))
+        body += self.extra_repr().splitlines()
+        if hasattr(self, "transforms") and self.transforms is not None:
+            body += [repr(self.transforms)]
+        lines = [head] + [" " * self._repr_indent + line for line in body]
+        return '\n'.join(lines)
 
 
 def build_dataset(is_train, data_dir, aug):
     transform = build_transform(is_train, aug)
     label_smoothing = aug.label_smoothing if is_train else 0.
 
-    root = os.path.join(data_dir, 'train' if is_train else 'val')
+    if 'imagenet-1k' in data_dir or 'imagenet_full_size/061417' in data_dir:  # IN-1K
+        root = os.path.join(data_dir, 'train' if is_train else 'val')
+    elif 'imagenet-22k' in data_dir:  # IN-22K
+        root = os.path.join(data_dir, '062717') if is_train \
+            else '/datasets/imagenet-1k/val'
+    else:
+        raise NotImplementedError
+
     dataset = ImageFolder(root=root, transform=transform, label_smoothing=label_smoothing)
 
     logging.info(dataset)
@@ -151,3 +176,20 @@ def mixup_target(target, num_classes, lam=1., smoothing=0.0, device='cpu'):
 
 timm.data.mixup.one_hot = one_hot
 timm.data.mixup.mixup_target = mixup_target
+
+
+def get_target_transform_1k_to_22k(dataset_train, dataset_val):
+    class_to_idx_val = dataset_val.class_to_idx
+    class_to_idx_train = dataset_train.class_to_idx
+  
+    idx_val_to_train = {}
+    for k, v in class_to_idx_val.items():
+        if k == 'n04399382':
+            idx_val_to_train[v] = 0 # the only non-overlapping case; assign a random number
+        else:
+            idx_val_to_train[v] = class_to_idx_train[k]
+    
+    def target_transform(target):
+        return idx_val_to_train[target]
+    
+    return target_transform

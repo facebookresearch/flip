@@ -34,3 +34,5 @@ ls /kmh_data
 # gsutil cp \"gs://kmh-gcp/configs/gcp_credential.json\" ~/.
 # export GOOGLE_APPLICATION_CREDENTIALS=~/gcp_credential.json
 # "
+
+source ~/run_mount_data.sh
