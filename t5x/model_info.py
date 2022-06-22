@@ -53,6 +53,8 @@ def log_model_info(log_file: Optional[str],
     writer = stack.enter_context(gfile.GFile(
         log_file, 'w')) if log_file is not None else None
 
+    mesh_shape = partitioner._local_chunker.global_mesh.shape  # e.g., OrderedDict([('data', 2), ('model', 4)])
+    
     # Log params
     def _log_variable(name: str, arr: Optional[np.ndarray],
                       logical_axes: Optional[partitioning.AxisNames],
@@ -74,6 +76,12 @@ def log_model_info(log_file: Optional[str],
       #     name, arr.size, shape_str, mesh_axes)
       arr_size = '{:,d}'.format(arr.size)
       logging.info('{:96s} {:>16s} {:48s} {}'.format(name, arr_size, str(shape_str), str(mesh_axes)))
+
+      # kaiming: hack, do the sanity check here
+      if len(arr.shape) > 0:
+        for dim, ax in zip(arr.shape, mesh_axes):
+          if ax is not None:
+            assert dim % mesh_shape[ax] == 0
 
     logging_util.set_time_logging_short(logging)  # make the logging shorter
 
