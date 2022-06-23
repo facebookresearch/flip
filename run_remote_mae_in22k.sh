@@ -15,7 +15,7 @@ vitsize=huge3x_p16
 CONFIG=cfg_mae_${vitsize}
 
 
-JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_IN22K_${VM_NAME}_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}_s${seed}_p${partitions}_re${rescale}_normpix_exwd_NOsplit_fastsave_helloworld
+JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_IN22K_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}_s${seed}_p${partitions}_re${rescale}_normpix_exwd_NOsplit_fastsave_helloworld
 RESUME=''
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
@@ -44,6 +44,8 @@ python3 main.py \
     --config=configs/$CONFIG.py \
     --config.batch_size=${batch} \
     --config.log_every_steps=100 \
+    --config.save_every_epochs=5 \
+    --config.warmup_epochs=4.0 \
     --config.num_epochs=${ep} \
     --config.learning_rate=${lr} \
     --config.model.transformer.rescale_init=${rescale} \
