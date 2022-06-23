@@ -917,7 +917,8 @@ def revise_axes(name, axes):
     if axes[0] == None and axes[1] == 'model':
       axes = PartitionSpec('data', 'model')
     elif axes[0] == 'model' and axes[1] == None:
-      axes = PartitionSpec('model', 'data')
+      # axes = PartitionSpec('model', 'data')
+      axes = PartitionSpec('data', 'model')
     return axes
   else:
     return axes
