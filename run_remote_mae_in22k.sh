@@ -3,19 +3,19 @@ echo 'code dir: '$STAGEDIR
 # seed=0
 batch=4096
 lr=1e-4
-ep=80
+ep=160
 
 mask=0.75
 
-partitions=8
+partitions=1
 
 rescale=1.0
 
-vitsize=huge3x_p16
+vitsize=huge_p14
 CONFIG=cfg_mae_${vitsize}
 
 
-JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_IN22K_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}_s${seed}_p${partitions}_re${rescale}_normpix_exwd_NOsplit_fastsave_helloworld
+JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_IN22K_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}_s${seed}_p${partitions}_re${rescale}_normpix_exwd_NOsplit_fastsave
 RESUME=''
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
