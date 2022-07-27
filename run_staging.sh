@@ -21,7 +21,7 @@ echo 'Current dir: '`pwd`
 
 for seed in 100
 do
-source run_remote_mae_in22k.sh
+source run_remote_mae.sh
 
 echo sleep 1m
 sleep 1m

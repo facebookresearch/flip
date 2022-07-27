@@ -7,15 +7,15 @@ ep=1600
 
 mask=0.75
 
-partitions=8
+partitions=2
 
 rescale=1.0
 
-vitsize=huge3x_p16
+vitsize=giant_p14
 CONFIG=cfg_mae_${vitsize}
 
 
-JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}_s${seed}_p${partitions}_re${rescale}_normpix_exwd_NOsplit_fastsave
+JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}_s${seed}_p${partitions}st_re${rescale}_normpix_exwd_NOsplit_fastsave
 RESUME=''
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
