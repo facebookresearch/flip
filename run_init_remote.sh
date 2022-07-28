@@ -10,6 +10,8 @@ pip install --upgrade clu
 
 pip install flax==0.4.1
 
+pip3 install optax==0.1.2
+
 pip3 install tensorflow-probability
 pip3 install tensorflow_addons
 

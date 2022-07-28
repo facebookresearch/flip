@@ -7,7 +7,7 @@ ep=1600
 
 mask=0.75
 
-partitions=2
+partitions=1
 
 rescale=1.0
 
