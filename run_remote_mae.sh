@@ -11,7 +11,7 @@ partitions=2
 
 rescale=1.0
 
-vitsize=giant_p14
+vitsize=gpt2b_p14
 CONFIG=cfg_mae_${vitsize}
 
 
@@ -57,7 +57,7 @@ python3 main.py \
     --config.partitioning.num_partitions=${partitions} \
     --config.opt_type=adamw \
     --config.opt_mu_dtype=float32 \
-    --config.partitioning.partition_states=False \
+    --config.partitioning.partition_states=True \
     --config.model.visualize=False \
     --config.resume_dir=${RESUME} \
 2>&1 | tee -a $LOGDIR/finetune_\$SSH_ID.log
