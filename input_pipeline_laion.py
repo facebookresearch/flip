@@ -148,7 +148,14 @@ def create_split(batch_size, data_layout, train, dtype=tf.float32,
     split_size = train_records // num_shards
     start = shard_id * split_size
     split = 'train[{}:{}]'.format(start, start + split_size)
+
+    # ----------------------------------------
+    logging_util.verbose_on()
+    logging_util.sync_and_delay()
     logging.info('Split: {} / {}'.format(split, train_records))
+    logging_util.verbose_off()
+    # ----------------------------------------
+
     filenames = filenames[start:start + split_size]
   else:
     raise NotImplementedError

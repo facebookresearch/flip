@@ -127,17 +127,18 @@ def build_dataloaders(config, partitioner):
       aug=config.aug)
 
   # val set is imagenet
-  data_loader_val = create_imagenet_input_iter(
-      local_batch_size,
-      data_layout,
-      image_size,
-      input_dtype,
-      train=False,
-      cache=config.cache, 
-      seed=config.seed_tf,
-      aug=None)
+  # data_loader_val = create_imagenet_input_iter(
+  #     local_batch_size,
+  #     data_layout,
+  #     image_size,
+  #     input_dtype,
+  #     train=False,
+  #     cache=config.cache, 
+  #     seed=config.seed_tf,
+  #     aug=None)
+  data_loader_val = None
 
-  return data_loader_train, data_loader_val, local_batch_size
+  return data_loader_train, data_loader_val
 
 
 def print_sanity_check(batch, shard_id):
@@ -288,7 +289,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   # ------------------------------------
   # Create data loader
   # ------------------------------------
-  data_loader_train, data_loader_val, local_batch_size = build_dataloaders(config, partitioner)
+  data_loader_train, data_loader_val = build_dataloaders(config, partitioner)  # we do not use data_loader_val
 
   steps_per_epoch = config.samples_per_epoch // config.batch_size  # for lr schedule
   
@@ -422,7 +423,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # finished one epoch: eval
     # ------------------------------------------------------------
     if ((epoch + 1) % config.vis_every_epochs == 0 or epoch == epoch_offset) and config.model.visualize:
-      eval_batch = next(data_loader_val)
+      eval_batch = batch  # we visualize the same bach for simplicty
       metrics = partitioned_eval_step(state, eval_batch)
 
       imgs_vis = metrics.pop('imgs_vis')
