@@ -302,7 +302,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   # ------------------------------------
   # Set random seeds
   # ------------------------------------
-  rng_torch = set_seed_torch(config.seed_pt)
+  # rng_torch = set_seed_torch(config.seed_pt)
   tf.random.set_seed(config.seed_tf + jax.process_index())
 
   t5x.rng.set_hardware_rng_ops()
@@ -409,13 +409,13 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   shard_id = data_layout.shard_id
 
   for epoch in range(epoch_offset, int(config.num_epochs)):
-    data_loader_train.sampler.set_epoch(epoch)  # reset random seed
+    # data_loader_train.sampler.set_epoch(epoch)  # reset random seed
     
     # ------------------------------------------------------------
-    # train one epoch
+    # train one epoch (one "virtual" epoch)
     # ------------------------------------------------------------
-    for i, batch in enumerate(data_loader_train):
-      batch = parse_batch(batch, local_batch_size)
+    for i in range(steps_per_epoch):
+      batch = next(data_loader_train)
       state, metrics = partitioned_train_step(state, batch)
 
       if epoch == epoch_offset and i == 0 and partitioner._num_partitions > 8:
@@ -461,8 +461,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # ------------------------------------------------------------
     if ((epoch + 1) % config.vis_every_epochs == 0 or epoch == epoch_offset) and config.model.visualize:
       data_loader_val.sampler.set_epoch(epoch)
-      eval_batch = next(iter(data_loader_val))
-      eval_batch = parse_batch(eval_batch, local_batch_size)
+      eval_batch = next(data_loader_val)
       metrics = partitioned_eval_step(state, eval_batch)
 
       imgs_vis = metrics.pop('imgs_vis')

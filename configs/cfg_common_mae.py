@@ -116,6 +116,6 @@ def get_config():
   # misc
   config.image_size = 224
 
-  config.samples_per_epoch = 1281167  # define a "virtual" epoch based on IN1K
+  config.samples_per_epoch = 1281167  # define a "virtual" epoch
 
   return config
