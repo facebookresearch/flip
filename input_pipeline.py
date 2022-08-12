@@ -24,6 +24,7 @@ from utils.transform_util import \
   _decode_and_center_crop, normalize_image, color_jitter
 
 from utils.autoaug_util import distort_image_with_autoaugment, distort_image_with_randaugment
+from utils import logging_util
 
 from absl import logging
 from PIL import Image
@@ -88,14 +89,14 @@ def preprocess_for_eval(image_bytes, dtype=tf.float32, image_size=None):
   return image
 
 
-def create_split(dataset_builder, batch_size, partitioner, train, dtype=tf.float32,
+def create_split(dataset_builder, batch_size, data_layout, train, dtype=tf.float32,
                  image_size=None, cache=False, seed=0, aug=None):
   """Creates a split from the ImageNet dataset using TensorFlow Datasets.
 
   Args:
     dataset_builder: TFDS dataset builder for ImageNet.
-    batch_size: the batch size returned by the data pipeline.
-    partitioner: the partitioner
+    batch_size (local_batch_size): the batch size returned by the data pipeline.
+    data_layout: the partitioner data_layout
     train: Whether to load the train or evaluation split.
     dtype: data type of the image.
     image_size: The target size of the images.
@@ -103,7 +104,6 @@ def create_split(dataset_builder, batch_size, partitioner, train, dtype=tf.float
   Returns:
     A `tf.data.Dataset`.
   """
-  data_layout = partitioner.get_data_layout(batch_size)
   shard_id = data_layout.shard_id
   num_shards = data_layout.num_shards
 

@@ -67,10 +67,10 @@ import torch
 import torch.utils.data
 
 
-def create_input_iter(dataset_builder, batch_size, partitioner, image_size, dtype, train,
+def create_input_iter(dataset_builder, local_batch_size, data_layout, image_size, dtype, train,
                       cache, seed=0, aug=None,):
   ds = input_pipeline.create_split(
-      dataset_builder, batch_size, partitioner, image_size=image_size, dtype=dtype,
+      dataset_builder, local_batch_size, data_layout, image_size=image_size, dtype=dtype,
       train=train, cache=cache, seed=seed, aug=aug,)
 
   # ------------------------------------------------
@@ -79,35 +79,55 @@ def create_input_iter(dataset_builder, batch_size, partitioner, image_size, dtyp
   # x = next(iter(ds))
   # ------------------------------------------------
 
-  ds = map(prepare_tf_data, ds)
-  it = jax_utils.prefetch_to_device(ds, 2)
-  return it
+  ds = map(functools.partial(prepare_tf_data, batch_size=local_batch_size), ds)
+  # it = jax_utils.prefetch_to_device(ds, 2)  # do not need this in pjit (t5x)
+  return ds, local_batch_size
 
 
-def build_dataloaders(config, partitioner, rng_torch):
+def build_dataloaders(config, partitioner):
 
-  data_layout = partitioner.get_data_layout(config.batch_size)
+  batch_size = config.batch_size
+
+  data_layout = partitioner.get_data_layout(batch_size)
   shard_id = data_layout.shard_id
   num_shards = data_layout.num_shards
 
-  if config.batch_size % num_shards > 0:
+  if batch_size % num_shards > 0:
     raise ValueError('Batch size must be divisible by the number of devices')
-  # local_batch_size = config.batch_size // num_shards
+  local_batch_size = batch_size // num_shards
+
+  # ----------------------------------------
+  logging_util.verbose_on()
+  logging_util.sync_and_delay()
+  logging.info("shard_id: {}".format(shard_id))
+  logging_util.verbose_off()
+  # ----------------------------------------
 
   image_size = config.image_size
   input_dtype = tf.float32
 
   dataset_builder = tfds.builder(config.dataset)
-  train_iter = create_input_iter(
+  data_loader_train, local_batch_size = create_input_iter(
       dataset_builder,
       config.batch_size,
-      partitioner,
+      data_layout,
       image_size,
       input_dtype,
       train=True,
       cache=config.cache, 
       seed=config.seed_tf,
       aug=config.aug)
+
+  data_loader_val, _ = create_input_iter(
+      dataset_builder,
+      config.batch_size,
+      data_layout,
+      image_size,
+      input_dtype,
+      train=False,
+      cache=config.cache, 
+      seed=config.seed_tf,
+      aug=None)
 
   # ----------------------------------------
   # logging_util.verbose_on()
@@ -116,45 +136,45 @@ def build_dataloaders(config, partitioner, rng_torch):
   # logging_util.verbose_off()
   # ----------------------------------------
 
-  dataset_val = torchloader_util.build_dataset(is_train=False, data_dir=config.torchload.data_dir, aug=config.aug)
-  dataset_train = torchloader_util.build_dataset(is_train=True, data_dir=config.torchload.data_dir, aug=config.aug)
+  # dataset_val = torchloader_util.build_dataset(is_train=False, data_dir=config.torchload.data_dir, aug=config.aug)
+  # dataset_train = torchloader_util.build_dataset(is_train=True, data_dir=config.torchload.data_dir, aug=config.aug)
 
-  sampler_train = torch.utils.data.DistributedSampler(
-    dataset_train,
-    num_replicas=num_shards, # jax.process_count(),
-    rank=shard_id, # jax.process_index(),
-    shuffle=True,
-    seed=config.seed_pt,
-  )
-  sampler_val = torch.utils.data.DistributedSampler(
-    dataset_val,
-    num_replicas=num_shards, # jax.process_count(),
-    rank=shard_id, # jax.process_index(),
-    shuffle=False,
-  )
+  # sampler_train = torch.utils.data.DistributedSampler(
+  #   dataset_train,
+  #   num_replicas=num_shards, # jax.process_count(),
+  #   rank=shard_id, # jax.process_index(),
+  #   shuffle=True,
+  #   seed=config.seed_pt,
+  # )
+  # sampler_val = torch.utils.data.DistributedSampler(
+  #   dataset_val,
+  #   num_replicas=num_shards, # jax.process_count(),
+  #   rank=shard_id, # jax.process_index(),
+  #   shuffle=False,
+  # )
   
-  data_loader_train = torch.utils.data.DataLoader(
-    dataset_train, sampler=sampler_train,
-    batch_size=local_batch_size,
-    num_workers=config.torchload.num_workers,
-    pin_memory=True,
-    drop_last=True,
-    generator=rng_torch,
-    worker_init_fn=functools.partial(seed_worker, shard_id=shard_id),
-    persistent_workers=True,
-    timeout=60.,
-  )
-  data_loader_val = torch.utils.data.DataLoader(
-    dataset_val, sampler=sampler_val,
-    batch_size=local_batch_size,
-    num_workers=config.torchload.num_workers,
-    pin_memory=True,
-    drop_last=False,
-    persistent_workers=True,
-    timeout=60.,
-  )
+  # data_loader_train = torch.utils.data.DataLoader(
+  #   dataset_train, sampler=sampler_train,
+  #   batch_size=local_batch_size,
+  #   num_workers=config.torchload.num_workers,
+  #   pin_memory=True,
+  #   drop_last=True,
+  #   generator=rng_torch,
+  #   worker_init_fn=functools.partial(seed_worker, shard_id=shard_id),
+  #   persistent_workers=True,
+  #   timeout=60.,
+  # )
+  # data_loader_val = torch.utils.data.DataLoader(
+  #   dataset_val, sampler=sampler_val,
+  #   batch_size=local_batch_size,
+  #   num_workers=config.torchload.num_workers,
+  #   pin_memory=True,
+  #   drop_last=False,
+  #   persistent_workers=True,
+  #   timeout=60.,
+  # )
 
-  assert len(data_loader_train) == len(dataset_train) // config.batch_size
+  # assert len(data_loader_train) == len(dataset_train) // config.batch_size
   return data_loader_train, data_loader_val, local_batch_size
 
 
@@ -219,14 +239,6 @@ def eval_step(state, batch, model, rng):
   metrics = {'test_loss': loss, 'imgs_vis': imgs_vis}
 
   return metrics
-
-
-def parse_batch(batch, local_batch_size):
-  images, labels, labels_one_hot = batch
-  images = images.permute([0, 2, 3, 1])  # nchw -> nhwc
-  batch = {'image': images, 'label': labels, 'label_one_hot': labels_one_hot}
-  batch = prepare_pt_data(batch, local_batch_size)  # to (local_devices, device_batch_size, height, width, 3)
-  return batch
 
 
 def prepare_tf_data(xs, batch_size):
@@ -314,9 +326,9 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   # ------------------------------------
   # Create data loader
   # ------------------------------------
-  data_loader_train, data_loader_val, local_batch_size = build_dataloaders(config, partitioner, rng_torch)
+  data_loader_train, data_loader_val, local_batch_size = build_dataloaders(config, partitioner)
 
-  steps_per_epoch = len(data_loader_train)
+  steps_per_epoch = config.samples_per_epoch // config.batch_size  # for lr schedule
   
   # ------------------------------------
   # Create model
@@ -378,7 +390,6 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   # ------------------------------------------
   # debug
   # batch = next(iter(data_loader_val))
-  # batch = parse_batch(batch, local_batch_size)
   # logging.info('To run partitioned_eval_step:')
   # outcome = partitioned_eval_step(state, batch)
   # logging.info(jax.tree_map(lambda x: x.shape, outcome))
