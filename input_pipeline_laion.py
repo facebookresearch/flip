@@ -39,12 +39,12 @@ feature_description = {
     'width': tf.io.FixedLenFeature([], tf.int64),
     # information related to downloading and processing
     'key': tf.io.FixedLenFeature([], tf.string),
-    'original_height': tf.io.FixedLenFeature([], tf.int64),
-    'original_width': tf.io.FixedLenFeature([], tf.int64),
-    'NSFW': tf.io.FixedLenFeature([], tf.string),
-    'url': tf.io.FixedLenFeature([], tf.string),
-    'LICENSE': tf.io.FixedLenFeature([], tf.string),
-    'similarity': tf.io.FixedLenFeature([], tf.float32),
+    # 'original_height': tf.io.FixedLenFeature([], tf.int64),
+    # 'original_width': tf.io.FixedLenFeature([], tf.int64),
+    # 'NSFW': tf.io.FixedLenFeature([], tf.string),
+    # 'url': tf.io.FixedLenFeature([], tf.string),
+    # 'LICENSE': tf.io.FixedLenFeature([], tf.string),
+    # 'similarity': tf.io.FixedLenFeature([], tf.float32),
 }
 
 def parse_laion_example(example_proto):
@@ -152,9 +152,6 @@ def create_split(batch_size, data_layout, train, dtype=tf.float32,
     filenames = filenames[start:start + split_size]
   else:
     raise NotImplementedError
-
-  num_shards = 32
-  shard_id = num_shards - 1
 
   ds = tf.data.TFRecordDataset(filenames).map(parse_laion_example)
   ds = ds.apply(tf.data.experimental.ignore_errors(log_warning=False))
