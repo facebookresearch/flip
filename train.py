@@ -81,7 +81,7 @@ def create_input_iter(dataset_builder, local_batch_size, data_layout, image_size
 
   ds = map(functools.partial(prepare_tf_data, batch_size=local_batch_size), ds)
   # it = jax_utils.prefetch_to_device(ds, 2)  # do not need this in pjit (t5x)
-  return ds, local_batch_size
+  return ds
 
 
 def build_dataloaders(config, partitioner):
@@ -107,9 +107,9 @@ def build_dataloaders(config, partitioner):
   input_dtype = tf.float32
 
   dataset_builder = tfds.builder(config.dataset)
-  data_loader_train, local_batch_size = create_input_iter(
+  data_loader_train = create_input_iter(
       dataset_builder,
-      config.batch_size,
+      local_batch_size,
       data_layout,
       image_size,
       input_dtype,
@@ -118,9 +118,9 @@ def build_dataloaders(config, partitioner):
       seed=config.seed_tf,
       aug=config.aug)
 
-  data_loader_val, _ = create_input_iter(
+  data_loader_val = create_input_iter(
       dataset_builder,
-      config.batch_size,
+      local_batch_size,
       data_layout,
       image_size,
       input_dtype,
@@ -460,7 +460,6 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # finished one epoch: eval
     # ------------------------------------------------------------
     if ((epoch + 1) % config.vis_every_epochs == 0 or epoch == epoch_offset) and config.model.visualize:
-      data_loader_val.sampler.set_epoch(epoch)
       eval_batch = next(data_loader_val)
       metrics = partitioned_eval_step(state, eval_batch)
 
