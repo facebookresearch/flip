@@ -30,6 +30,7 @@ from typing import Any
 from absl import logging
 from clu import metric_writers
 import flax
+from flax import jax_utils
 from flax.training import common_utils
 from flax.training import train_state
 import jax
@@ -39,7 +40,9 @@ from jax.interpreters.sharded_jit import PartitionSpec
 import ml_collections
 import optax
 import tensorflow as tf
+import tensorflow_datasets as tfds
 
+import input_pipeline
 import models_mae
 
 from utils import summary_util as summary_util  # must be after 'from clu import metric_writers'
@@ -64,11 +67,47 @@ import torch
 import torch.utils.data
 
 
+def create_input_iter(dataset_builder, batch_size, partitioner, image_size, dtype, train,
+                      cache, seed=0, aug=None,):
+  ds = input_pipeline.create_split(
+      dataset_builder, batch_size, partitioner, image_size=image_size, dtype=dtype,
+      train=train, cache=cache, seed=seed, aug=aug,)
+
+  # ------------------------------------------------
+  # from IPython import embed; embed();
+  # if (0 == 0): raise NotImplementedError
+  # x = next(iter(ds))
+  # ------------------------------------------------
+
+  ds = map(prepare_tf_data, ds)
+  it = jax_utils.prefetch_to_device(ds, 2)
+  return it
+
+
 def build_dataloaders(config, partitioner, rng_torch):
 
   data_layout = partitioner.get_data_layout(config.batch_size)
   shard_id = data_layout.shard_id
   num_shards = data_layout.num_shards
+
+  if config.batch_size % num_shards > 0:
+    raise ValueError('Batch size must be divisible by the number of devices')
+  # local_batch_size = config.batch_size // num_shards
+
+  image_size = config.image_size
+  input_dtype = tf.float32
+
+  dataset_builder = tfds.builder(config.dataset)
+  train_iter = create_input_iter(
+      dataset_builder,
+      config.batch_size,
+      partitioner,
+      image_size,
+      input_dtype,
+      train=True,
+      cache=config.cache, 
+      seed=config.seed_tf,
+      aug=config.aug)
 
   # ----------------------------------------
   # logging_util.verbose_on()
@@ -76,10 +115,6 @@ def build_dataloaders(config, partitioner, rng_torch):
   # logging.info(data_layout)
   # logging_util.verbose_off()
   # ----------------------------------------
-
-  if config.batch_size % num_shards > 0:
-    raise ValueError('Batch size must be divisible by the number of devices')
-  local_batch_size = config.batch_size // num_shards
 
   dataset_val = torchloader_util.build_dataset(is_train=False, data_dir=config.torchload.data_dir, aug=config.aug)
   dataset_train = torchloader_util.build_dataset(is_train=True, data_dir=config.torchload.data_dir, aug=config.aug)
@@ -194,12 +229,12 @@ def parse_batch(batch, local_batch_size):
   return batch
 
 
-def prepare_pt_data(xs, batch_size):
+def prepare_tf_data(xs, batch_size):
   """Convert a input batch from PyTorch Tensors to numpy arrays."""
   local_device_count = jax.local_device_count()
   def _prepare(x):
     # Use _numpy() for zero-copy conversion between TF and NumPy.
-    x = x.numpy()  # pylint: disable=protected-access
+    x = x._numpy()  # pylint: disable=protected-access
 
     if x.shape[0] != batch_size:
       pads = -np.ones((batch_size - x.shape[0],) + x.shape[1:], dtype=x.dtype)

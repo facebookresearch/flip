@@ -79,6 +79,7 @@ def get_config():
 
   config.aug.area_range = (0.2, 1)
   config.aug.aspect_ratio_range = (3. / 4, 4. / 3.)
+  config.aug.crop_ver = 'v4'  # v1, v3
 
   config.aug.label_smoothing = 0.0  # not used
 
@@ -112,5 +113,9 @@ def get_config():
   config.partitioning.num_partitions = 1
   config.partitioning.partition_states = False
 
+  # misc
+  config.image_size = 224
+
+  config.seed_per_host = False
 
   return config
