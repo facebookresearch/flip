@@ -1,4 +1,4 @@
-VM_NAME=kmh-tpuvm-v3-256-7
+VM_NAME=kmh-tpuvm-v3-256-3
 
 # source ~/run_mount_data.sh
 # source ~/run_mount_data.sh
