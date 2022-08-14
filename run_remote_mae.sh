@@ -3,7 +3,7 @@ echo 'code dir: '$STAGEDIR
 # seed=0
 batch=4096
 lr=1e-4
-ep=1600
+ep=800
 
 mask=0.75
 
@@ -15,7 +15,7 @@ vitsize=large
 CONFIG=cfg_mae_${vitsize}
 
 # _normpix_exwd_NOsplit_fastsave
-JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}_s${seed}_p${partitions}st_re${rescale}_laion_area0.5
+JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}_s${seed}_p${partitions}st_re${rescale}_laion_area0.5_txtloader
 RESUME=''
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}

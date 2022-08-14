@@ -58,34 +58,30 @@ def parse_laion_example(example_proto):
 
 
 # define the decode function
-def decode_example(example, image_size, aug):
+def decode_example(example, image_size, aug, tokenizer):
+  # decoder the text
+  txt = preprocess_text(example['txt'], tokenizer=tokenizer, aug_txt=aug.txt)
+
   # decoder the image
-  from IPython import embed; embed();
-  if (0 == 0): raise NotImplementedError
+  image = preprocess_image(example['image'], image_size=image_size, aug=aug)
+  return {'image': image, 'txt': txt}
 
-  # vocab file: gs://vit_models/lit/LiT-B16B.txt. It should be the same as vocab.txt in:
-  # https://storage.googleapis.com/bert_models/2019_05_30/wwm_uncased_L-24_H-1024_A-16.zip
-  # md5sum: 64800d5d8528ce344256daf115d4965e
-  # vocab_size: 30522
 
-  tokenizer = tftx.BertTokenizer('./vocab/vocab_bert_base.txt', lower_case=True, token_out_type=tf.int32)
-
-  # tokenizer._wordpiece_tokenizer._get_vocab_and_ids  # 30523
-
-  txt = example['txt'].numpy().decode('utf-8')
-  txt = '3 Bedrooms Detached House for sale in Stowmarket, Suffolk'
-  # txt = 'an apple'
+def preprocess_text(txt, tokenizer, aug_txt):
+  """
+  reference https://github.com/google-research/big_vision/blob/main/big_vision/pp/proj/flaxformer/bert_ops.py
+  """
+  # txt = txt.numpy().decode('utf-8')
   token_ids = tokenizer.tokenize(txt)
-  max_len = 16
-  padded_token_ids, mask = tftx.pad_model_inputs(token_ids, max_len)
-  del mask  # Recovered from zero padding in model.
+  # token_ids = token_ids.flat_values
+
+  max_len = aug_txt.max_len
+  padded_token_ids, _ = tftx.pad_model_inputs(token_ids, max_len)
+  padded_token_ids = padded_token_ids[0]
+  return padded_token_ids
 
 
-  image = preprocess_for_train(example['image'], image_size=image_size, aug=aug)
-  return {'image': image}
-
-
-def preprocess_for_train(image_bytes, dtype=tf.float32, image_size=None, aug=None):
+def preprocess_image(image_bytes, dtype=tf.float32, image_size=None, aug=None):
   """Preprocesses the given image for training.
 
   Args:
@@ -125,7 +121,7 @@ def preprocess_for_train(image_bytes, dtype=tf.float32, image_size=None, aug=Non
   return image
 
 
-def preprocess_for_eval(image_bytes, dtype=tf.float32, image_size=None):
+def preprocess_image_for_eval(image_bytes, dtype=tf.float32, image_size=None):
   """Preprocesses the given image for evaluation.
 
   Args:
@@ -196,13 +192,20 @@ def create_split(batch_size, data_layout, train, dtype=tf.float32,
     ds = ds.repeat()
     ds = ds.shuffle(16 * batch_size, seed=seed)
 
-  decode_fn = functools.partial(decode_example, image_size=image_size, aug=aug)
+
+  # create the tokenizer
+  # vocab file: gs://vit_models/lit/LiT-B16B.txt. It should be the same as vocab.txt in:
+  # https://storage.googleapis.com/bert_models/2019_05_30/wwm_uncased_L-24_H-1024_A-16.zip
+  # md5sum: 64800d5d8528ce344256daf115d4965e
+  # vocab_size: 30522
+  tokenizer = tftx.BertTokenizer('./vocab/vocab_bert_base.txt', lower_case=True, token_out_type=tf.int32)
+  decode_fn = functools.partial(decode_example, image_size=image_size, aug=aug, tokenizer=tokenizer)
 
   # ---------------------------------------
   # debugging 
-  x = next(iter(ds))
-  decode_fn(x)
-  raise NotImplementedError
+  # x = next(iter(ds))
+  # batch = decode_fn(x)
+  # raise NotImplementedError
   # ---------------------------------------
 
   ds = ds.map(decode_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
