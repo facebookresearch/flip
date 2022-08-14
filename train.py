@@ -167,7 +167,7 @@ def train_step(state, batch, model, rng):
     mutable = [k for k in state.flax_mutables]
     outcome = model.apply(
         {'params': params, **state.flax_mutables},
-        inputs=batch['image'],
+        inputs=batch,
         mutable=mutable,
         rngs=dict(dropout=dropout_rng),
         train=True)
@@ -196,7 +196,7 @@ def eval_step(state, batch, model, rng):
 
   dropout_rng = jax.random.fold_in(rng, state.step)
 
-  outcome = model.apply(variables, batch['image'], train=False, mutable=False, rngs=dict(dropout=dropout_rng),)
+  outcome = model.apply(variables, batch, train=False, mutable=False, rngs=dict(dropout=dropout_rng),)
   loss, imgs_vis = outcome
 
   metrics = {'test_loss': loss, 'imgs_vis': imgs_vis}
@@ -296,9 +296,10 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   # ------------------------------------
   # Create model
   # ------------------------------------
-  model = models_mae.VisionTransformer(**config.model)
+  model = models_mae.ImageTextLearner(config_img=config.model)
   
-  p_init_fn, state_axes, state_shape = create_train_state(config, model, image_size, steps_per_epoch, partitioner)
+  p_init_fn, state_axes, state_shape = create_train_state(
+    config, model, steps_per_epoch, partitioner, init_batch=next(data_loader_train))
   rng_init, rng = jax.random.split(rng)
 
   t5x.model_info.log_model_info(None, state_shape, partitioner)

@@ -60,8 +60,23 @@ def get_config():
   config.batch_size = 4096
   config.cache = True
 
-  # model config
+  # image model config
   config.model = mae.get_config()  # ViT-B/16
+  config.model.mask_ratio = 0.75
+  config.model.norm_pix_loss = True
+  config.model.decoder = ml_collections.ConfigDict()
+  config.model.decoder.hidden_size = 64
+  config.model.decoder.transformer = ml_collections.ConfigDict()
+  config.model.decoder.transformer.mlp_dim = config.model.decoder.hidden_size * 4
+  config.model.decoder.transformer.num_heads = 16
+  config.model.decoder.transformer.num_layers = 3
+  config.model.decoder.transformer.attention_dropout_rate = 0.0
+  config.model.decoder.transformer.dropout_rate = 0.0
+  config.model.decoder.transformer.droppath_rate = 0.0
+
+  # text model config
+
+
 
   # optimizer config
   config.opt_type = 'adamw'

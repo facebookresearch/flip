@@ -507,3 +507,33 @@ class VisionTransformer(nn.Module):
       outcome = pred  # not used
 
     return loss, outcome
+
+  
+class ImageTextLearner(nn.Module):
+  """ContrastiveLearner with Vision Transformer
+  """
+  config_img: Any = None  # model config
+  dtype: Any = jnp.float32
+
+  def get_config_img(self):
+    cfg = self.config_img.copy_and_resolve_references()  # copy
+    cfg.name = 'img_encoder'
+    
+    # delete unused fields
+    # cfg.unlock()
+    # del cfg.decoder
+    # del cfg.knn
+    # del cfg.visualize
+    # cfg.lock()
+    return cfg
+
+  def setup(self):
+    self.img_encoder = VisionTransformer(**self.get_config_img())
+
+  def __call__(self, inputs, *, train):
+    img = inputs['image']
+    txt = inputs['txt']
+
+    loss = self.img_encoder(img, train=train)
+
+    return loss

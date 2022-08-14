@@ -15,16 +15,15 @@ from utils import opt_util
 from utils import adamw
 
 
-def init_fn(rng, image_size, model):
-  input_shape = (1, image_size, image_size, 3)
-  variables = model.init({'params': rng, 'dropout': jax.random.PRNGKey(0)}, jnp.ones(input_shape, model.dtype), train=True)
+def init_fn(rng, init_batch, model):
+  variables = model.init({'params': rng, 'dropout': jax.random.PRNGKey(0)}, init_batch, train=True)
   return variables
 
 
-def init_shapes(rng, image_size, model):
-  input_shape = (1, image_size, image_size, 3)
+def init_shapes(rng, init_batch, model):
+  # input_shape = (1, image_size, image_size, 3)
   init = functools.partial(model.init, train=True) 
-  variables_shape = jax.eval_shape(init, {'params': rng, 'dropout': jax.random.PRNGKey(0)}, jnp.ones(input_shape, model.dtype))
+  variables_shape = jax.eval_shape(init, {'params': rng, 'dropout': jax.random.PRNGKey(0)}, init_batch)
   return variables_shape
 
 
@@ -74,17 +73,20 @@ def create_optimizer(config, params_names, steps_per_epoch):
   return opt
 
 
-def create_train_state(config, model, image_size, steps_per_epoch, partitioner):
+def create_train_state(config, model, steps_per_epoch, partitioner, init_batch):
   """Create initial training state."""
+
+  init_batch = jax.tree_map(lambda x: x[:2], init_batch)  # set batch=2 for init
+
   rng = jax.random.PRNGKey(0)  # for shape reference only
   # create optimizer first
-  params_shapes = init_shapes(rng, image_size, model)
+  params_shapes = init_shapes(rng, init_batch, model)
   opt = create_optimizer(config, params_shapes['params'], steps_per_epoch)
 
   # ---------------------------------------------------------------------------
   def initialize_train_state(rng_init):
     # split rng for init and for state
-    initial_variables = init_fn(rng=rng_init, image_size=image_size, model=model)
+    initial_variables = init_fn(rng=rng_init, init_batch=init_batch, model=model)
     if opt:
       return train_state_lib.FlaxOptimTrainState.create(opt, initial_variables)
     return train_state_lib.InferenceState.create(initial_variables)
