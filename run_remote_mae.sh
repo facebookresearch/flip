@@ -15,7 +15,7 @@ vitsize=large
 CONFIG=cfg_mae_${vitsize}
 
 # _normpix_exwd_NOsplit_fastsave
-JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}_s${seed}_p${partitions}st_re${rescale}_laion_area0.5_txtloader
+JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}_s${seed}_p${partitions}st_re${rescale}_laion_a0.5_refactsanity
 RESUME=''
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
@@ -46,11 +46,12 @@ python3 main.py \
     --config.log_every_steps=100 \
     --config.num_epochs=${ep} \
     --config.learning_rate=${lr} \
-    --config.model.transformer.rescale_init=${rescale} \
     --config.profile_memory=True \
-    --config.model.norm_pix_loss=True \
-    --config.model.sincos=True \
-    --config.model.mask_ratio=${mask} \
+    --config.model.model_img.transformer.rescale_init=${rescale} \
+    --config.model.model_img.norm_pix_loss=True \
+    --config.model.model_img.sincos=True \
+    --config.model.model_img.mask_ratio=${mask} \
+    --config.model.model_img.visualize=True \
     --config.seed_tf=${seed} \
     --config.seed_jax=${seed} \
     --config.seed_pt=${seed} \
@@ -58,7 +59,6 @@ python3 main.py \
     --config.opt_type=adamw \
     --config.opt_mu_dtype=float32 \
     --config.partitioning.partition_states=False \
-    --config.model.visualize=True \
     --config.resume_dir=${RESUME} \
     --config.aug.area_range=\(0.5\,1.0\) \
 2>&1 | tee -a $LOGDIR/finetune_\$SSH_ID.log

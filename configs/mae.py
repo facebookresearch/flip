@@ -35,7 +35,37 @@ import configs.vit as vit
 def get_config():
   """Get the hyperparameter configuration to train on TPUs."""
   config = ml_collections.ConfigDict()
+  config.model_img = get_config_img()
+  config.model_txt = get_config_txt()
 
+  return config
+
+
+def get_config_img():
+  """Get the hyperparameter configuration to train on TPUs."""
+  config = ml_collections.ConfigDict()
+
+  config.mask_ratio = 0.75
+  config.norm_pix_loss = True
+
+  config.sincos = True
+
+  config.update(vit.get_b16_config())
+  config.transformer.dropout_rate = 0.0
+  config.transformer.droppath_rate = 0.0
+
+  config.decoder = vit.get_testing_config()
+  config.decoder.transformer.dropout_rate = 0.0
+  config.decoder.transformer.droppath_rate = 0.0
+
+  config.visualize = True
+
+  return config
+
+
+def get_config_txt():
+  """Get the hyperparameter configuration to train on TPUs."""
+  config = ml_collections.ConfigDict()
 
   config.mask_ratio = 0.75
   config.norm_pix_loss = True

@@ -296,7 +296,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   # ------------------------------------
   # Create model
   # ------------------------------------
-  model = models_mae.ImageTextLearner(config_img=config.model)
+  model = models_mae.ImageTextLearner(config=config.model)
   
   p_init_fn, state_axes, state_shape = create_train_state(
     config, model, steps_per_epoch, partitioner, init_batch=next(data_loader_train))
