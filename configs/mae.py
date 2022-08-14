@@ -38,6 +38,8 @@ def get_config():
   config.model_img = get_config_img()
   config.model_txt = get_config_txt()
 
+  config.visualize = True
+
   return config
 
 
@@ -58,8 +60,6 @@ def get_config_img():
   config.decoder.transformer.dropout_rate = 0.0
   config.decoder.transformer.droppath_rate = 0.0
 
-  config.visualize = True
-
   return config
 
 
@@ -79,7 +79,5 @@ def get_config_txt():
   config.decoder = vit.get_testing_config()
   config.decoder.transformer.dropout_rate = 0.0
   config.decoder.transformer.droppath_rate = 0.0
-
-  config.visualize = True
 
   return config

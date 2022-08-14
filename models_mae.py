@@ -315,7 +315,6 @@ class VisionTransformer(nn.Module):
   classifier: str = 'token'
   dtype: Any = jnp.float32
   decoder: Any = None
-  visualize: bool = False
 
   def random_mask(self, x):
 
@@ -501,12 +500,8 @@ class VisionTransformer(nn.Module):
     # compute loss
     loss = self.compute_loss(imgs, pred, mask)
 
-    if self.visualize: # and not train:
-      outcome = self.visualization(imgs, pred, mask)
-    else:
-      outcome = pred  # not used
-
-    return loss, outcome
+    vis = self.visualization(imgs, pred, mask)
+    return loss, vis
 
   
 class ImageTextLearner(nn.Module):
@@ -527,6 +522,6 @@ class ImageTextLearner(nn.Module):
     img = inputs['image']
     txt = inputs['txt']
 
-    loss = self.img_encoder(img, train=train)
+    loss, vis = self.img_encoder(img, train=train)
 
-    return loss
+    return loss, vis
