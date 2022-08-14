@@ -18,6 +18,7 @@
 import jax
 import tensorflow as tf
 import tensorflow_datasets as tfds
+import tensorflow_text as tftx
 
 from utils.transform_util import \
   decode_and_random_crop, \
@@ -59,6 +60,27 @@ def parse_laion_example(example_proto):
 # define the decode function
 def decode_example(example, image_size, aug):
   # decoder the image
+  from IPython import embed; embed();
+  if (0 == 0): raise NotImplementedError
+
+  # vocab file: gs://vit_models/lit/LiT-B16B.txt. It should be the same as vocab.txt in:
+  # https://storage.googleapis.com/bert_models/2019_05_30/wwm_uncased_L-24_H-1024_A-16.zip
+  # md5sum: 64800d5d8528ce344256daf115d4965e
+  # vocab_size: 30522
+
+  tokenizer = tftx.BertTokenizer('./vocab/vocab_bert_base.txt', lower_case=True, token_out_type=tf.int32)
+
+  # tokenizer._wordpiece_tokenizer._get_vocab_and_ids  # 30523
+
+  txt = example['txt'].numpy().decode('utf-8')
+  txt = '3 Bedrooms Detached House for sale in Stowmarket, Suffolk'
+  # txt = 'an apple'
+  token_ids = tokenizer.tokenize(txt)
+  max_len = 16
+  padded_token_ids, mask = tftx.pad_model_inputs(token_ids, max_len)
+  del mask  # Recovered from zero padding in model.
+
+
   image = preprocess_for_train(example['image'], image_size=image_size, aug=aug)
   return {'image': image}
 
@@ -178,9 +200,9 @@ def create_split(batch_size, data_layout, train, dtype=tf.float32,
 
   # ---------------------------------------
   # debugging 
-  # x = next(iter(ds))
-  # decode_fn(x)
-  # raise NotImplementedError
+  x = next(iter(ds))
+  decode_fn(x)
+  raise NotImplementedError
   # ---------------------------------------
 
   ds = ds.map(decode_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
