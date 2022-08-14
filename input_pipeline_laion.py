@@ -15,10 +15,13 @@
 """ImageNet input pipeline.
 """
 
+import os
 import jax
 import tensorflow as tf
 import tensorflow_datasets as tfds
-import tensorflow_text as tftx
+# import tensorflow_text as tftx
+
+from transformers import CLIPTokenizerFast
 
 from utils.transform_util import \
   decode_and_random_crop, \
@@ -58,27 +61,39 @@ def parse_laion_example(example_proto):
 
 
 # define the decode function
-def decode_example(example, image_size, aug, tokenizer):
+def decode_example(example, image_size, aug, tokenize_func):
   # decoder the text
-  txt = preprocess_text(example['txt'], tokenizer=tokenizer, aug_txt=aug.txt)
+  txt = preprocess_text(example['txt'], tokenize_func=tokenize_func)
 
   # decoder the image
   image = preprocess_image(example['image'], image_size=image_size, aug=aug)
   return {'image': image, 'txt': txt}
 
 
-def preprocess_text(txt, tokenizer, aug_txt):
-  """
-  reference https://github.com/google-research/big_vision/blob/main/big_vision/pp/proj/flaxformer/bert_ops.py
-  """
-  # txt = txt.numpy().decode('utf-8')
-  token_ids = tokenizer.tokenize(txt)
-  # token_ids = token_ids.flat_values
+def get_txt_tokenize_func(aug_txt):
+  if aug_txt.tokenizer == 'clip':
+    tokenizer_name = "openai/clip-vit-base-patch32"
+    cache_dir = os.path.join("/kmh_data", tokenizer_name)  # point to the same location, in case it is changed
+    tokenizer = CLIPTokenizerFast.from_pretrained(tokenizer_name, cache_dir=cache_dir)
+  else:
+    raise NotImplementedError
 
-  max_len = aug_txt.max_len
-  padded_token_ids, _ = tftx.pad_model_inputs(token_ids, max_len)
-  padded_token_ids = padded_token_ids[0]
-  return padded_token_ids
+  tokenize = lambda s: tokenizer.encode(
+    s.numpy().decode(),
+    padding='max_length',
+    truncation='longest_first',
+    max_length=aug_txt.max_len,
+    return_tensors='tf',)
+  tokenize_tf_func = tf.function(
+      lambda s: tf.py_function(tokenize, inp=[s], Tout=tf.int32),
+      input_signature=[tf.TensorSpec(None, tf.string)],
+  )
+  return tokenize_tf_func
+
+
+def preprocess_text(txt, tokenize_func):
+  txt_enc = tokenize_func(txt)
+  return txt_enc
 
 
 def preprocess_image(image_bytes, dtype=tf.float32, image_size=None, aug=None):
@@ -194,17 +209,13 @@ def create_split(batch_size, data_layout, train, dtype=tf.float32,
 
 
   # create the tokenizer
-  # vocab file: gs://vit_models/lit/LiT-B16B.txt. It should be the same as vocab.txt in:
-  # https://storage.googleapis.com/bert_models/2019_05_30/wwm_uncased_L-24_H-1024_A-16.zip
-  # md5sum: 64800d5d8528ce344256daf115d4965e
-  # vocab_size: 30522
-  tokenizer = tftx.BertTokenizer('./vocab/vocab_bert_base.txt', lower_case=True, token_out_type=tf.int32)
-  decode_fn = functools.partial(decode_example, image_size=image_size, aug=aug, tokenizer=tokenizer)
+  tokenize_func = get_txt_tokenize_func(aug.txt)
+  decode_fn = functools.partial(decode_example, image_size=image_size, aug=aug, tokenize_func=tokenize_func)
 
   # ---------------------------------------
   # debugging 
-  # x = next(iter(ds))
-  # batch = decode_fn(x)
+  x = next(iter(ds))
+  batch = decode_fn(x)
   # raise NotImplementedError
   # ---------------------------------------
 

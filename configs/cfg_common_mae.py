@@ -84,10 +84,6 @@ def get_config():
 
   config.aug.color_jit = None  # [0.4, 0.4, 0.4]  # None to disable; [brightness, contrast, saturation]
 
-  # text aug config
-  config.aug.txt = ml_collections.ConfigDict()
-  config.aug.txt.max_len = 32
-
   # memory
   config.profile_memory = False
 
@@ -121,5 +117,10 @@ def get_config():
 
   # image+text model config
   config.model = mae.get_config()  # ViT-B/16
+
+  # text aug config
+  config.aug.txt = ml_collections.ConfigDict()
+  config.aug.txt.tokenizer = 'clip'
+  config.aug.txt.max_len = 77
 
   return config

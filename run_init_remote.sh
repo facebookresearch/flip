@@ -12,22 +12,24 @@ gcloud alpha compute tpus tpu-vm ssh ${VM_NAME} --zone europe-west4-a \
 
 # pip3 install optax==0.1.2
 
-sudo pip3 uninstall -y tensorflow keras keras-nightly keras-preprocessing tensorboard tb-nightly tf-nightly tf-estimator-nightly
-pip3 uninstall -y tensorflow keras keras-nightly keras-preprocessing tensorboard tb-nightly tf-nightly tf-estimator-nightly
-pip3 install tensorflow==2.8
+# sudo pip3 uninstall -y tensorflow keras keras-nightly keras-preprocessing tensorboard tb-nightly tf-nightly tf-estimator-nightly
+# pip3 uninstall -y tensorflow keras keras-nightly keras-preprocessing tensorboard tb-nightly tf-nightly tf-estimator-nightly
+# pip3 install tensorflow==2.8
 
-pip3 install tensorflow-probability
-pip3 install tensorflow_addons
-pip install cached_property
-pip install tensorstore
+# pip3 install tensorflow-probability
+# pip3 install tensorflow_addons
+# pip3 install cached_property
+# pip3 install tensorstore
+
+pip3 install transformers==4.21.1
 
 # pip3 install torch==1.7.1
 # pip3 install torchvision==0.8.2
 # pip3 install timm==0.4.12
 
-pip3 list | grep 'jax\|flax\|tensorflow\|clu '
+# pip3 list | grep 'jax\|flax\|tensorflow\|clu '
 
-python3 -c 'import tensorflow as tf'
+# python3 -c 'import tensorflow as tf'
 # python3 -c 'import jax; print(jax.device_count());'
 # python3 -c 'import flax'
 

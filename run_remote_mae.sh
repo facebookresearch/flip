@@ -15,7 +15,7 @@ vitsize=large
 CONFIG=cfg_mae_${vitsize}
 
 # _normpix_exwd_NOsplit_fastsave
-JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}_s${seed}_p${partitions}st_re${rescale}_laion_a0.5_refactsanity
+JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}_s${seed}_p${partitions}st_re${rescale}_laion_a0.5_sanity_cliptoken
 RESUME=''
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
@@ -51,7 +51,6 @@ python3 main.py \
     --config.model.model_img.norm_pix_loss=True \
     --config.model.model_img.sincos=True \
     --config.model.model_img.mask_ratio=${mask} \
-    --config.model.model_img.visualize=True \
     --config.seed_tf=${seed} \
     --config.seed_jax=${seed} \
     --config.seed_pt=${seed} \
