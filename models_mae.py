@@ -67,7 +67,7 @@ class IdentityLayer(nn.Module):
     return x
 
 
-class AddPositionEmbs(nn.Module):
+class Add2DPositionEmbs(nn.Module):
   """Adds (optionally learned) positional embeddings to the inputs.
   """
   sincos: bool
@@ -100,7 +100,7 @@ class AddPositionEmbs(nn.Module):
     # but this is not addressed here if sincos=False
 
   def __call__(self, inputs):
-    """Applies AddPositionEmbs module.
+    """Applies Add2DPositionEmbs module.
 
     By default this layer uses a fixed sinusoidal embedding table. If a
     learned position embedding is desired, pass an initializer to
@@ -120,6 +120,35 @@ class AddPositionEmbs(nn.Module):
     else:
       output = inputs + pe
 
+    return output
+
+
+class Add1DPositionEmbs(nn.Module):
+  """Adds (optionally learned) positional embeddings to the inputs.
+  """
+  sincos: bool
+  seq_shape: Shape  # [l, c]
+  dtype: Any = jnp.float32
+  posemb_init: Any = None
+
+  def setup(self):
+    l, c = self.seq_shape
+    pos_emb_shape = (1, l, c)  # (batch_size, seq_len, emb_dim).
+
+    if not self.sincos:
+      init_fn = self.posemb_init
+    else:
+      raise NotImplementedError
+
+    self.pe = t5x.layers.param_with_axes(
+        'pos_embedding',
+        init_fn,
+        pos_emb_shape,
+        jnp.float32,
+        axes=('_null0', 'length', 'embed'))
+
+  def __call__(self, inputs):    
+    output = inputs + self.pe
     return output
 
 
@@ -328,6 +357,7 @@ def random_mask(rng, x, mask_ratio):
 
   return x_masked, mask, ids_restore
 
+
 class LanguageTransformer(nn.Module):
   """LanguageTransformer."""
 
@@ -358,6 +388,10 @@ class LanguageTransformer(nn.Module):
       axes=['_null0', 'embed'],  # do not use 'vocab' 
       name='token_embedding')
     x = embed(x)
+
+    n, l, c = x.shape
+    posemb = Add1DPositionEmbs(sincos=self.sincos, seq_shape=(l, c), posemb_init=fixed_gaussian_init, name='posembed_encoder')
+    x = posemb(x)
 
 class VisionTransformer(nn.Module):
   """VisionTransformer."""
@@ -455,7 +489,7 @@ class VisionTransformer(nn.Module):
     n, h, w, c = x.shape
     x = jnp.reshape(x, [n, h * w, c])
 
-    x = AddPositionEmbs(sincos=self.sincos, use_cls_token=use_cls_token, img_shape=(h, w, c), name='posembed_encoder')(x)
+    x = Add2DPositionEmbs(sincos=self.sincos, use_cls_token=use_cls_token, img_shape=(h, w, c), name='posembed_encoder')(x)
 
     # masking: length -> length * mask_ratio
     x, mask, ids_restore = random_mask(self.make_rng('dropout'), x, self.mask_ratio)
@@ -495,7 +529,7 @@ class VisionTransformer(nn.Module):
     x_ = gather_by_einsum(x_, ids_restore)
 
     # add decoder posembed (before cls token)
-    x_ = AddPositionEmbs(sincos=self.sincos, use_cls_token=use_cls_token, img_shape=(h, w, self.decoder.hidden_size), name='posembed_decoder')(x_)
+    x_ = Add2DPositionEmbs(sincos=self.sincos, use_cls_token=use_cls_token, img_shape=(h, w, self.decoder.hidden_size), name='posembed_decoder')(x_)
 
     x = jnp.concatenate([x[:, :num_clstokens, :], x_], axis=1)  # append cls token
 
