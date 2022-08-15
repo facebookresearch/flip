@@ -673,11 +673,11 @@ class ImageTextLearner(nn.Module):
 
     loss_img, vis = self.img_encoder(img, train=train)
 
-    loss = loss_img + loss_txt
+    loss_tot = loss_img + loss_txt
 
     artifacts = {
-      'loss': loss,
+      'loss': loss_img,  # always plot loss_img in the 'loss' metric
       'loss_img': loss_img,
       'loss_txt': loss_txt}
 
-    return loss, vis, artifacts
+    return loss_tot, vis, artifacts

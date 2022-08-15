@@ -397,8 +397,6 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # train one epoch (one "virtual" epoch)
     # ------------------------------------------------------------
     for i in range(steps_per_epoch):
-      if i > 20:
-        break
       batch = next(data_loader_train)
       state, metrics = partitioned_train_step(state, batch)
 
