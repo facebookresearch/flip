@@ -14,6 +14,7 @@
 
 import functools
 from typing import Any, Callable, Optional, Tuple
+from xml.sax.xmlreader import InputSource
 
 import jax
 import jax.numpy as jnp
@@ -73,11 +74,12 @@ class Add2DPositionEmbs(nn.Module):
   """
   sincos: bool
   use_cls_token: bool
-  img_shape: Shape  # [h, w, c]
   dtype: Any = jnp.float32
 
-  def setup(self):
-    h, w, c = self.img_shape
+  def get_pos_emb(self, x):
+    _, l, c = x.shape
+    h = w = int(l**.5)
+    assert h * w == l
 
     num_clstokens = 1 if self.use_cls_token else 0
     pos_emb_shape = (1, num_clstokens + h * w, c)  # (batch_size, seq_len, emb_dim).
@@ -89,7 +91,7 @@ class Add2DPositionEmbs(nn.Module):
       pe_array = posembed_util.get_2d_sincos_pos_embed(c, (h, w), cls_token=self.use_cls_token)  # in numpy array
       init_fn = initializers_util.constant(value=pe_array, dtype=self.dtype)
 
-    self.pe = t5x.layers.param_with_axes(
+    pe = t5x.layers.param_with_axes(
         'pos_embedding',
         init_fn,
         pos_emb_shape,
@@ -100,6 +102,9 @@ class Add2DPositionEmbs(nn.Module):
     # when loading for finetuning, this zero posembed can be tuned.
     # but this is not addressed here if sincos=False
 
+    return pe
+
+  @nn.compact
   def __call__(self, inputs):
     """Applies Add2DPositionEmbs module.
 
@@ -113,8 +118,8 @@ class Add2DPositionEmbs(nn.Module):
     Returns:
       Output tensor with shape `(bs, timesteps, in_dim)`.
     """
-    
-    pe = jax.lax.stop_gradient(self.pe) if self.sincos else self.pe
+    pe = self.get_pos_emb(inputs)
+    pe = jax.lax.stop_gradient(pe) if self.sincos else self.pe
 
     if self.use_cls_token:
       output = inputs + pe[:, 1:, :]
@@ -128,12 +133,11 @@ class Add1DPositionEmbs(nn.Module):
   """Adds (optionally learned) positional embeddings to the inputs.
   """
   sincos: bool
-  seq_shape: Shape  # [l, c]
   dtype: Any = jnp.float32
   posemb_init: Any = None
 
-  def setup(self):
-    l, c = self.seq_shape
+  def get_pos_emb(self, x):
+    _, l, c = x.shape
     pos_emb_shape = (1, l, c)  # (batch_size, seq_len, emb_dim).
 
     if not self.sincos:
@@ -141,15 +145,19 @@ class Add1DPositionEmbs(nn.Module):
     else:
       raise NotImplementedError
 
-    self.pe = t5x.layers.param_with_axes(
+    pe = t5x.layers.param_with_axes(
         'pos_embedding',
         init_fn,
         pos_emb_shape,
         jnp.float32,
         axes=('_null0', 'length', 'embed'))
 
-  def __call__(self, inputs):    
-    output = inputs + self.pe
+    return pe
+
+  @nn.compact
+  def __call__(self, inputs):
+    pe = self.get_pos_emb(inputs)    
+    output = inputs + pe
     return output
 
 
@@ -424,7 +432,7 @@ class LanguageTransformer(nn.Module):
     x = embed(x)
 
     n, l, c = x.shape
-    posemb = Add1DPositionEmbs(sincos=self.sincos, seq_shape=(l, c), posemb_init=fixed_gaussian_init, name='posembed_encoder')
+    posemb = Add1DPositionEmbs(sincos=self.sincos, posemb_init=fixed_gaussian_init, name='posembed_encoder')
     x = posemb(x)
 
     # masking: length -> length * mask_ratio
@@ -455,7 +463,7 @@ class LanguageTransformer(nn.Module):
     x_ = gather_by_einsum(x_, ids_restore)
 
     # add decoder posembed
-    posemb = Add1DPositionEmbs(sincos=self.sincos, seq_shape=x_.shape[1:], posemb_init=fixed_gaussian_init, name='posembed_decoder')
+    posemb = Add1DPositionEmbs(sincos=self.sincos, posemb_init=fixed_gaussian_init, name='posembed_decoder')
     x = posemb(x_)
 
     # apply the decoder
@@ -568,7 +576,7 @@ class VisionTransformer(nn.Module):
     n, h, w, c = x.shape
     x = jnp.reshape(x, [n, h * w, c])
 
-    x = Add2DPositionEmbs(sincos=self.sincos, use_cls_token=use_cls_token, img_shape=(h, w, c), name='posembed_encoder')(x)
+    x = Add2DPositionEmbs(sincos=self.sincos, use_cls_token=use_cls_token, name='posembed_encoder')(x)
 
     # masking: length -> length * mask_ratio
     x, mask, ids_restore = random_mask(self.make_rng('dropout'), x, self.mask_ratio)
@@ -608,7 +616,7 @@ class VisionTransformer(nn.Module):
     x_ = gather_by_einsum(x_, ids_restore)
 
     # add decoder posembed (before cls token)
-    x_ = Add2DPositionEmbs(sincos=self.sincos, use_cls_token=use_cls_token, img_shape=(h, w, self.decoder.hidden_size), name='posembed_decoder')(x_)
+    x_ = Add2DPositionEmbs(sincos=self.sincos, use_cls_token=use_cls_token, name='posembed_decoder')(x_)
 
     x = jnp.concatenate([x[:, :num_clstokens, :], x_], axis=1)  # append cls token
 
@@ -627,6 +635,27 @@ class VisionTransformer(nn.Module):
     pred = x[:, num_clstokens:, :]
 
     return pred
+
+  # @nn.compact
+  # def setup(self):
+  #   """
+  #   declare all param layers based on inputs
+  #   """    
+  #   use_cls_token = (self.classifier == 'token')
+  #   assert use_cls_token  # kaiming: TODO: support both?
+
+  #   self.layer_patch_embed = t5x.layers.Conv(
+  #       features=self.hidden_size,
+  #       kernel_size=self.patches.size,
+  #       strides=self.patches.size,
+  #       padding='VALID',
+  #       name='embedding',
+  #       kernel_init=patch_kernel_init,
+  #       bias_init=patch_bias_init,
+  #       kernel_axes=('_null0', '_null1', '_null2', 'embed'),
+  #       )
+  #   x = self.patch_embed
+  #   self.pos_embed = Add2DPositionEmbs(sincos=self.sincos, use_cls_token=use_cls_token, img_shape=(h, w, c), name='posembed_encoder')
 
   @nn.compact
   def __call__(self, inputs, *, train):
@@ -669,9 +698,9 @@ class ImageTextLearner(nn.Module):
     img = inputs['image']
     txt = {'txt': inputs['txt'], 'txt_is_valid': inputs['txt_is_valid']}
 
-    loss_txt = self.txt_encoder(txt, train=train)
-
     loss_img, vis = self.img_encoder(img, train=train)
+
+    loss_txt = self.txt_encoder(txt, train=train)
 
     loss_tot = loss_img + loss_txt
 

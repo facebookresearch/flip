@@ -5,7 +5,7 @@ rm -rf tmp
 export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets
 python3 main.py \
     --workdir=./tmp \
-    --config=configs/cfg_mae_large.py \
+    --config=configs/cfg_mae_dbg.py \
     --config.batch_size=16 \
     --config.log_every_steps=10 \
     --config.num_epochs=1000 \
@@ -14,7 +14,6 @@ python3 main.py \
     --config.opt_type=adamw \
     --config.opt_mu_dtype=float32 \
     --config.partitioning.partition_states=True \
-    --config.torchload.data_dir='/datasets/imagenet-1k' \
     --config.aug.area_range=\(0.1\,1.0\) \
 
     # --config.resume_dir='gs://kmh-gcp/checkpoints/flax/20220521_221137_scratch_kmh-tpuvm-v3-256-1_cfg_vit_large_50ep_fttl_b1024_wd0.3_lr1e-4_lrd1.0_dp0.2_warm20_s0_beta0.95_p16_dbgp16/checkpoint_62550'
