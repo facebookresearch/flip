@@ -79,10 +79,10 @@ def create_imagenet_input_iter(local_batch_size, data_layout, image_size, dtype,
 
 
 def create_laion_input_iter(local_batch_size, data_layout, image_size, dtype, train,
-                      cache, seed=0, aug=None,):
+                      cache, seed=0, cfg=None,):
   ds = input_pipeline_laion.create_split(
       local_batch_size, data_layout, image_size=image_size, dtype=dtype,
-      train=train, cache=cache, seed=seed, aug=aug,)
+      train=train, cache=cache, seed=seed, cfg=cfg,)
 
   # ------------------------------------------------
   # from IPython import embed; embed();
@@ -124,7 +124,7 @@ def build_dataloaders(config, partitioner):
       train=True,
       cache=False, # config.cache, 
       seed=config.seed_tf,
-      aug=config.aug)
+      cfg=config)
 
   # val set is imagenet
   # data_loader_val = create_imagenet_input_iter(

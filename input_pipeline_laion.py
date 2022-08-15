@@ -86,14 +86,16 @@ def get_txt_tokenize_func(aug_txt):
     # vocab file: gs://vit_models/lit/LiT-B16B.txt. It should be the same as vocab.txt in:
     # https://storage.googleapis.com/bert_models/2019_05_30/wwm_uncased_L-24_H-1024_A-16.zip
     # md5sum: 64800d5d8528ce344256daf115d4965e
-    # vocab_size: 30522
+    # vocab_size: 30523, (30522+1, including unknown [UNK])
     tokenizer = tftx.BertTokenizer('./vocab/vocab_bert_base.txt', lower_case=True, token_out_type=tf.int32)
     tokenize_func = functools.partial(tfds_preprocess_text, tokenizer=tokenizer, aug_txt=aug_txt)
-    return tokenize_func
+    vocab_size = tokenizer._wordpiece_tokenizer.vocab_size().numpy()  # including unknown
+    return tokenize_func, vocab_size
   elif aug_txt.tokenizer == 'hf_clip':
     tokenizer_name = "openai/clip-vit-base-patch32"
     cache_dir = os.path.join("/kmh_data", tokenizer_name)  # point to the same location, in case it is changed
     tokenizer = CLIPTokenizerFast.from_pretrained(tokenizer_name, cache_dir=cache_dir)
+    vocab_size = tokenizer.vocab_size
   else:
     raise NotImplementedError
 
@@ -115,7 +117,7 @@ def get_txt_tokenize_func(aug_txt):
       lambda s: tf.py_function(tokenize, inp=[s], Tout=tf.int32),
       input_signature=[tf.TensorSpec(None, tf.string)],
   )
-  return tokenize_tf_func
+  return tokenize_tf_func, vocab_size
 
 
 def preprocess_text(txt, tokenize_func):
@@ -182,7 +184,7 @@ def preprocess_image_for_eval(image_bytes, dtype=tf.float32, image_size=None):
 
 
 def create_split(batch_size, data_layout, train, dtype=tf.float32,
-                 image_size=None, cache=False, seed=0, aug=None):
+                 image_size=None, cache=False, seed=0, cfg=None):
   """Creates a split from the ImageNet dataset using TensorFlow Datasets.
 
   Args:
@@ -196,6 +198,7 @@ def create_split(batch_size, data_layout, train, dtype=tf.float32,
   Returns:
     A `tf.data.Dataset`.
   """
+  aug = cfg.aug
   shard_id = data_layout.shard_id
   num_shards = data_layout.num_shards
 
@@ -234,9 +237,9 @@ def create_split(batch_size, data_layout, train, dtype=tf.float32,
     ds = ds.repeat()
     ds = ds.shuffle(16 * batch_size, seed=seed)
 
-
   # create the tokenizer
-  tokenize_func = get_txt_tokenize_func(aug.txt)
+  tokenize_func, vocab_size = get_txt_tokenize_func(aug.txt)
+  assert vocab_size == cfg.model.model_txt.vocab_size
   decode_fn = functools.partial(decode_example, image_size=image_size, aug=aug, tokenize_func=tokenize_func)
 
   # ---------------------------------------

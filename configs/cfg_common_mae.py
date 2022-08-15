@@ -121,6 +121,8 @@ def get_config():
   # text aug config
   config.aug.txt = ml_collections.ConfigDict()
   config.aug.txt.tokenizer = 'tf_bert'  # 'tf_bert' 'hf_clip'
-  config.aug.txt.max_len = 32
+  config.aug.txt.max_len = 32  # clip: 77
+
+  config.model.model_txt.vocab_size = 30523  # bert: 30522+1
 
   return config

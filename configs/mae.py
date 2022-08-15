@@ -52,9 +52,17 @@ def get_config_img():
 
   config.sincos = True
 
-  config.update(vit.get_b16_config())
+  config.name = 'img_encoder'
+  config.patches = ml_collections.ConfigDict({'size': (16, 16)})
+  config.hidden_size = 768
+  config.transformer = ml_collections.ConfigDict()
+  config.transformer.mlp_dim = 3072
+  config.transformer.num_heads = 12
+  config.transformer.num_layers = 12
+  config.transformer.attention_dropout_rate = 0.0
   config.transformer.dropout_rate = 0.0
   config.transformer.droppath_rate = 0.0
+  config.classifier = 'token'
 
   config.decoder = vit.get_testing_config()
   config.decoder.transformer.dropout_rate = 0.0
@@ -67,16 +75,29 @@ def get_config_txt():
   """Get the hyperparameter configuration to train on TPUs."""
   config = ml_collections.ConfigDict()
 
-  config.mask_ratio = 0.75
-  config.norm_pix_loss = True
+  config.mask_ratio = 0.5
 
-  config.sincos = True
+  config.sincos = False
 
-  config.update(vit.get_b16_config())
+  config.name = 'txt_encoder'
+  config.vocab_size = 768
+  config.hidden_size = 768
+  config.transformer = ml_collections.ConfigDict()
+  config.transformer.mlp_dim = config.hidden_size * 4
+  config.transformer.num_heads = 12
+  config.transformer.num_layers = 12
+  config.transformer.attention_dropout_rate = 0.0
   config.transformer.dropout_rate = 0.0
   config.transformer.droppath_rate = 0.0
 
-  config.decoder = vit.get_testing_config()
+  config.decoder = ml_collections.ConfigDict()
+  config.decoder.name = 'txt_decoder'
+  config.decoder.hidden_size = 256
+  config.decoder.transformer = ml_collections.ConfigDict()
+  config.decoder.transformer.mlp_dim = config.hidden_size * 4
+  config.decoder.transformer.num_heads = 12
+  config.decoder.transformer.num_layers = 4
+  config.decoder.transformer.attention_dropout_rate = 0.0
   config.decoder.transformer.dropout_rate = 0.0
   config.decoder.transformer.droppath_rate = 0.0
 

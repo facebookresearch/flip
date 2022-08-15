@@ -302,10 +302,66 @@ def gather_by_einsum(x, ids):
   return x
 
 
+def random_mask(rng, x, mask_ratio):
+
+  N, L, _ = x.shape  # batch, length, dim
+  len_keep = int(L * (1 - mask_ratio))
+
+  noise = random.uniform(rng, shape=x.shape[:2])
+
+  ids_shuffle = jnp.argsort(noise, axis=1)  # ascend: small is keep, large is remove
+  ids_restore = jnp.argsort(ids_shuffle, axis=1)
+
+  # keep the first subset
+  ids_keep = ids_shuffle[:, :len_keep]
+  x_masked = gather_by_einsum(x, ids_keep)
+
+  x_masked = t5x.layers.with_sharding_constraint(x_masked, ('batch', 'length', 'embed'))
+
+  # generate the binary mask: 0 is keep, 1 is remove
+  mask = jnp.ones([N, L])
+  mask = t5x.layers.with_sharding_constraint(mask, ('batch', 'length'))
+  mask = mask.at[:, :len_keep].set(0)
+  # unshuffle to get the binary mask
+  mask = gather_by_einsum(mask, ids_restore)
+  mask = t5x.layers.with_sharding_constraint(mask, ('batch', 'length'))
+
+  return x_masked, mask, ids_restore
+
+class LanguageTransformer(nn.Module):
+  """LanguageTransformer."""
+
+  mask_ratio: float
+  sincos: bool
+  vocab_size: int
+  transformer: Any
+  hidden_size: int
+  dtype: Any = jnp.float32
+  decoder: Any = None
+
+  @nn.compact
+  def __call__(self, inputs, *, train):
+    txt = inputs
+
+    # apply encoder
+    # x, mask, ids_restore = self.apply_encoder(txt, train=train)
+    self.apply_encoder(txt, train=train)
+
+  def apply_encoder(self, inputs, train):
+    x = inputs
+    
+    embed = t5x.layers.Embed(
+      num_embeddings=self.vocab_size,
+      features=self.hidden_size,
+      embedding_init=fixed_gaussian_init,
+      one_hot=True,
+      axes=['_null0', 'embed'],  # do not use 'vocab' 
+      name='token_embedding')
+    x = embed(x)
+
 class VisionTransformer(nn.Module):
   """VisionTransformer."""
 
-  # num_classes: int
   mask_ratio: float
   sincos: bool
   norm_pix_loss: bool
@@ -315,33 +371,6 @@ class VisionTransformer(nn.Module):
   classifier: str = 'token'
   dtype: Any = jnp.float32
   decoder: Any = None
-
-  def random_mask(self, x):
-
-    N, L, _ = x.shape  # batch, length, dim
-    len_keep = int(L * (1 - self.mask_ratio))
-
-    rng = self.make_rng('dropout')
-    noise = random.uniform(rng, shape=x.shape[:2])
-
-    ids_shuffle = jnp.argsort(noise, axis=1)  # ascend: small is keep, large is remove
-    ids_restore = jnp.argsort(ids_shuffle, axis=1)
-
-    # keep the first subset
-    ids_keep = ids_shuffle[:, :len_keep]
-    x_masked = gather_by_einsum(x, ids_keep)
-
-    x_masked = t5x.layers.with_sharding_constraint(x_masked, ('batch', 'length', 'embed'))
-
-    # generate the binary mask: 0 is keep, 1 is remove
-    mask = jnp.ones([N, L])
-    mask = t5x.layers.with_sharding_constraint(mask, ('batch', 'length'))
-    mask = mask.at[:, :len_keep].set(0)
-    # unshuffle to get the binary mask
-    mask = gather_by_einsum(mask, ids_restore)
-    mask = t5x.layers.with_sharding_constraint(mask, ('batch', 'length'))
-
-    return x_masked, mask, ids_restore
 
   def patchify(self, imgs):
       """
@@ -429,7 +458,7 @@ class VisionTransformer(nn.Module):
     x = AddPositionEmbs(sincos=self.sincos, use_cls_token=use_cls_token, img_shape=(h, w, c), name='posembed_encoder')(x)
 
     # masking: length -> length * mask_ratio
-    x, mask, ids_restore = self.random_mask(x)
+    x, mask, ids_restore = random_mask(self.make_rng('dropout'), x, self.mask_ratio)
     ids_restore = jnp.reshape(ids_restore, [n, h, w])  # carries the shape info
 
     if use_cls_token:
@@ -512,15 +541,23 @@ class ImageTextLearner(nn.Module):
 
   def get_config_img(self):
     cfg = self.config.model_img.copy_and_resolve_references()  # copy
-    cfg.name = 'img_encoder'
+    cfg.name = 'img_encoder'  # force name
+    return cfg
+
+  def get_config_txt(self):
+    cfg = self.config.model_txt.copy_and_resolve_references()  # copy
+    cfg.name = 'txt_encoder'  # force name
     return cfg
 
   def setup(self):
     self.img_encoder = VisionTransformer(**self.get_config_img())
+    self.txt_encoder = LanguageTransformer(**self.get_config_txt())
 
   def __call__(self, inputs, *, train):
     img = inputs['image']
     txt = inputs['txt']
+
+    self.txt_encoder(txt, train=train)
 
     loss, vis = self.img_encoder(img, train=train)
 
