@@ -171,14 +171,16 @@ def train_step(state, batch, model, rng):
         mutable=mutable,
         rngs=dict(dropout=dropout_rng),
         train=True)
-    (loss, _), new_mutables = outcome
-    return loss, (new_mutables, loss)
+    (loss, _, artifacts), new_mutables = outcome
+    return loss, (new_mutables, artifacts)
 
   grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
   aux, grads = grad_fn(state.params)
 
-  new_mutables, loss = aux[1]
-  metrics = {'loss': loss}
+  new_mutables, artifacts = aux[1]
+
+  # metrics = {'loss': loss}
+  metrics = {**artifacts}
 
   # only for metric logging
   lr = state._optimizer.optimizer_def.metric_learning_rate_fn(state.step)
@@ -197,7 +199,7 @@ def eval_step(state, batch, model, rng):
   dropout_rng = jax.random.fold_in(rng, state.step)
 
   outcome = model.apply(variables, batch, train=False, mutable=False, rngs=dict(dropout=dropout_rng),)
-  loss, imgs_vis = outcome
+  loss, imgs_vis, artifacts = outcome
 
   metrics = {'test_loss': loss, 'imgs_vis': imgs_vis}
 
@@ -327,6 +329,22 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   t5x.model_info.log_state_info(state)
 
+  # ------------------------------------------
+  # for debugging with real tensors
+  batch = next(iter(data_loader_train))
+  mutable = [k for k in state.flax_mutables]
+  outcome = model.apply(
+      {'params': state.params, **state.flax_mutables},
+      inputs=batch,
+      mutable=mutable,
+      rngs=dict(dropout=rng),
+      train=True)
+  # # use the following to add checkpoints
+  # import jaxlib
+  # if isinstance(x, jnp.DeviceArray):
+  #   pass
+  # ------------------------------------------
+
   # --------------------------------------------------------
   # logging.info('Saving debug checkpoint: {}'.format(workdir))
   # checkpointer.save(state)
@@ -353,7 +371,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   # ------------------------------------------
   # debug
-  # batch = next(iter(data_loader_val))
+  # batch = next(iter(data_loader_train))
   # logging.info('To run partitioned_eval_step:')
   # outcome = partitioned_eval_step(state, batch)
   # logging.info(jax.tree_map(lambda x: x.shape, outcome))
@@ -379,6 +397,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # train one epoch (one "virtual" epoch)
     # ------------------------------------------------------------
     for i in range(steps_per_epoch):
+      if i > 20:
+        break
       batch = next(data_loader_train)
       state, metrics = partitioned_train_step(state, batch)
 

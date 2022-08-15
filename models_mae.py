@@ -18,6 +18,7 @@ from typing import Any, Callable, Optional, Tuple
 import jax
 import jax.numpy as jnp
 import jax.random as random
+import optax
 
 import flax.linen as nn
 
@@ -331,12 +332,19 @@ def gather_by_einsum(x, ids):
   return x
 
 
-def random_mask(rng, x, mask_ratio):
+def random_mask(rng, x, mask_ratio, bias=None):
+  """
+  x: [N, L, C] input
+  bias: [N, L], an additional map to the noise map (small is keep, large is remove)
+  """
 
   N, L, _ = x.shape  # batch, length, dim
   len_keep = int(L * (1 - mask_ratio))
 
-  noise = random.uniform(rng, shape=x.shape[:2])
+  noise = random.uniform(rng, shape=x.shape[:2])  
+
+  if bias is not None:
+    noise += bias
 
   ids_shuffle = jnp.argsort(noise, axis=1)  # ascend: small is keep, large is remove
   ids_restore = jnp.argsort(ids_shuffle, axis=1)
@@ -371,7 +379,8 @@ class LanguageTransformer(nn.Module):
 
   @nn.compact
   def __call__(self, inputs, *, train):
-    txt = inputs
+    txt = inputs['txt']
+    is_valid = inputs['txt_is_valid']
 
     # apply encoder
     x, mask, ids_restore = self.apply_encoder(txt, train=train)
@@ -379,9 +388,28 @@ class LanguageTransformer(nn.Module):
     # apply decoder
     pred = self.apply_decoder(x, ids_restore, train=train)
 
-    from IPython import embed; embed();
-    if (0 == 0): raise NotImplementedError
+    # apply loss
+    loss = self.compute_loss(txt, pred, mask, is_valid)
 
+    return loss
+
+  def compute_loss(self, txt, pred, mask, is_valid):
+    """
+    txt: [N, L]
+    pred: [N, L, K]
+    mask: [N, L], 0 is keep (known), 1 is remove (unknown)
+    is_valid: [N, L], 1 is real, 0 is pad
+    """    
+    labels_one_hot = jax.nn.one_hot(txt, self.vocab_size)  # [N, L, K]
+    loss = optax.softmax_cross_entropy(pred, labels_one_hot)  # [N, L]
+
+    # has loss: mask=1 (unknown) and is_valid=1 (real)
+    mask = jnp.logical_and(jnp.bool_(mask), jnp.bool_(is_valid))
+    mask = jnp.float32(mask)
+
+    loss = jnp.sum(loss * mask) / jnp.sum(mask)  # mean loss on removed patches
+
+    return loss
 
   def apply_encoder(self, inputs, train):
     x = inputs
@@ -641,8 +669,15 @@ class ImageTextLearner(nn.Module):
     img = inputs['image']
     txt = {'txt': inputs['txt'], 'txt_is_valid': inputs['txt_is_valid']}
 
-    self.txt_encoder(txt, train=train)
+    loss_txt = self.txt_encoder(txt, train=train)
 
-    loss, vis = self.img_encoder(img, train=train)
+    loss_img, vis = self.img_encoder(img, train=train)
 
-    return loss, vis
+    loss = loss_img + loss_txt
+
+    artifacts = {
+      'loss': loss,
+      'loss_img': loss_img,
+      'loss_txt': loss_txt}
+
+    return loss, vis, artifacts

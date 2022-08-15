@@ -10,7 +10,7 @@ python3 main.py \
     --config.log_every_steps=10 \
     --config.num_epochs=1000 \
     --config.profile_memory=True \
-    --config.partitioning.num_partitions=4 \
+    --config.partitioning.num_partitions=1 \
     --config.opt_type=adamw \
     --config.opt_mu_dtype=float32 \
     --config.partitioning.partition_states=True \
