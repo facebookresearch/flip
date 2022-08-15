@@ -374,8 +374,14 @@ class LanguageTransformer(nn.Module):
     txt = inputs
 
     # apply encoder
-    # x, mask, ids_restore = self.apply_encoder(txt, train=train)
-    self.apply_encoder(txt, train=train)
+    x, mask, ids_restore = self.apply_encoder(txt, train=train)
+
+    # apply decoder
+    pred = self.apply_decoder(x, ids_restore, train=train)
+
+    from IPython import embed; embed();
+    if (0 == 0): raise NotImplementedError
+
 
   def apply_encoder(self, inputs, train):
     x = inputs
@@ -385,13 +391,58 @@ class LanguageTransformer(nn.Module):
       features=self.hidden_size,
       embedding_init=fixed_gaussian_init,
       one_hot=True,
-      axes=['_null0', 'embed'],  # do not use 'vocab' 
+      axes=['classes', 'embed'],  # do not use 'vocab' 
       name='token_embedding')
     x = embed(x)
 
     n, l, c = x.shape
     posemb = Add1DPositionEmbs(sincos=self.sincos, seq_shape=(l, c), posemb_init=fixed_gaussian_init, name='posembed_encoder')
     x = posemb(x)
+
+    # masking: length -> length * mask_ratio
+    x, mask, ids_restore = random_mask(self.make_rng('dropout'), x, self.mask_ratio)
+
+    # apply the encoder
+    x = Encoder(name='Transformer', **self.transformer, prefix='encoder')(x, train=train)
+
+    return x, mask, ids_restore
+
+  def apply_decoder(self, x, ids_restore, train):
+    n, l = ids_restore.shape
+
+    # apply the encoder-decoder bottleneck
+    x = t5x.layers.Dense(
+      features=self.decoder.hidden_size,
+      kernel_init=mlp_kernel_init,
+      bias_init=mlp_bias_init,
+      kernel_axes=('mlp', 'embed'),  # 'mlp' is split first
+      name='bottleneck')(x)
+
+    # append mask token
+    mask_token = t5x.layers.param_with_axes(
+      'mask_token', masktoken_init, (1, 1, self.decoder.hidden_size),
+      jnp.float32, axes=('_null0', '_null1', 'embed'))
+    mask_tokens = jnp.tile(mask_token, [n, ids_restore.shape[1] - x.shape[1], 1])
+    x_ = jnp.concatenate([x, mask_tokens], axis=1)  # no cls token
+    x_ = gather_by_einsum(x_, ids_restore)
+
+    # add decoder posembed
+    posemb = Add1DPositionEmbs(sincos=self.sincos, seq_shape=x_.shape[1:], posemb_init=fixed_gaussian_init, name='posembed_decoder')
+    x = posemb(x_)
+
+    # apply the decoder
+    x = Encoder(name='TransformerDecoder', **self.decoder.transformer, prefix='decoder')(x, train=train)
+
+    # apply the predictor
+    x = t5x.layers.Dense(
+      features=self.vocab_size,
+      kernel_init=mlp_kernel_init,
+      bias_init=mlp_bias_init,
+      kernel_axes=('embed', 'classes'),  # 'mlp' is split first
+      name='pred')(x)
+
+    return x
+
 
 class VisionTransformer(nn.Module):
   """VisionTransformer."""
@@ -558,7 +609,6 @@ class VisionTransformer(nn.Module):
 
     # apply decoder
     pred = self.apply_decoder(x, ids_restore, train=train)
-    x = pred
 
     # compute loss
     loss = self.compute_loss(imgs, pred, mask)
@@ -589,7 +639,7 @@ class ImageTextLearner(nn.Module):
 
   def __call__(self, inputs, *, train):
     img = inputs['image']
-    txt = inputs['txt']
+    txt = {'txt': inputs['txt'], 'txt_is_valid': inputs['txt_is_valid']}
 
     self.txt_encoder(txt, train=train)
 

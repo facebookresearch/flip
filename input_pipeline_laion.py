@@ -63,11 +63,11 @@ def parse_laion_example(example_proto):
 # define the decode function
 def decode_example(example, image_size, aug, tokenize_func):
   # decoder the text
-  txt = preprocess_text(example['txt'], tokenize_func=tokenize_func)
+  txt, txt_is_valid = preprocess_text(example['txt'], tokenize_func=tokenize_func)
 
   # decoder the image
   image = preprocess_image(example['image'], image_size=image_size, aug=aug)
-  return {'image': image, 'txt': txt}
+  return {'image': image, 'txt': txt, 'txt_is_valid': txt_is_valid}
 
 
 def tfds_preprocess_text(txt, tokenizer, aug_txt):
@@ -76,9 +76,8 @@ def tfds_preprocess_text(txt, tokenizer, aug_txt):
   """
   token_ids = tokenizer.tokenize(txt)
   max_len = aug_txt.max_len
-  padded_token_ids, _ = tftx.pad_model_inputs(token_ids, max_len)
-  padded_token_ids = padded_token_ids[0]
-  return padded_token_ids
+  padded_token_ids, is_valid = tftx.pad_model_inputs(token_ids, max_len)
+  return padded_token_ids[0], is_valid[0]
 
 
 def get_txt_tokenize_func(aug_txt):
@@ -92,6 +91,7 @@ def get_txt_tokenize_func(aug_txt):
     vocab_size = tokenizer._wordpiece_tokenizer.vocab_size().numpy()  # including unknown
     return tokenize_func, vocab_size
   elif aug_txt.tokenizer == 'hf_clip':
+    raise NotImplementedError  # TODO{km}: support is_valid
     tokenizer_name = "openai/clip-vit-base-patch32"
     cache_dir = os.path.join("/kmh_data", tokenizer_name)  # point to the same location, in case it is changed
     tokenizer = CLIPTokenizerFast.from_pretrained(tokenizer_name, cache_dir=cache_dir)

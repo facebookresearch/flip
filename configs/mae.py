@@ -75,7 +75,7 @@ def get_config_txt():
   """Get the hyperparameter configuration to train on TPUs."""
   config = ml_collections.ConfigDict()
 
-  config.mask_ratio = 0.5
+  config.mask_ratio = 0.25
 
   config.sincos = False
 
@@ -95,7 +95,7 @@ def get_config_txt():
   config.decoder.hidden_size = 256
   config.decoder.transformer = ml_collections.ConfigDict()
   config.decoder.transformer.mlp_dim = config.hidden_size * 4
-  config.decoder.transformer.num_heads = 12
+  config.decoder.transformer.num_heads = 16
   config.decoder.transformer.num_layers = 4
   config.decoder.transformer.attention_dropout_rate = 0.0
   config.decoder.transformer.dropout_rate = 0.0
