@@ -562,33 +562,24 @@ class VisionTransformer(nn.Module):
     use_cls_token = (self.classifier == 'token')
     assert use_cls_token  # kaiming: TODO: support both?
 
-    x = t5x.layers.Conv(
-        features=self.hidden_size,
-        kernel_size=self.patches.size,
-        strides=self.patches.size,
-        padding='VALID',
-        name='embedding',
-        kernel_init=patch_kernel_init,
-        bias_init=patch_bias_init,
-        kernel_axes=('_null0', '_null1', '_null2', 'embed'),
-        )(inputs)
+    x = self.encoder_layers['patch_emb'](inputs)
 
     n, h, w, c = x.shape
     x = jnp.reshape(x, [n, h * w, c])
 
-    x = Add2DPositionEmbs(sincos=self.sincos, use_cls_token=use_cls_token, name='posembed_encoder')(x)
+    x = self.encoder_layers['pos_emb'](x)
 
     # masking: length -> length * mask_ratio
     x, mask, ids_restore = random_mask(self.make_rng('dropout'), x, self.mask_ratio)
     ids_restore = jnp.reshape(ids_restore, [n, h, w])  # carries the shape info
 
     if use_cls_token:
-      cls = t5x.layers.param_with_axes('cls', clstoken_init, (1, 1, c), jnp.float32, axes=('_null0', '_null1', 'embed'))
+      cls = self.encoder_layers['cls_token']
       cls = jnp.tile(cls, [n, 1, 1])
       x = jnp.concatenate([cls, x], axis=1)
 
     # apply the encoder
-    x = Encoder(name='Transformer', **self.transformer, prefix='encoder')(x, train=train)
+    x = self.encoder_layers['encoder'](x, train=train)
 
     return x, mask, ids_restore
 
@@ -636,26 +627,36 @@ class VisionTransformer(nn.Module):
 
     return pred
 
-  # @nn.compact
-  # def setup(self):
-  #   """
-  #   declare all param layers based on inputs
-  #   """    
-  #   use_cls_token = (self.classifier == 'token')
-  #   assert use_cls_token  # kaiming: TODO: support both?
+  def setup(self):
+    """
+    declare all param layers based on inputs
+    """
+    # ------------------------
+    # define encoder
+    # ------------------------
+    use_cls_token = (self.classifier == 'token')
+    assert use_cls_token  # kaiming: TODO: support both?
 
-  #   self.layer_patch_embed = t5x.layers.Conv(
-  #       features=self.hidden_size,
-  #       kernel_size=self.patches.size,
-  #       strides=self.patches.size,
-  #       padding='VALID',
-  #       name='embedding',
-  #       kernel_init=patch_kernel_init,
-  #       bias_init=patch_bias_init,
-  #       kernel_axes=('_null0', '_null1', '_null2', 'embed'),
-  #       )
-  #   x = self.patch_embed
-  #   self.pos_embed = Add2DPositionEmbs(sincos=self.sincos, use_cls_token=use_cls_token, img_shape=(h, w, c), name='posembed_encoder')
+    encoder_layers = {}    
+    encoder_layers['patch_emb'] = t5x.layers.Conv(
+        features=self.hidden_size,
+        kernel_size=self.patches.size,
+        strides=self.patches.size,
+        padding='VALID',
+        name='embedding',
+        kernel_init=patch_kernel_init,
+        bias_init=patch_bias_init,
+        kernel_axes=('_null0', '_null1', '_null2', 'embed'),
+        )
+
+    encoder_layers['pos_emb'] = Add2DPositionEmbs(sincos=self.sincos, use_cls_token=use_cls_token, name='posembed_encoder')
+
+    if use_cls_token:
+      encoder_layers['cls_token'] = t5x.layers.param_with_axes('cls', clstoken_init, (1, 1, self.hidden_size), jnp.float32, axes=('_null0', '_null1', 'embed'))
+
+    encoder_layers['encoder'] = Encoder(name='Transformer', **self.transformer, prefix='encoder')
+
+    self.encoder_layers = encoder_layers
 
   @nn.compact
   def __call__(self, inputs, *, train):
