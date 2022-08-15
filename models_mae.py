@@ -579,7 +579,7 @@ class VisionTransformer(nn.Module):
       x = jnp.concatenate([cls, x], axis=1)
 
     # apply the encoder
-    x = self.encoder_layers['encoder'](x, train=train)
+    x = self.encoder_layers['blocks'](x, train=train)
 
     return x, mask, ids_restore
 
@@ -590,37 +590,25 @@ class VisionTransformer(nn.Module):
     ids_restore = jnp.reshape(ids_restore, [n, h * w])
 
     # apply the encoder-decoder bottleneck
-    x = t5x.layers.Dense(
-      features=self.decoder.hidden_size,
-      kernel_init=mlp_kernel_init,
-      bias_init=mlp_bias_init,
-      kernel_axes=('mlp', 'embed'),  # 'mlp' is split first
-      name='bottleneck')(x)
+    x = self.decoder_layers['bottleneck'](x)
 
     # append mask token
     num_clstokens = 1 if use_cls_token else 0
-    mask_token = t5x.layers.param_with_axes(
-      'mask_token', masktoken_init, (1, 1, self.decoder.hidden_size),
-      jnp.float32, axes=('_null0', '_null1', 'embed'))
+    mask_token = self.decoder_layers['mask_token']
     mask_tokens = jnp.tile(mask_token, [n, ids_restore.shape[1] + num_clstokens - x.shape[1], 1])
     x_ = jnp.concatenate([x[:, num_clstokens:, :], mask_tokens], axis=1)  # no cls token
     x_ = gather_by_einsum(x_, ids_restore)
 
     # add decoder posembed (before cls token)
-    x_ = Add2DPositionEmbs(sincos=self.sincos, use_cls_token=use_cls_token, name='posembed_decoder')(x_)
+    x_ = self.decoder_layers['pos_emb'](x_)
 
     x = jnp.concatenate([x[:, :num_clstokens, :], x_], axis=1)  # append cls token
 
     # apply the decoder
-    x = Encoder(name='TransformerDecoder', **self.decoder.transformer, prefix='decoder')(x, train=train)
+    x = self.decoder_layers['blocks'](x, train=train)
 
     # apply the predictor
-    x = t5x.layers.Dense(
-      features=self.patches.size[0] * self.patches.size[1] * 3,
-      kernel_init=mlp_kernel_init,
-      bias_init=mlp_bias_init,
-      kernel_axes=('embed', 'classes'),  # 'mlp' is split first
-      name='pred')(x)
+    x = self.decoder_layers['pred'](x)
 
     # remove cls token
     pred = x[:, num_clstokens:, :]
@@ -637,7 +625,8 @@ class VisionTransformer(nn.Module):
     use_cls_token = (self.classifier == 'token')
     assert use_cls_token  # kaiming: TODO: support both?
 
-    encoder_layers = {}    
+    encoder_layers = {}
+
     encoder_layers['patch_emb'] = t5x.layers.Conv(
         features=self.hidden_size,
         kernel_size=self.patches.size,
@@ -646,19 +635,39 @@ class VisionTransformer(nn.Module):
         name='embedding',
         kernel_init=patch_kernel_init,
         bias_init=patch_bias_init,
-        kernel_axes=('_null0', '_null1', '_null2', 'embed'),
-        )
-
+        kernel_axes=('_null0', '_null1', '_null2', 'embed'))
     encoder_layers['pos_emb'] = Add2DPositionEmbs(sincos=self.sincos, use_cls_token=use_cls_token, name='posembed_encoder')
-
     if use_cls_token:
       encoder_layers['cls_token'] = t5x.layers.param_with_axes('cls', clstoken_init, (1, 1, self.hidden_size), jnp.float32, axes=('_null0', '_null1', 'embed'))
-
-    encoder_layers['encoder'] = Encoder(name='Transformer', **self.transformer, prefix='encoder')
+    encoder_layers['blocks'] = Encoder(name='Transformer', **self.transformer, prefix='encoder')
 
     self.encoder_layers = encoder_layers
 
-  @nn.compact
+    # ------------------------
+    # define decoder
+    # ------------------------
+    decoder_layers = {}
+
+    decoder_layers['bottleneck'] = t5x.layers.Dense(
+      features=self.decoder.hidden_size,
+      kernel_init=mlp_kernel_init,
+      bias_init=mlp_bias_init,
+      kernel_axes=('mlp', 'embed'),  # 'mlp' is split first
+      name='bottleneck')
+    decoder_layers['mask_token'] = t5x.layers.param_with_axes(
+      'mask_token', masktoken_init, (1, 1, self.decoder.hidden_size),
+      jnp.float32, axes=('_null0', '_null1', 'embed'))
+    decoder_layers['pos_emb'] = Add2DPositionEmbs(sincos=self.sincos, use_cls_token=use_cls_token, name='posembed_decoder')
+    decoder_layers['blocks'] = Encoder(name='TransformerDecoder', **self.decoder.transformer, prefix='decoder')
+    decoder_layers['pred'] = t5x.layers.Dense(
+      features=self.patches.size[0] * self.patches.size[1] * 3,
+      kernel_init=mlp_kernel_init,
+      bias_init=mlp_bias_init,
+      kernel_axes=('embed', 'classes'),  # 'mlp' is split first
+      name='pred')
+    
+    self.decoder_layers = decoder_layers
+
   def __call__(self, inputs, *, train):
     imgs = inputs
 
