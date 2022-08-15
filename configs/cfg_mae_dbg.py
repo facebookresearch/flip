@@ -49,7 +49,6 @@ def get_config():
   config.model.model_img.transformer.num_layers = 3
   config.model.model_img.transformer.rescale_init = 1.0
 
-  config.model.model_img.decoder = ml_collections.ConfigDict()
   config.model.model_img.decoder.hidden_size = 64
   config.model.model_img.decoder.transformer = ml_collections.ConfigDict()
   config.model.model_img.decoder.transformer.mlp_dim = config.model.model_img.decoder.hidden_size * 4

@@ -37,7 +37,7 @@ def get_config():
   """Get the hyperparameter configuration to train on TPUs."""
   config = cfg_common_mae.get_config()
 
-  # mae config
+  # mae img config
   config.model.model_img.mask_ratio = 0.75
   config.model.model_img.norm_pix_loss = True
 
@@ -49,7 +49,6 @@ def get_config():
   config.model.model_img.transformer.num_layers = 24
   config.model.model_img.transformer.rescale_init = 1.0
 
-  config.model.model_img.decoder = ml_collections.ConfigDict()
   config.model.model_img.decoder.hidden_size = 512
   config.model.model_img.decoder.transformer = ml_collections.ConfigDict()
   config.model.model_img.decoder.transformer.mlp_dim = config.model.model_img.decoder.hidden_size * 4
@@ -58,6 +57,26 @@ def get_config():
   config.model.model_img.decoder.transformer.attention_dropout_rate = 0.0
   config.model.model_img.decoder.transformer.dropout_rate = 0.0
   config.model.model_img.decoder.transformer.droppath_rate = 0.0
+
+  # mae txt config
+  config.model.model_txt.mask_ratio = 0.25
+
+  config.model.model_txt.hidden_size = 768
+  config.model.model_txt.transformer.mlp_dim = config.model.model_txt.hidden_size * 4
+  config.model.model_txt.transformer.dropout_rate = 0.0
+  config.model.model_txt.transformer.droppath_rate = 0.0
+  config.model.model_txt.decoder.transformer.num_heads = 12
+  config.model.model_txt.transformer.num_layers = 12
+  config.model.model_txt.transformer.rescale_init = 1.0
+
+  config.model.model_txt.decoder.hidden_size = 384
+  config.model.model_txt.decoder.transformer = ml_collections.ConfigDict()
+  config.model.model_txt.decoder.transformer.mlp_dim = config.model.model_txt.decoder.hidden_size * 4
+  config.model.model_txt.decoder.transformer.num_heads = 12
+  config.model.model_txt.decoder.transformer.num_layers = 8
+  config.model.model_txt.decoder.transformer.attention_dropout_rate = 0.0
+  config.model.model_txt.decoder.transformer.dropout_rate = 0.0
+  config.model.model_txt.decoder.transformer.droppath_rate = 0.0
 
   # opt config
   config.opt_mu_dtype = 'float32'
