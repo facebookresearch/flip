@@ -120,7 +120,7 @@ def get_config():
 
   # text aug config
   config.aug.txt = ml_collections.ConfigDict()
-  config.aug.txt.tokenizer = 'clip'
-  config.aug.txt.max_len = 77
+  config.aug.txt.tokenizer = 'tf_bert'  # 'tf_bert' 'hf_clip'
+  config.aug.txt.max_len = 32
 
   return config

@@ -19,7 +19,7 @@ import os
 import jax
 import tensorflow as tf
 import tensorflow_datasets as tfds
-# import tensorflow_text as tftx
+import tensorflow_text as tftx
 
 from transformers import CLIPTokenizerFast
 
@@ -70,19 +70,46 @@ def decode_example(example, image_size, aug, tokenize_func):
   return {'image': image, 'txt': txt}
 
 
+def tfds_preprocess_text(txt, tokenizer, aug_txt):
+  """
+  reference https://github.com/google-research/big_vision/blob/main/big_vision/pp/proj/flaxformer/bert_ops.py
+  """
+  token_ids = tokenizer.tokenize(txt)
+  max_len = aug_txt.max_len
+  padded_token_ids, _ = tftx.pad_model_inputs(token_ids, max_len)
+  padded_token_ids = padded_token_ids[0]
+  return padded_token_ids
+
+
 def get_txt_tokenize_func(aug_txt):
-  if aug_txt.tokenizer == 'clip':
+  if aug_txt.tokenizer == 'tf_bert':
+    # vocab file: gs://vit_models/lit/LiT-B16B.txt. It should be the same as vocab.txt in:
+    # https://storage.googleapis.com/bert_models/2019_05_30/wwm_uncased_L-24_H-1024_A-16.zip
+    # md5sum: 64800d5d8528ce344256daf115d4965e
+    # vocab_size: 30522
+    tokenizer = tftx.BertTokenizer('./vocab/vocab_bert_base.txt', lower_case=True, token_out_type=tf.int32)
+    tokenize_func = functools.partial(tfds_preprocess_text, tokenizer=tokenizer, aug_txt=aug_txt)
+    return tokenize_func
+  elif aug_txt.tokenizer == 'hf_clip':
     tokenizer_name = "openai/clip-vit-base-patch32"
     cache_dir = os.path.join("/kmh_data", tokenizer_name)  # point to the same location, in case it is changed
     tokenizer = CLIPTokenizerFast.from_pretrained(tokenizer_name, cache_dir=cache_dir)
   else:
     raise NotImplementedError
 
+  # --------------------------------
+  # txt = 'View EPC Rating Graph for this property'
+  # s = tokenizer.encode(txt)
+  # t = tokenizer.decode(s)
+  # --------------------------------
+
+  # for hugging face tokenzier
   tokenize = lambda s: tokenizer.encode(
     s.numpy().decode(),
     padding='max_length',
     truncation='longest_first',
     max_length=aug_txt.max_len,
+    add_special_tokens=False,
     return_tensors='tf',)
   tokenize_tf_func = tf.function(
       lambda s: tf.py_function(tokenize, inp=[s], Tout=tf.int32),
