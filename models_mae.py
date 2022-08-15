@@ -385,7 +385,48 @@ class LanguageTransformer(nn.Module):
   dtype: Any = jnp.float32
   decoder: Any = None
 
-  @nn.compact
+  def setup(self):
+    """
+    declare all param layers based on inputs
+    """
+    # ------------------------
+    # define encoder
+    # ------------------------
+    encoder_layers = {}
+    encoder_layers['token_emb'] = t5x.layers.Embed(
+      num_embeddings=self.vocab_size,
+      features=self.hidden_size,
+      embedding_init=fixed_gaussian_init,
+      one_hot=True,
+      axes=['classes', 'embed'],  # do not use 'vocab' 
+      name='token_embedding')
+    encoder_layers['pos_emb'] = Add1DPositionEmbs(sincos=self.sincos, posemb_init=fixed_gaussian_init, name='posembed_encoder')
+    encoder_layers['blocks'] = Encoder(name='Transformer', **self.transformer, prefix='encoder')
+    self.encoder_layers = encoder_layers
+
+    # ------------------------
+    # define decoder
+    # ------------------------
+    decoder_layers = {}
+    decoder_layers['bottleneck'] = t5x.layers.Dense(
+      features=self.decoder.hidden_size,
+      kernel_init=mlp_kernel_init,
+      bias_init=mlp_bias_init,
+      kernel_axes=('mlp', 'embed'),  # 'mlp' is split first
+      name='bottleneck')
+    decoder_layers['mask_token'] = t5x.layers.param_with_axes(
+      'mask_token', masktoken_init, (1, 1, self.decoder.hidden_size),
+      jnp.float32, axes=('_null0', '_null1', 'embed'))
+    decoder_layers['posemb'] = Add1DPositionEmbs(sincos=self.sincos, posemb_init=fixed_gaussian_init, name='posembed_decoder')
+    decoder_layers['blocks'] = Encoder(name='TransformerDecoder', **self.decoder.transformer, prefix='decoder')
+    decoder_layers['pred'] = t5x.layers.Dense(
+      features=self.vocab_size,
+      kernel_init=mlp_kernel_init,
+      bias_init=mlp_bias_init,
+      kernel_axes=('embed', 'classes'),  # 'mlp' is split first
+      name='pred')
+    self.decoder_layers = decoder_layers
+
   def __call__(self, inputs, *, train):
     txt = inputs['txt']
     is_valid = inputs['txt_is_valid']
@@ -422,24 +463,15 @@ class LanguageTransformer(nn.Module):
   def apply_encoder(self, inputs, train):
     x = inputs
     
-    embed = t5x.layers.Embed(
-      num_embeddings=self.vocab_size,
-      features=self.hidden_size,
-      embedding_init=fixed_gaussian_init,
-      one_hot=True,
-      axes=['classes', 'embed'],  # do not use 'vocab' 
-      name='token_embedding')
-    x = embed(x)
+    x = self.encoder_layers['token_emb'](x)
 
-    n, l, c = x.shape
-    posemb = Add1DPositionEmbs(sincos=self.sincos, posemb_init=fixed_gaussian_init, name='posembed_encoder')
-    x = posemb(x)
+    x = self.encoder_layers['pos_emb'](x)
 
     # masking: length -> length * mask_ratio
     x, mask, ids_restore = random_mask(self.make_rng('dropout'), x, self.mask_ratio)
 
     # apply the encoder
-    x = Encoder(name='Transformer', **self.transformer, prefix='encoder')(x, train=train)
+    x = self.encoder_layers['blocks'](x, train=train)
 
     return x, mask, ids_restore
 
@@ -447,35 +479,22 @@ class LanguageTransformer(nn.Module):
     n, l = ids_restore.shape
 
     # apply the encoder-decoder bottleneck
-    x = t5x.layers.Dense(
-      features=self.decoder.hidden_size,
-      kernel_init=mlp_kernel_init,
-      bias_init=mlp_bias_init,
-      kernel_axes=('mlp', 'embed'),  # 'mlp' is split first
-      name='bottleneck')(x)
+    x = self.decoder_layers['bottleneck'](x)
 
     # append mask token
-    mask_token = t5x.layers.param_with_axes(
-      'mask_token', masktoken_init, (1, 1, self.decoder.hidden_size),
-      jnp.float32, axes=('_null0', '_null1', 'embed'))
+    mask_token = self.decoder_layers['mask_token']
     mask_tokens = jnp.tile(mask_token, [n, ids_restore.shape[1] - x.shape[1], 1])
     x_ = jnp.concatenate([x, mask_tokens], axis=1)  # no cls token
     x_ = gather_by_einsum(x_, ids_restore)
 
     # add decoder posembed
-    posemb = Add1DPositionEmbs(sincos=self.sincos, posemb_init=fixed_gaussian_init, name='posembed_decoder')
-    x = posemb(x_)
+    x = self.decoder_layers['posemb'](x_)
 
     # apply the decoder
-    x = Encoder(name='TransformerDecoder', **self.decoder.transformer, prefix='decoder')(x, train=train)
+    x = self.decoder_layers['blocks'](x, train=train)
 
     # apply the predictor
-    x = t5x.layers.Dense(
-      features=self.vocab_size,
-      kernel_init=mlp_kernel_init,
-      bias_init=mlp_bias_init,
-      kernel_axes=('embed', 'classes'),  # 'mlp' is split first
-      name='pred')(x)
+    x = self.decoder_layers['pred'](x)
 
     return x
 
@@ -625,8 +644,7 @@ class VisionTransformer(nn.Module):
     use_cls_token = (self.classifier == 'token')
     assert use_cls_token  # kaiming: TODO: support both?
 
-    encoder_layers = {}
-
+    encoder_layers = {}  # cannot directly declare self.encoder_layers
     encoder_layers['patch_emb'] = t5x.layers.Conv(
         features=self.hidden_size,
         kernel_size=self.patches.size,
@@ -640,14 +658,12 @@ class VisionTransformer(nn.Module):
     if use_cls_token:
       encoder_layers['cls_token'] = t5x.layers.param_with_axes('cls', clstoken_init, (1, 1, self.hidden_size), jnp.float32, axes=('_null0', '_null1', 'embed'))
     encoder_layers['blocks'] = Encoder(name='Transformer', **self.transformer, prefix='encoder')
-
     self.encoder_layers = encoder_layers
 
     # ------------------------
     # define decoder
     # ------------------------
     decoder_layers = {}
-
     decoder_layers['bottleneck'] = t5x.layers.Dense(
       features=self.decoder.hidden_size,
       kernel_init=mlp_kernel_init,
@@ -665,7 +681,6 @@ class VisionTransformer(nn.Module):
       bias_init=mlp_bias_init,
       kernel_axes=('embed', 'classes'),  # 'mlp' is split first
       name='pred')
-    
     self.decoder_layers = decoder_layers
 
   def __call__(self, inputs, *, train):
