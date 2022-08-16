@@ -427,21 +427,6 @@ class LanguageTransformer(nn.Module):
       name='pred')
     self.decoder_layers = decoder_layers
 
-  def __call__(self, inputs, *, train):
-    txt = inputs['txt']
-    is_valid = inputs['txt_is_valid']
-
-    # apply encoder
-    x, mask, ids_restore = self.apply_encoder(txt, train=train)
-
-    # apply decoder
-    pred = self.apply_decoder(x, ids_restore, train=train)
-
-    # apply loss
-    loss = self.compute_loss(txt, pred, mask, is_valid)
-
-    return loss
-
   def compute_loss(self, txt, pred, mask, is_valid):
     """
     txt: [N, L]
@@ -497,6 +482,21 @@ class LanguageTransformer(nn.Module):
     x = self.decoder_layers['pred'](x)
 
     return x
+
+  # def __call__(self, inputs, *, train):
+  #   txt = inputs['txt']
+  #   is_valid = inputs['txt_is_valid']
+
+  #   # apply encoder
+  #   x, mask, ids_restore = self.apply_encoder(txt, train=train)
+
+  #   # apply decoder
+  #   pred = self.apply_decoder(x, ids_restore, train=train)
+
+  #   # apply loss
+  #   loss = self.compute_loss(txt, pred, mask, is_valid)
+
+  #   return loss
 
 
 class VisionTransformer(nn.Module):
@@ -683,20 +683,20 @@ class VisionTransformer(nn.Module):
       name='pred')
     self.decoder_layers = decoder_layers
 
-  def __call__(self, inputs, *, train):
-    imgs = inputs
+  # def __call__(self, inputs, *, train):
+  #   imgs = inputs
 
-    # apply encoder
-    x, mask, ids_restore = self.apply_encoder(imgs, train=train)
+  #   # apply encoder
+  #   x, mask, ids_restore = self.apply_encoder(imgs, train=train)
 
-    # apply decoder
-    pred = self.apply_decoder(x, ids_restore, train=train)
+  #   # apply decoder
+  #   pred = self.apply_decoder(x, ids_restore, train=train)
 
-    # compute loss
-    loss = self.compute_loss(imgs, pred, mask)
+  #   # compute loss
+  #   loss = self.compute_loss(imgs, pred, mask)
 
-    vis = self.visualization(imgs, pred, mask)
-    return loss, vis
+  #   vis = self.visualization(imgs, pred, mask)
+  #   return loss, vis
 
   
 class ImageTextLearner(nn.Module):
@@ -721,11 +721,27 @@ class ImageTextLearner(nn.Module):
 
   def __call__(self, inputs, *, train):
     img = inputs['image']
-    txt = {'txt': inputs['txt'], 'txt_is_valid': inputs['txt_is_valid']}
+    # txt = {'txt': inputs['txt'], 'txt_is_valid': inputs['txt_is_valid']}
+    txt = inputs['txt']
+    is_valid = inputs['txt_is_valid']
 
-    loss_img, vis = self.img_encoder(img, train=train)
 
-    loss_txt = self.txt_encoder(txt, train=train)
+    # ------------------------
+    # img (used to be self.img_encoder.__call__)
+    # loss_img, vis = self.img_encoder(img, train=train)
+    # ------------------------
+    x_img, mask_img, ids_restore_img = self.img_encoder.apply_encoder(img, train=train)
+    pred_img = self.img_encoder.apply_decoder(x_img, ids_restore_img, train=train)
+    loss_img = self.img_encoder.compute_loss(img, pred_img, mask_img)
+    vis = self.img_encoder.visualization(img, pred_img, mask_img)
+
+    # ------------------------
+    # txt
+    # loss_txt = self.txt_encoder(txt, train=train)
+    # ------------------------
+    x_txt, mask_txt, ids_restore_txt = self.txt_encoder.apply_encoder(txt, train=train)
+    pred_txt = self.txt_encoder.apply_decoder(x_txt, ids_restore_txt, train=train)
+    loss_txt = self.txt_encoder.compute_loss(txt, pred_txt, mask_txt, is_valid)
 
     loss_tot = loss_img + loss_txt
 
