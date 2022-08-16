@@ -16,7 +16,7 @@ vitsize=large
 CONFIG=cfg_mae_${vitsize}
 
 # _normpix_exwd_NOsplit_fastsave
-JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}txt${mask_txt}_s${seed}_p${partitions}st_re${rescale}_laion_a0.5_sanity_twoMAE_imgCross
+JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}txt${mask_txt}_s${seed}_p${partitions}st_re${rescale}_laion_a0.5_sanity_twoMAE_twoCross
 RESUME=''
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
@@ -62,7 +62,7 @@ python3 main.py \
     --config.partitioning.partition_states=False \
     --config.resume_dir=${RESUME} \
     --config.aug.area_range=\(0.5\,1.0\) \
-    --config.model.model_txt.decoder.cross_attention=False \
+    --config.model.model_txt.decoder.cross_attention=True \
     --config.model.model_img.decoder.cross_attention=True \
 2>&1 | tee -a $LOGDIR/finetune_\$SSH_ID.log
 " 2>&1 | tee -a $LOGDIR/finetune.log
