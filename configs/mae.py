@@ -64,9 +64,18 @@ def get_config_img():
   config.transformer.droppath_rate = 0.0
   config.classifier = 'token'
 
-  config.decoder = vit.get_testing_config()
+  config.decoder = ml_collections.ConfigDict()
+  config.decoder.name = 'img_decoder'
+  config.decoder.hidden_size = 256
+  config.decoder.transformer = ml_collections.ConfigDict()
+  config.decoder.transformer.mlp_dim = config.hidden_size * 4
+  config.decoder.transformer.num_heads = 16
+  config.decoder.transformer.num_layers = 4
+  config.decoder.transformer.attention_dropout_rate = 0.0
   config.decoder.transformer.dropout_rate = 0.0
   config.decoder.transformer.droppath_rate = 0.0
+
+  config.decoder.cross_attention = True
 
   return config
 
@@ -80,7 +89,7 @@ def get_config_txt():
   config.sincos = False
 
   config.name = 'txt_encoder'
-  config.vocab_size = 768
+  config.vocab_size = 0
   config.hidden_size = 768
   config.transformer = ml_collections.ConfigDict()
   config.transformer.mlp_dim = config.hidden_size * 4
@@ -100,5 +109,7 @@ def get_config_txt():
   config.decoder.transformer.attention_dropout_rate = 0.0
   config.decoder.transformer.dropout_rate = 0.0
   config.decoder.transformer.droppath_rate = 0.0
+
+  config.decoder.cross_attention = True
 
   return config

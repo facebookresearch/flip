@@ -334,15 +334,15 @@ class Encoder1DBlockCross(nn.Module):
     x = x + identity
 
     # second block: cross-attention
-    # identity = x
-    # x = t5x.layers.LayerNorm(dtype=self.dtype, axes=('embed',))(x)
-    # x = MsaBlock(
-    #     dtype=self.dtype,
-    #     dropout_rate=self.attention_dropout_rate,
-    #     num_heads=self.num_heads,
-    #     name='CrossAtt'
-    # )(x, kv)
-    # x = x + identity
+    identity = x
+    x = t5x.layers.LayerNorm(dtype=self.dtype, axes=('embed',))(x)
+    x = MsaBlock(
+        dtype=self.dtype,
+        dropout_rate=self.attention_dropout_rate,
+        num_heads=self.num_heads,
+        name='CrossAtt'
+    )(x, kv)
+    x = x + identity
 
     # MLP block.
     identity = x
@@ -557,8 +557,10 @@ class LanguageTransformer(nn.Module):
       'mask_token', masktoken_init, (1, 1, self.decoder.hidden_size),
       jnp.float32, axes=('_null0', '_null1', 'embed'))
     decoder_layers['posemb'] = Add1DPositionEmbs(sincos=self.sincos, posemb_init=fixed_gaussian_init, name='posembed_decoder')
-    # decoder_layers['blocks'] = Encoder(name='TransformerDecoder', **self.decoder.transformer, prefix='decoder')
-    decoder_layers['blocks'] = EncoderCross(name='TransformerDecoder', **self.decoder.transformer, prefix='decoder')
+    if self.decoder.cross_attention:
+      decoder_layers['blocks'] = EncoderCross(name='TransformerDecoder', **self.decoder.transformer, prefix='decoder')
+    else:
+      decoder_layers['blocks'] = Encoder(name='TransformerDecoder', **self.decoder.transformer, prefix='decoder')
     decoder_layers['pred'] = t5x.layers.Dense(
       features=self.vocab_size,
       kernel_init=mlp_kernel_init,
@@ -628,21 +630,6 @@ class LanguageTransformer(nn.Module):
     x = self.decoder_layers['pred'](x)
 
     return x
-
-  # def __call__(self, inputs, *, train):
-  #   txt = inputs['txt']
-  #   is_valid = inputs['txt_is_valid']
-
-  #   # apply encoder
-  #   x, mask, ids_restore = self.apply_encoder(txt, train=train)
-
-  #   # apply decoder
-  #   pred = self.apply_decoder(x, ids_restore, train=train)
-
-  #   # apply loss
-  #   loss = self.compute_loss(txt, pred, mask, is_valid)
-
-  #   return loss
 
 
 class VisionTransformer(nn.Module):
@@ -827,7 +814,10 @@ class VisionTransformer(nn.Module):
       'mask_token', masktoken_init, (1, 1, self.decoder.hidden_size),
       jnp.float32, axes=('_null0', '_null1', 'embed'))
     decoder_layers['pos_emb'] = Add2DPositionEmbs(sincos=self.sincos, use_cls_token=use_cls_token, name='posembed_decoder')
-    decoder_layers['blocks'] = Encoder(name='TransformerDecoder', **self.decoder.transformer, prefix='decoder')
+    if self.decoder.cross_attention:
+      decoder_layers['blocks'] = EncoderCross(name='TransformerDecoder', **self.decoder.transformer, prefix='decoder')
+    else:
+      decoder_layers['blocks'] = Encoder(name='TransformerDecoder', **self.decoder.transformer, prefix='decoder')
     decoder_layers['pred'] = t5x.layers.Dense(
       features=self.patches.size[0] * self.patches.size[1] * 3,
       kernel_init=mlp_kernel_init,
@@ -835,21 +825,6 @@ class VisionTransformer(nn.Module):
       kernel_axes=('embed', 'classes'),  # 'mlp' is split first
       name='pred')
     self.decoder_layers = decoder_layers
-
-  # def __call__(self, inputs, *, train):
-  #   imgs = inputs
-
-  #   # apply encoder
-  #   x, mask, ids_restore = self.apply_encoder(imgs, train=train)
-
-  #   # apply decoder
-  #   pred = self.apply_decoder(x, ids_restore, train=train)
-
-  #   # compute loss
-  #   loss = self.compute_loss(imgs, pred, mask)
-
-  #   vis = self.visualization(imgs, pred, mask)
-  #   return loss, vis
 
   
 class ImageTextLearner(nn.Module):
@@ -896,8 +871,8 @@ class ImageTextLearner(nn.Module):
     x_img_full, x_img_part = self.img_encoder.apply_unshuffle(x_img, ids_restore_img)
     x_txt_full, x_txt_part = self.txt_encoder.apply_unshuffle(x_txt, ids_restore_txt)
 
-    pred_img = self.img_encoder.apply_decoder(x_img_full, train=train)
-    pred_txt = self.txt_encoder.apply_decoder((x_txt_full, x_img_part), train=train)
+    pred_img = self.img_encoder.apply_decoder((x_img_full, x_txt_part) if self.img_encoder.decoder.cross_attention else x_img_full, train=train)
+    pred_txt = self.txt_encoder.apply_decoder((x_txt_full, x_img_part) if self.txt_encoder.decoder.cross_attention else x_txt_full, train=train)
 
     # compute losses
     loss_img = self.img_encoder.compute_loss(img, pred_img, mask_img)
