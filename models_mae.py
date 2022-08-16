@@ -272,6 +272,90 @@ class Encoder1DBlock(nn.Module):
     return x + y
 
 
+class Encoder1DBlockCross(nn.Module):
+  """Transformer encoder layer.
+
+  Attributes:
+    inputs: input data.
+    mlp_dim: dimension of the mlp on top of attention block.
+    dtype: the dtype of the computation (default: float32).
+    dropout_rate: dropout rate.
+    attention_dropout_rate: dropout for attention heads.
+    deterministic: bool, deterministic or not (to apply dropout).
+    num_heads: Number of heads in nn.MultiHeadDotProductAttention
+  """
+
+  mlp_dim: int
+  num_heads: int
+  dtype: Dtype = jnp.float32
+  dropout_rate: float = 0.1
+  attention_dropout_rate: float = 0.1
+  droppath_rate: float = 0.0
+  layer_id: int = None
+  rescale_init: float = 1.
+
+  @nn.compact
+  def __call__(self, q, kv, *, deterministic):
+    """Applies Encoder1DBlock module.
+
+    Args:
+      inputs: Inputs to the layer.
+      deterministic: Dropout will not be applied when set to true.
+
+    Returns:
+      output after transformer encoder block.
+    """
+    assert self.dropout_rate == 0  # for now
+    assert self.droppath_rate == 0  # for now
+
+    # Attention block.
+    assert q.ndim == 3, f'Expected (batch, seq, hidden) got {q.shape}'
+    assert kv.ndim == 3, f'Expected (batch, seq, hidden) got {kv.shape}'
+    kv = t5x.layers.LayerNorm(dtype=self.dtype, axes=('embed',))(kv)
+
+    # ----------------------------------------------------
+    # declare block type
+    MsaBlock = functools.partial(
+      t5x.layers.MultiHeadDotProductAttention,
+      qkv_kernel_init=lambda *args: qkv_kernel_init(*args) * self.rescale_init,
+      out_kernel_init=lambda *args: out_kernel_init(*args) * self.rescale_init,
+    )
+    # ----------------------------------------------------
+
+    # first block: self-attention
+    identity = q
+    x = t5x.layers.LayerNorm(dtype=self.dtype, axes=('embed',))(q)
+    x = MsaBlock(
+        dtype=self.dtype,
+        dropout_rate=self.attention_dropout_rate,
+        num_heads=self.num_heads,
+        name='SelfAtt'
+    )(x, x)
+    x = x + identity
+
+    # second block: cross-attention
+    # identity = x
+    # x = t5x.layers.LayerNorm(dtype=self.dtype, axes=('embed',))(x)
+    # x = MsaBlock(
+    #     dtype=self.dtype,
+    #     dropout_rate=self.attention_dropout_rate,
+    #     num_heads=self.num_heads,
+    #     name='CrossAtt'
+    # )(x, kv)
+    # x = x + identity
+
+    # MLP block.
+    identity = x
+    y = t5x.layers.LayerNorm(dtype=self.dtype, axes=('embed',))(x)
+    y = MlpBlock(
+        mlp_dim=self.mlp_dim, dtype=self.dtype, dropout_rate=self.dropout_rate,
+        kernel_init=lambda *args: mlp_kernel_init(*args) * self.rescale_init,
+        bias_init=mlp_bias_init,
+        )(y, deterministic=deterministic)
+    y = y + identity
+    return y
+
+
 class Encoder(nn.Module):
   """Transformer Model Encoder for sequence to sequence translation.
 
@@ -317,6 +401,61 @@ class Encoder(nn.Module):
           layer_id=lyr,
           rescale_init=self.rescale_init,
         )(x, deterministic=not train)
+    encoded = t5x.layers.LayerNorm(name=self.prefix + '_norm', axes=('embed',))(x)
+
+    return encoded
+
+
+class EncoderCross(nn.Module):
+  """Transformer Model Encoder for sequence to sequence translation.
+
+  Attributes:
+    num_layers: number of layers
+    mlp_dim: dimension of the mlp on top of attention block
+    num_heads: Number of heads in nn.MultiHeadDotProductAttention
+    dropout_rate: dropout rate.
+    attention_dropout_rate: dropout rate in self attention.
+  """
+
+  num_layers: int
+  mlp_dim: int
+  num_heads: int
+  dropout_rate: float = 0.1
+  attention_dropout_rate: float = 0.1
+  droppath_rate: float = 0.0
+  prefix: str = 'encoder'
+  rescale_init: float = 1.0
+
+  @nn.compact
+  def __call__(self, inputs, *, train):
+    """Applies Transformer model on the inputs.
+
+    Args:
+      inputs: Inputs to the layer.
+      train: Set to `True` when training.
+
+    Returns:
+      output of a transformer encoder.
+    """
+    assert isinstance(inputs, tuple)
+    assert len(inputs) == 2
+
+    q, kv = inputs
+    assert q.ndim == 3  # (batch, len of q, emb)
+    assert kv.ndim == 3  # (batch, len of kv, emb)
+
+    x = q
+    for lyr in range(self.num_layers):
+      x = Encoder1DBlockCross(
+          mlp_dim=self.mlp_dim,
+          dropout_rate=self.dropout_rate,
+          attention_dropout_rate=self.attention_dropout_rate,
+          droppath_rate=self.droppath_rate * lyr / (self.num_layers - 1) if self.droppath_rate > 0. else 0.,
+          name=self.prefix + 'block_{:02d}'.format(lyr),
+          num_heads=self.num_heads,
+          layer_id=lyr,
+          rescale_init=self.rescale_init,
+        )(q=x, kv=kv, deterministic=not train)
     encoded = t5x.layers.LayerNorm(name=self.prefix + '_norm', axes=('embed',))(x)
 
     return encoded
@@ -418,7 +557,8 @@ class LanguageTransformer(nn.Module):
       'mask_token', masktoken_init, (1, 1, self.decoder.hidden_size),
       jnp.float32, axes=('_null0', '_null1', 'embed'))
     decoder_layers['posemb'] = Add1DPositionEmbs(sincos=self.sincos, posemb_init=fixed_gaussian_init, name='posembed_decoder')
-    decoder_layers['blocks'] = Encoder(name='TransformerDecoder', **self.decoder.transformer, prefix='decoder')
+    # decoder_layers['blocks'] = Encoder(name='TransformerDecoder', **self.decoder.transformer, prefix='decoder')
+    decoder_layers['blocks'] = EncoderCross(name='TransformerDecoder', **self.decoder.transformer, prefix='decoder')
     decoder_layers['pred'] = t5x.layers.Dense(
       features=self.vocab_size,
       kernel_init=mlp_kernel_init,
@@ -460,11 +600,13 @@ class LanguageTransformer(nn.Module):
 
     return x, mask, ids_restore
 
-  def apply_decoder(self, x, ids_restore, train):
+  def apply_unshuffle(self, x, ids_restore):
+    """bottleneck projection, unshuffle, add pos emb"""
     n, l = ids_restore.shape
 
     # apply the encoder-decoder bottleneck
     x = self.decoder_layers['bottleneck'](x)
+    x_part = x  # take a copy
 
     # append mask token
     mask_token = self.decoder_layers['mask_token']
@@ -473,7 +615,11 @@ class LanguageTransformer(nn.Module):
     x_ = gather_by_einsum(x_, ids_restore)
 
     # add decoder posembed
-    x = self.decoder_layers['posemb'](x_)
+    x_full = self.decoder_layers['posemb'](x_)
+
+    return x_full, x_part
+
+  def apply_decoder(self, x, train):
 
     # apply the decoder
     x = self.decoder_layers['blocks'](x, train=train)
@@ -602,7 +748,8 @@ class VisionTransformer(nn.Module):
 
     return x, mask, ids_restore
 
-  def apply_decoder(self, x, ids_restore, train):
+  def apply_unshuffle(self, x, ids_restore):
+    """bottleneck projection, unshuffle, add pos emb"""
     use_cls_token = (self.classifier == 'token')
 
     n, h, w = ids_restore.shape
@@ -610,6 +757,7 @@ class VisionTransformer(nn.Module):
 
     # apply the encoder-decoder bottleneck
     x = self.decoder_layers['bottleneck'](x)
+    x_part = x  # take a copy
 
     # append mask token
     num_clstokens = 1 if use_cls_token else 0
@@ -621,7 +769,12 @@ class VisionTransformer(nn.Module):
     # add decoder posembed (before cls token)
     x_ = self.decoder_layers['pos_emb'](x_)
 
-    x = jnp.concatenate([x[:, :num_clstokens, :], x_], axis=1)  # append cls token
+    x_full = jnp.concatenate([x[:, :num_clstokens, :], x_], axis=1)  # append cls token
+    return x_full, x_part
+
+  def apply_decoder(self, x, train):
+    use_cls_token = (self.classifier == 'token')
+    num_clstokens = 1 if use_cls_token else 0
 
     # apply the decoder
     x = self.decoder_layers['blocks'](x, train=train)
@@ -730,20 +883,30 @@ class ImageTextLearner(nn.Module):
     # img (used to be self.img_encoder.__call__)
     # loss_img, vis = self.img_encoder(img, train=train)
     # ------------------------
-    x_img, mask_img, ids_restore_img = self.img_encoder.apply_encoder(img, train=train)
-    pred_img = self.img_encoder.apply_decoder(x_img, ids_restore_img, train=train)
-    loss_img = self.img_encoder.compute_loss(img, pred_img, mask_img)
-    vis = self.img_encoder.visualization(img, pred_img, mask_img)
-
     # ------------------------
     # txt
     # loss_txt = self.txt_encoder(txt, train=train)
     # ------------------------
+
+    # apply both encoders
+    x_img, mask_img, ids_restore_img = self.img_encoder.apply_encoder(img, train=train)
     x_txt, mask_txt, ids_restore_txt = self.txt_encoder.apply_encoder(txt, train=train)
-    pred_txt = self.txt_encoder.apply_decoder(x_txt, ids_restore_txt, train=train)
+
+    # apply both decoders
+    x_img_full, x_img_part = self.img_encoder.apply_unshuffle(x_img, ids_restore_img)
+    x_txt_full, x_txt_part = self.txt_encoder.apply_unshuffle(x_txt, ids_restore_txt)
+
+    pred_img = self.img_encoder.apply_decoder(x_img_full, train=train)
+    pred_txt = self.txt_encoder.apply_decoder((x_txt_full, x_img_part), train=train)
+
+    # compute losses
+    loss_img = self.img_encoder.compute_loss(img, pred_img, mask_img)
     loss_txt = self.txt_encoder.compute_loss(txt, pred_txt, mask_txt, is_valid)
 
     loss_tot = loss_img + loss_txt
+
+    # visualize
+    vis = self.img_encoder.visualization(img, pred_img, mask_img)
 
     artifacts = {
       'loss': loss_img,  # always plot loss_img in the 'loss' metric

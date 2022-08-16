@@ -1,4 +1,4 @@
-VM_NAME=kmh-tpuvm-v3-256-2
+VM_NAME=kmh-tpuvm-v3-256-4
 
 gcloud alpha compute tpus tpu-vm ssh ${VM_NAME} --zone europe-west4-a \
     --worker=all --command "
