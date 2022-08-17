@@ -78,7 +78,7 @@ def tfds_preprocess_text(txt, tokenizer, cls_token, aug_txt):
   max_len = aug_txt.max_len + (-1 if cls_token else 0)
   padded_token_ids, is_valid = tftx.pad_model_inputs(token_ids, max_len)
   padded_token_ids, is_valid = padded_token_ids[0], is_valid[0]
-  if cls_token is not None:
+  if cls_token is not None:  # appendix cls token at the beginning
     padded_token_ids = tf.concat([tf.fill([1,], cls_token), padded_token_ids], axis=0)
     is_valid = tf.concat([tf.fill([1,], 1), is_valid], axis=0)
   return padded_token_ids, is_valid

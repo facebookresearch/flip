@@ -126,4 +126,13 @@ def get_config():
 
   config.model.model_txt.vocab_size = 30523  # bert: 30522+1
 
+  # clr config
+  config.model.clr = ml_collections.ConfigDict()
+  config.model.clr.tau = 0.2
+  config.model.clr.proj_layers = 2
+  config.model.clr.proj_dim_hidden = 1024
+  config.model.clr.proj_dim_out = 256
+
+  config.model.clr.clr_loss = True
+
   return config
