@@ -70,14 +70,18 @@ def decode_example(example, image_size, aug, tokenize_func):
   return {'image': image, 'txt': txt, 'txt_is_valid': txt_is_valid}
 
 
-def tfds_preprocess_text(txt, tokenizer, aug_txt):
+def tfds_preprocess_text(txt, tokenizer, cls_token, aug_txt):
   """
   reference https://github.com/google-research/big_vision/blob/main/big_vision/pp/proj/flaxformer/bert_ops.py
   """
   token_ids = tokenizer.tokenize(txt)
-  max_len = aug_txt.max_len
+  max_len = aug_txt.max_len + (-1 if cls_token else 0)
   padded_token_ids, is_valid = tftx.pad_model_inputs(token_ids, max_len)
-  return padded_token_ids[0], is_valid[0]
+  padded_token_ids, is_valid = padded_token_ids[0], is_valid[0]
+  if cls_token is not None:
+    padded_token_ids = tf.concat([tf.fill([1,], cls_token), padded_token_ids], axis=0)
+    is_valid = tf.concat([tf.fill([1,], 1), is_valid], axis=0)
+  return padded_token_ids, is_valid
 
 
 def get_txt_tokenize_func(aug_txt):
@@ -86,8 +90,16 @@ def get_txt_tokenize_func(aug_txt):
     # https://storage.googleapis.com/bert_models/2019_05_30/wwm_uncased_L-24_H-1024_A-16.zip
     # md5sum: 64800d5d8528ce344256daf115d4965e
     # vocab_size: 30523, (30522+1, including unknown [UNK])
-    tokenizer = tftx.BertTokenizer('./vocab/vocab_bert_base.txt', lower_case=True, token_out_type=tf.int32)
-    tokenize_func = functools.partial(tfds_preprocess_text, tokenizer=tokenizer, aug_txt=aug_txt)
+    vocab_file = './vocab/vocab_bert_base.txt'
+    tokenizer = tftx.BertTokenizer(vocab_file, lower_case=True, token_out_type=tf.int32)
+
+    if aug_txt.cls_token:
+      with open(vocab_file) as f:
+        vocab = f.read().split("\n")
+      cls_token = vocab.index("[CLS]")
+    else:
+      cls_token = None
+    tokenize_func = functools.partial(tfds_preprocess_text, tokenizer=tokenizer, cls_token=cls_token, aug_txt=aug_txt)
     vocab_size = tokenizer._wordpiece_tokenizer.vocab_size().numpy()  # including unknown
     return tokenize_func, vocab_size
   elif aug_txt.tokenizer == 'hf_clip':

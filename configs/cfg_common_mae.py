@@ -122,6 +122,7 @@ def get_config():
   config.aug.txt = ml_collections.ConfigDict()
   config.aug.txt.tokenizer = 'tf_bert'  # 'tf_bert' 'hf_clip'
   config.aug.txt.max_len = 32  # clip: 77
+  config.aug.txt.cls_token = True
 
   config.model.model_txt.vocab_size = 30523  # bert: 30522+1
 
