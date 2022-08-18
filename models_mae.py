@@ -863,18 +863,20 @@ class ImageTextLearner(nn.Module):
   def apply_projection_head(self, z, prefix):
     clr = self.config.clr
     for i in range(clr.proj_layers - 1):
-      z = nn.Dense(
+      z = t5x.layers.Dense(
         features=clr.proj_dim_hidden,
         dtype=self.dtype,
         kernel_init=mlp_kernel_init,
         bias_init=mlp_bias_init,
+        kernel_axes=('_null0', '_null1'),
         name='{}_mlp{}'.format(prefix, i))(z)
       z = nn.gelu(z)
-    z = nn.Dense(
+    z = t5x.layers.Dense(
       features=clr.proj_dim_out,
       dtype=self.dtype,
       kernel_init=mlp_kernel_init,
       bias_init=mlp_bias_init,
+      kernel_axes=('_null0', '_null1'),
       name='{}_mlp{}'.format(prefix, clr.proj_layers))(z)
     return z
   
@@ -889,8 +891,8 @@ class ImageTextLearner(nn.Module):
 
     labels_one_hot = jnp.eye(logits.shape[-1])
 
-    loss01 = optax.softmax_cross_entropy(logits=logits, labels=labels_one_hot)
-    loss10 = optax.softmax_cross_entropy(logits=logits.transpose(), labels=labels_one_hot)
+    loss01 = optax.softmax_cross_entropy(logits=logits, labels=labels_one_hot).mean()
+    loss10 = optax.softmax_cross_entropy(logits=logits.transpose(), labels=labels_one_hot).mean()
 
     loss = (loss01 + loss10) / 2
     return loss

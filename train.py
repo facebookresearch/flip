@@ -371,9 +371,9 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   # ------------------------------------------
   # debug
-  batch = next(iter(data_loader_train))
+  # batch = next(iter(data_loader_train))
   # logging.info('To run partitioned_eval_step:')
-  outcome = train_step(state, batch)
+  # outcome = train_step(state, batch, rng)
   # logging.info(jax.tree_map(lambda x: x.shape, outcome))
   # ------------------------------------------
 
