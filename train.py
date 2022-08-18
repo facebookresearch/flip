@@ -397,6 +397,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # train one epoch (one "virtual" epoch)
     # ------------------------------------------------------------
     for i in range(steps_per_epoch):
+      if i > 10:
+        break
       batch = next(data_loader_train)
       state, metrics = partitioned_train_step(state, batch)
 
@@ -446,9 +448,10 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
       metrics = partitioned_eval_step(state, eval_batch)
 
       imgs_vis = metrics.pop('imgs_vis')
-      imgs_vis = imgs_vis * jnp.asarray(STDDEV_RGB) + jnp.asarray(MEAN_RGB)
-      imgs_vis = jnp.uint8(jnp.clip(imgs_vis, 0, 255.))
-      writer.write_images(step=epoch_1000x, images=dict(imgs_vis=imgs_vis))
+      if imgs_vis is not None:
+        imgs_vis = imgs_vis * jnp.asarray(STDDEV_RGB) + jnp.asarray(MEAN_RGB)
+        imgs_vis = jnp.uint8(jnp.clip(imgs_vis, 0, 255.))
+        writer.write_images(step=epoch_1000x, images=dict(imgs_vis=imgs_vis))
 
       summary = jax.tree_map(lambda x: x.mean(), metrics)
       values = [f"{k}: {v:.6f}" for k, v in sorted(summary.items())]

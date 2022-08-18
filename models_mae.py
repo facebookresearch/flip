@@ -814,16 +814,17 @@ class VisionTransformer(nn.Module):
       'mask_token', masktoken_init, (1, 1, self.decoder.hidden_size),
       jnp.float32, axes=('_null0', '_null1', 'embed'))
     decoder_layers['pos_emb'] = Add2DPositionEmbs(sincos=self.sincos, use_cls_token=use_cls_token, name='posembed_decoder')
-    if self.decoder.cross_attention:
-      decoder_layers['blocks'] = EncoderCross(name='TransformerDecoder', **self.decoder.transformer, prefix='decoder')
-    else:
-      decoder_layers['blocks'] = Encoder(name='TransformerDecoder', **self.decoder.transformer, prefix='decoder')
-    decoder_layers['pred'] = t5x.layers.Dense(
-      features=self.patches.size[0] * self.patches.size[1] * 3,
-      kernel_init=mlp_kernel_init,
-      bias_init=mlp_bias_init,
-      kernel_axes=('embed', 'classes'),  # 'mlp' is split first
-      name='pred')
+    if self.decoder.on_use:
+      if self.decoder.cross_attention:
+        decoder_layers['blocks'] = EncoderCross(name='TransformerDecoder', **self.decoder.transformer, prefix='decoder')
+      else:
+        decoder_layers['blocks'] = Encoder(name='TransformerDecoder', **self.decoder.transformer, prefix='decoder')
+      decoder_layers['pred'] = t5x.layers.Dense(
+        features=self.patches.size[0] * self.patches.size[1] * 3,
+        kernel_init=mlp_kernel_init,
+        bias_init=mlp_bias_init,
+        kernel_axes=('embed', 'classes'),  # 'mlp' is split first
+        name='pred')
     self.decoder_layers = decoder_layers
 
   
@@ -924,17 +925,25 @@ class ImageTextLearner(nn.Module):
     x_img_full, x_img_part = self.img_encoder.apply_unshuffle(x_img, ids_restore_img)
     x_txt_full, x_txt_part = self.txt_encoder.apply_unshuffle(x_txt, ids_restore_txt)
 
-    pred_img = self.img_encoder.apply_decoder((x_img_full, x_txt_part) if self.img_encoder.decoder.cross_attention else x_img_full, train=train)
+    if self.img_encoder.decoder.on_use:
+      pred_img = self.img_encoder.apply_decoder((x_img_full, x_txt_part) if self.img_encoder.decoder.cross_attention else x_img_full, train=train)
+    else:
+      pred_img = None
+      assert self.txt_encoder.decoder.cross_attention
     pred_txt = self.txt_encoder.apply_decoder((x_txt_full, x_img_part) if self.txt_encoder.decoder.cross_attention else x_txt_full, train=train)
 
     # compute losses
-    loss_img = self.img_encoder.compute_loss(img, pred_img, mask_img)
+    if self.img_encoder.decoder.on_use:
+      loss_img = self.img_encoder.compute_loss(img, pred_img, mask_img)
+      # visualize
+      vis = self.img_encoder.visualization(img, pred_img, mask_img)
+    else:
+      loss_img = 0
+      vis = None
     loss_txt = self.txt_encoder.compute_loss(txt, pred_txt, mask_txt, is_valid)
 
     loss_tot = loss_img + loss_txt + loss_clr
 
-    # visualize
-    vis = self.img_encoder.visualization(img, pred_img, mask_img)
 
     artifacts = {
       'loss': loss_img,  # always plot loss_img in the 'loss' metric
