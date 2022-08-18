@@ -557,16 +557,17 @@ class LanguageTransformer(nn.Module):
       'mask_token', masktoken_init, (1, 1, self.decoder.hidden_size),
       jnp.float32, axes=('_null0', '_null1', 'embed'))
     decoder_layers['posemb'] = Add1DPositionEmbs(sincos=self.sincos, posemb_init=fixed_gaussian_init, name='posembed_decoder')
-    if self.decoder.cross_attention:
-      decoder_layers['blocks'] = EncoderCross(name='TransformerDecoder', **self.decoder.transformer, prefix='decoder')
-    else:
-      decoder_layers['blocks'] = Encoder(name='TransformerDecoder', **self.decoder.transformer, prefix='decoder')
-    decoder_layers['pred'] = t5x.layers.Dense(
-      features=self.vocab_size,
-      kernel_init=mlp_kernel_init,
-      bias_init=mlp_bias_init,
-      kernel_axes=('embed', 'classes'),  # 'mlp' is split first
-      name='pred')
+    if self.decoder.on_use:
+      if self.decoder.cross_attention:
+        decoder_layers['blocks'] = EncoderCross(name='TransformerDecoder', **self.decoder.transformer, prefix='decoder')
+      else:
+        decoder_layers['blocks'] = Encoder(name='TransformerDecoder', **self.decoder.transformer, prefix='decoder')
+      decoder_layers['pred'] = t5x.layers.Dense(
+        features=self.vocab_size,
+        kernel_init=mlp_kernel_init,
+        bias_init=mlp_bias_init,
+        kernel_axes=('embed', 'classes'),  # 'mlp' is split first
+        name='pred')
     self.decoder_layers = decoder_layers
 
   def compute_loss(self, txt, pred, mask, is_valid):
@@ -929,18 +930,24 @@ class ImageTextLearner(nn.Module):
       pred_img = self.img_encoder.apply_decoder((x_img_full, x_txt_part) if self.img_encoder.decoder.cross_attention else x_img_full, train=train)
     else:
       pred_img = None
-      assert self.txt_encoder.decoder.cross_attention
-    pred_txt = self.txt_encoder.apply_decoder((x_txt_full, x_img_part) if self.txt_encoder.decoder.cross_attention else x_txt_full, train=train)
+
+    if self.txt_encoder.decoder.on_use:
+      pred_txt = self.txt_encoder.apply_decoder((x_txt_full, x_img_part) if self.txt_encoder.decoder.cross_attention else x_txt_full, train=train)
+    else:
+      pred_txt = None
 
     # compute losses
     if self.img_encoder.decoder.on_use:
       loss_img = self.img_encoder.compute_loss(img, pred_img, mask_img)
-      # visualize
       vis = self.img_encoder.visualization(img, pred_img, mask_img)
     else:
       loss_img = 0
       vis = None
-    loss_txt = self.txt_encoder.compute_loss(txt, pred_txt, mask_txt, is_valid)
+
+    if self.txt_encoder.decoder.on_use:
+      loss_txt = self.txt_encoder.compute_loss(txt, pred_txt, mask_txt, is_valid)
+    else:
+      loss_txt = 0
 
     loss_tot = loss_img + loss_txt + loss_clr
 

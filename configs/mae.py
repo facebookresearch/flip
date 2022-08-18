@@ -114,4 +114,6 @@ def get_config_txt():
 
   config.decoder.cross_attention = True
 
+  config.decoder.on_use = True  # whehter txt has decoders?
+
   return config
