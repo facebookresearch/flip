@@ -906,15 +906,6 @@ class ImageTextLearner(nn.Module):
     txt = inputs['txt']
     is_valid = inputs['txt_is_valid']
 
-    # ------------------------
-    # img (used to be self.img_encoder.__call__)
-    # loss_img, vis = self.img_encoder(img, train=train)
-    # ------------------------
-    # ------------------------
-    # txt
-    # loss_txt = self.txt_encoder(txt, train=train)
-    # ------------------------
-
     # apply both encoders
     x_img, mask_img, ids_restore_img = self.img_encoder.apply_encoder(img, train=train)
     x_txt, mask_txt, ids_restore_txt = self.txt_encoder.apply_encoder(txt, train=train)
