@@ -911,7 +911,10 @@ class ImageTextLearner(nn.Module):
     x_txt, mask_txt, ids_restore_txt = self.txt_encoder.apply_encoder(txt, train=train)
 
     # apply contrastive learning (clip-like)
-    loss_clr = self.apply_contrast(x_img, x_txt)
+    if self.config.clr.clr_loss:
+      loss_clr = self.apply_contrast(x_img, x_txt)
+    else:
+      loss_clr = 0
 
     # apply both decoders
     x_img_full, x_img_part = self.img_encoder.apply_unshuffle(x_img, ids_restore_img)
