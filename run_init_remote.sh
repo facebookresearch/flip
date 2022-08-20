@@ -1,4 +1,4 @@
-VM_NAME=kmh-tpuvm-v3-512-1
+VM_NAME=kmh-tpuvm-v3-256-2
 
 # gcloud alpha compute tpus tpu-vm ssh ${VM_NAME} --zone europe-west4-a \
 #     --worker=all --command "
@@ -24,7 +24,7 @@ gcloud alpha compute tpus tpu-vm ssh ${VM_NAME} --zone europe-west4-a \
 # pip3 install cached_property
 # pip3 install tensorstore
 
-pip3 install transformers==4.21.1
+# pip3 install transformers==4.21.1
 
 # pip3 install torch==1.7.1
 # pip3 install torchvision==0.8.2
