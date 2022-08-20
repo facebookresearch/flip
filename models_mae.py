@@ -925,6 +925,11 @@ class ImageTextLearner(nn.Module):
     else:
       pred_img = None
 
+    if self.img_encoder.decoder.pool_x_part:  # if specified, pool one feature for cross_attention
+      assert self.txt_encoder.decoder.on_use
+      assert self.txt_encoder.decoder.cross_attention
+      x_img_part = jnp.mean(x_img_part, axis=1, keepdims=True)
+
     if self.txt_encoder.decoder.on_use:
       pred_txt = self.txt_encoder.apply_decoder((x_txt_full, x_img_part) if self.txt_encoder.decoder.cross_attention else x_txt_full, train=train)
     else:

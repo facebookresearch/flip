@@ -77,6 +77,8 @@ def get_config_img():
 
   config.decoder.cross_attention = True
 
+  config.decoder.pool_x_part = False
+
   config.decoder.on_use = True  # whehter img has decoders?
 
   return config
