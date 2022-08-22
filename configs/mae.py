@@ -118,4 +118,6 @@ def get_config_txt():
 
   config.decoder.on_use = True  # whehter txt has decoders?
 
+  config.decoder.loss_weight = 1.0
+
   return config

@@ -948,7 +948,7 @@ class ImageTextLearner(nn.Module):
     else:
       loss_txt = 0
 
-    loss_tot = loss_img + loss_txt + loss_clr
+    loss_tot = loss_img + loss_txt * self.txt_encoder.decoder.loss_weight + loss_clr
 
 
     artifacts = {

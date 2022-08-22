@@ -8,6 +8,8 @@ ep=800
 mask=0.75
 mask_txt=0.875
 
+txtw=0.01
+
 tau=0.1
 
 partitions=1
@@ -18,7 +20,7 @@ vitsize=large
 CONFIG=cfg_mae_${vitsize}
 
 # _normpix_exwd_NOsplit_fastsave
-JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}txt${mask_txt}_s${seed}_p${partitions}st_re${rescale}_laion_a0.5_twoMAE_txtCross_NOclr${tau}_NOtxtcls
+JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}txt${mask_txt}_s${seed}_p${partitions}st_re${rescale}_laion_a0.5_twoMAE_txtCross_NOclr${tau}_NOtxtcls_txtw${txtw}
 RESUME=''
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
@@ -72,6 +74,7 @@ python3 main.py \
     --config.model.clr.clr_loss=False \
     --config.model.model_img.decoder.pool_x_part=False \
     --config.aug.txt.cls_token=False \
+    --config.model.model_txt.decoder.loss_weight=${txtw} \
 2>&1 | tee -a $LOGDIR/finetune_\$SSH_ID.log
 " 2>&1 | tee -a $LOGDIR/finetune.log
 
