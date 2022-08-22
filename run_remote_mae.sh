@@ -8,7 +8,7 @@ ep=800
 mask=0.75
 mask_txt=0.875
 
-txtw=0.01
+txtw=0.1
 
 tau=0.1
 
