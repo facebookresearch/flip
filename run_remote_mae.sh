@@ -3,10 +3,10 @@ echo 'code dir: '$STAGEDIR
 # seed=0
 batch=4096
 lr=1e-4
-ep=800
+ep=10000  # 400M * 30 / 1.28M = 9375
 
-mask=0.75
-mask_txt=0.875
+mask=0.0
+mask_txt=0.0
 
 txtw=0.1
 
@@ -20,7 +20,7 @@ vitsize=large
 CONFIG=cfg_mae_${vitsize}
 
 # _normpix_exwd_NOsplit_fastsave
-JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}txt${mask_txt}_s${seed}_p${partitions}st_re${rescale}_laion_a0.5_twoMAE_txtCross_NOclr${tau}_NOtxtcls_txtw${txtw}
+JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}txt${mask_txt}_s${seed}_p${partitions}st_re${rescale}_laion_a0.5_NOMAE_NOCross_clr${tau}_NOtxtcls_txtw${txtw}
 RESUME=''
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
@@ -67,11 +67,11 @@ python3 main.py \
     --config.resume_dir=${RESUME} \
     --config.aug.area_range=\(0.5\,1.0\) \
     --config.model.clr.tau=${tau} \
-    --config.model.model_txt.decoder.cross_attention=True \
+    --config.model.model_txt.decoder.cross_attention=False \
     --config.model.model_img.decoder.cross_attention=False \
-    --config.model.model_txt.decoder.on_use=True \
-    --config.model.model_img.decoder.on_use=True \
-    --config.model.clr.clr_loss=False \
+    --config.model.model_txt.decoder.on_use=False \
+    --config.model.model_img.decoder.on_use=False \
+    --config.model.clr.clr_loss=True \
     --config.model.model_img.decoder.pool_x_part=False \
     --config.aug.txt.cls_token=False \
     --config.model.model_txt.decoder.loss_weight=${txtw} \
