@@ -219,6 +219,19 @@ def eval_step(state, batch, model, rng):
   return metrics
 
 
+def eval_tags_step(state, batch, model, rng):
+  variables = {'params': state.params, **state.flax_mutables}
+
+  dropout_rng = jax.random.fold_in(rng, state.step)
+
+  outcome = model.apply(variables, batch, train=False, mutable=False, rngs=dict(dropout=dropout_rng), encode_img=False)
+  loss, imgs_vis, artifacts = outcome
+
+  metrics = {'test_loss': loss, 'imgs_vis': imgs_vis}
+
+  return metrics
+
+
 def prepare_tf_data(xs, batch_size):
   """Convert a input batch from PyTorch Tensors to numpy arrays."""
   local_device_count = jax.local_device_count()
@@ -304,7 +317,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   # ------------------------------------
   # Create data loader
   # ------------------------------------
-  data_loader_train, data_loader_val = build_dataloaders(config, partitioner)  # we do not use data_loader_val
+  data_loader_train, data_loader_val, data_loader_tags = build_dataloaders(config, partitioner)  # we do not use data_loader_val
 
   steps_per_epoch = config.samples_per_epoch // config.batch_size  # for lr schedule
   
@@ -367,6 +380,20 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   step_offset = int(state.step)
   logging.info('step_offset: {}'.format(step_offset))
 
+  # ------------------------------------------
+  # build eval_tags_step
+  eval_step_fn = functools.partial(eval_tags_step, model=model, rng=rng)  # (state, batch) -> metrics
+  eval_axes = {'test_loss': PartitionSpec(), 'imgs_vis': PartitionSpec('data', None, None, None)}
+  partitioned_eval_tags_step = partitioner.partition(
+        eval_step_fn,
+        in_axis_resources=(state_axes, partitioner.data_partition_spec),
+        out_axis_resources=eval_axes)
+
+  batch = next(iter(data_loader_tags))
+  logging.info('To run eval_tags_step:')
+  outcome = eval_tags_step(state, batch, model=model, rng=rng)
+  # ------------------------------------------
+
   # to create partitioned train_step
   train_step_fn = functools.partial(train_step, model=model, rng=rng)  # (state, batch) -> (state, metrics)
   partitioned_train_step = partitioner.partition(
@@ -381,6 +408,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
         eval_step_fn,
         in_axis_resources=(state_axes, partitioner.data_partition_spec),
         out_axis_resources=eval_axes)
+
 
   # ------------------------------------------
   # debug

@@ -67,7 +67,7 @@ def decode_example(example, image_size, aug, tokenize_func):
 
   # decoder the image
   image = preprocess_image(example['image'], image_size=image_size, aug=aug) if example['image'] is not None else None
-  return {'image': image, 'txt': txt, 'txt_is_valid': txt_is_valid, 'txt_org': example['txt']}
+  return {'image': image, 'txt': txt, 'txt_is_valid': txt_is_valid}
 
 
 def tfds_preprocess_text(txt, tokenizer, cls_token, aug_txt):
