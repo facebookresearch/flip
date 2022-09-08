@@ -66,8 +66,8 @@ def decode_example(example, image_size, aug, tokenize_func):
   txt, txt_is_valid = preprocess_text(example['txt'], tokenize_func=tokenize_func)
 
   # decoder the image
-  image = preprocess_image(example['image'], image_size=image_size, aug=aug)
-  return {'image': image, 'txt': txt, 'txt_is_valid': txt_is_valid}
+  image = preprocess_image(example['image'], image_size=image_size, aug=aug) if example['image'] is not None else None
+  return {'image': image, 'txt': txt, 'txt_is_valid': txt_is_valid, 'txt_org': example['txt']}
 
 
 def tfds_preprocess_text(txt, tokenizer, cls_token, aug_txt):
@@ -196,7 +196,7 @@ def preprocess_image_for_eval(image_bytes, dtype=tf.float32, image_size=None):
 
 
 def create_split(batch_size, data_layout, train, dtype=tf.float32,
-                 image_size=None, cache=False, seed=0, cfg=None):
+                 image_size=None, cache=False, seed=0, cfg=None, from_tags=None):
   """Creates a split from the ImageNet dataset using TensorFlow Datasets.
 
   Args:
@@ -214,29 +214,34 @@ def create_split(batch_size, data_layout, train, dtype=tf.float32,
   shard_id = data_layout.shard_id
   num_shards = data_layout.num_shards
 
-  laion400m_dataset_path = "gs://kmh-gcp/laion-400m/tfrecord_dataset_img480"
-  filenames = tf.io.gfile.glob(laion400m_dataset_path + "/*.tfrecord")  # len: 41408 (647*64)
-  filenames.sort()
+  if from_tags is None:  # loading LAION
+    laion400m_dataset_path = "gs://kmh-gcp/laion-400m/tfrecord_dataset_img480"
+    filenames = tf.io.gfile.glob(laion400m_dataset_path + "/*.tfrecord")  # len: 41408 (647*64)
+    filenames.sort()
 
-  if train:
-    train_records = len(filenames)  # len: 41408
-    split_size = train_records // num_shards
-    start = shard_id * split_size
-    split = 'train[{}:{}]'.format(start, start + split_size)
+    if train:
+      train_records = len(filenames)  # len: 41408
+      split_size = train_records // num_shards
+      start = shard_id * split_size
+      split = 'train[{}:{}]'.format(start, start + split_size)
 
-    # ----------------------------------------
-    logging_util.verbose_on()
-    logging_util.sync_and_delay()
-    logging.info('Split: {} / {}'.format(split, train_records))
-    logging_util.verbose_off()
-    # ----------------------------------------
+      # ----------------------------------------
+      logging_util.verbose_on()
+      logging_util.sync_and_delay()
+      logging.info('Split: {} / {}'.format(split, train_records))
+      logging_util.verbose_off()
+      # ----------------------------------------
 
-    filenames = filenames[start:start + split_size]
+      filenames = filenames[start:start + split_size]
+    else:
+      raise NotImplementedError
+
+    ds = tf.data.TFRecordDataset(filenames).map(parse_laion_example)
+    ds = ds.apply(tf.data.experimental.ignore_errors(log_warning=False))
   else:
-    raise NotImplementedError
-
-  ds = tf.data.TFRecordDataset(filenames).map(parse_laion_example)
-  ds = ds.apply(tf.data.experimental.ignore_errors(log_warning=False))
+    ds = tf.data.Dataset.from_tensor_slices(from_tags)
+    ds = ds.map(lambda x: {'txt': x, 'image': None})
+    logging.info('Creating dataset from tags.')
 
   options = tf.data.Options()
   options.threading.private_threadpool_size = 48

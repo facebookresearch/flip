@@ -79,10 +79,10 @@ def create_imagenet_input_iter(local_batch_size, data_layout, image_size, dtype,
 
 
 def create_laion_input_iter(local_batch_size, data_layout, image_size, dtype, train,
-                      cache, seed=0, cfg=None,):
+                      cache, seed=0, cfg=None, from_tags=None):
   ds = input_pipeline_laion.create_split(
       local_batch_size, data_layout, image_size=image_size, dtype=dtype,
-      train=train, cache=cache, seed=seed, cfg=cfg,)
+      train=train, cache=cache, seed=seed, cfg=cfg, from_tags=from_tags)
 
   # ------------------------------------------------
   # from IPython import embed; embed();
@@ -116,6 +116,19 @@ def build_dataloaders(config, partitioner):
   image_size = config.image_size
   input_dtype = tf.float32
 
+  # ImageNet tags
+  from vocab.class_names import CLIP_IMAGENET_CLASS_NAMES
+  data_loader_tags = create_laion_input_iter(
+      8,  # local_batch_size=8
+      data_layout,
+      image_size,
+      input_dtype,
+      train=False,
+      cache=False, # config.cache, 
+      seed=config.seed_tf,
+      cfg=config,
+      from_tags=CLIP_IMAGENET_CLASS_NAMES)
+
   data_loader_train = create_laion_input_iter(
       local_batch_size,
       data_layout,
@@ -127,18 +140,18 @@ def build_dataloaders(config, partitioner):
       cfg=config)
 
   # val set is imagenet
-  # data_loader_val = create_imagenet_input_iter(
-  #     local_batch_size,
-  #     data_layout,
-  #     image_size,
-  #     input_dtype,
-  #     train=False,
-  #     cache=config.cache, 
-  #     seed=config.seed_tf,
-  #     aug=None)
-  data_loader_val = None
+  data_loader_val = create_imagenet_input_iter(
+      local_batch_size,
+      data_layout,
+      image_size,
+      input_dtype,
+      train=False,
+      cache=config.cache, 
+      seed=config.seed_tf,
+      aug=None)
+  # data_loader_val = None
 
-  return data_loader_train, data_loader_val
+  return data_loader_train, data_loader_val, data_loader_tags
 
 
 def print_sanity_check(batch, shard_id):
@@ -397,6 +410,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # train one epoch (one "virtual" epoch)
     # ------------------------------------------------------------
     for i in range(steps_per_epoch):
+      if i >= 0:
+        break
       batch = next(data_loader_train)
       state, metrics = partitioned_train_step(state, batch)
 
