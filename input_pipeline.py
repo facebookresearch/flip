@@ -129,7 +129,7 @@ def create_split(dataset_builder, batch_size, data_layout, train, dtype=tf.float
   if cache:
     ds = ds.cache()
 
-  if train:
+  if True:  # force to shuffle
     ds = ds.repeat()
     ds = ds.shuffle(16 * batch_size, seed=seed)
 
@@ -155,8 +155,8 @@ def create_split(dataset_builder, batch_size, data_layout, train, dtype=tf.float
   ds = ds.map(decode_example, num_parallel_calls=tf.data.experimental.AUTOTUNE)
   ds = ds.batch(batch_size, drop_remainder=True)
 
-  if not train:
-    ds = ds.repeat()
+  # if not train:
+  #   ds = ds.repeat()
 
   ds = ds.prefetch(10)
 

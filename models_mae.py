@@ -888,10 +888,12 @@ class ImageTextLearner(nn.Module):
 
   @nn.compact
   def __call__(self, inputs, *, train, encode_img=True, encode_txt=True):
-    img = inputs['image']
-    # txt = {'txt': inputs['txt'], 'txt_is_valid': inputs['txt_is_valid']}
-    txt = inputs['txt']
-    is_valid = inputs['txt_is_valid']
+    if encode_img:
+      img = inputs['image']
+    
+    if encode_txt:
+      txt = inputs['txt']
+      is_valid = inputs['txt_is_valid']
 
     # apply both encoders
     if encode_img:

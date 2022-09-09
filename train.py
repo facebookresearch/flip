@@ -206,16 +206,24 @@ def train_step(state, batch, model, rng):
   return new_state, metrics
 
 
-def eval_step(state, batch, model, rng):
+def eval_step(state, batch, encoded_tags, model, rng):
   variables = {'params': state.params, **state.flax_mutables}
 
   dropout_rng = jax.random.fold_in(rng, state.step)
 
-  outcome = model.apply(variables, batch, train=False, mutable=False, rngs=dict(dropout=dropout_rng),)
-  loss, imgs_vis, artifacts = outcome
+  outcome = model.apply(variables, batch, train=False, mutable=False, rngs=dict(dropout=dropout_rng), encode_txt=False)
+  loss, _, artifacts = outcome
+  z_img = artifacts['z_img']
 
-  metrics = {'test_loss': loss, 'imgs_vis': imgs_vis}
+  labels = batch['label']
 
+  z_txt = encoded_tags
+  logits = jnp.einsum('nc,mc->nm', z_img, z_txt)
+
+  pred_labels = jnp.argmax(logits, -1)
+  accuracy = jnp.float32(pred_labels == labels)
+  metrics = {'test_acc1': accuracy, 'label': labels}
+  metrics = jax.tree_map(lambda x: jnp.reshape(x, [-1,]), metrics)
   return metrics
 
 
@@ -358,14 +366,14 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   # ------------------------------------------
   # for debugging with real tensors
-  batch = next(iter(data_loader_train))
-  mutable = [k for k in state.flax_mutables]
-  outcome = model.apply(
-      {'params': state.params, **state.flax_mutables},
-      inputs=batch,
-      mutable=mutable,
-      rngs=dict(dropout=rng),
-      train=True)
+  # batch = next(iter(data_loader_train))
+  # mutable = [k for k in state.flax_mutables]
+  # outcome = model.apply(
+  #     {'params': state.params, **state.flax_mutables},
+  #     inputs=batch,
+  #     mutable=mutable,
+  #     rngs=dict(dropout=rng),
+  #     train=True)
   # # use the following to add checkpoints
   # import jaxlib
   # if isinstance(x, jnp.DeviceArray):
@@ -407,18 +415,20 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
         donate_argnums=(0,))
 
   eval_step_fn = functools.partial(eval_step, model=model, rng=rng)  # (state, batch) -> metrics
-  eval_axes = {'test_loss': PartitionSpec(), 'imgs_vis': PartitionSpec('data', None, None, None)}
+  eval_axes = None
   partitioned_eval_step = partitioner.partition(
         eval_step_fn,
-        in_axis_resources=(state_axes, partitioner.data_partition_spec),
+        in_axis_resources=(state_axes, partitioner.data_partition_spec, None),
         out_axis_resources=eval_axes)
   # ------------------------------------------
 
   # ------------------------------------------
   # debug
-  # batch = next(iter(data_loader_train))
-  # logging.info('To run partitioned_eval_step:')
-  # outcome = train_step(state, batch, rng)
+  # encoded_tags = compute_encoded_tags(state, batched_tags, partitioned_eval_tags_step)
+  # batch = next(iter(data_loader_val))
+  # logging.info('To run eval_step:')
+  # outcome = eval_step(state, batch, encoded_tags, model=model, rng=rng)
+  # outcome = partitioned_eval_step(state, batch, encoded_tags)
   # logging.info(jax.tree_map(lambda x: x.shape, outcome))
   # ------------------------------------------
 
@@ -490,29 +500,35 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # ------------------------------------------------------------
     if ((epoch + 1) % config.vis_every_epochs == 0 or epoch == epoch_offset) and config.model.visualize:
       # --------------------------------------------------------------------
-      # Encoding tags: no data-parallism across nodes
-      logging.info('Encoding tags...')
-      encoded_tags = []
-      for i, tags_batch in enumerate(batched_tags):
-        z_txt = partitioned_eval_tags_step(state, tags_batch)
-        encoded_tags.append(z_txt)
-      encoded_tags = jnp.concatenate(encoded_tags, axis=0)  # type: DeviceArray
-      assert encoded_tags.shape[0] == 1000
-      logging.info('Encoding tags done.')
-      # --------------------------------------------------------------------
-
-      eval_batch = batch  # we visualize the same bach for simplicty
-      metrics = partitioned_eval_step(state, eval_batch)
-
-      imgs_vis = metrics.pop('imgs_vis')
-      if imgs_vis is not None:
-        imgs_vis = imgs_vis * jnp.asarray(STDDEV_RGB) + jnp.asarray(MEAN_RGB)
-        imgs_vis = jnp.uint8(jnp.clip(imgs_vis, 0, 255.))
-        writer.write_images(step=epoch_1000x, images=dict(imgs_vis=imgs_vis))
-
-      summary = jax.tree_map(lambda x: x.mean(), metrics)
+      summary = run_eval(
+        state,
+        batched_tags,
+        partitioned_eval_tags_step,
+        data_loader_val,
+        partitioned_eval_step,
+        config,)
       values = [f"{k}: {v:.6f}" for k, v in sorted(summary.items())]
       logging.info('eval epoch: %d, %s', epoch, ', '.join(values))
+
+      # to make it consistent with PyTorch log
+      summary['step_tensorboard'] = epoch  # step for tensorboard (no need to minus 1)
+      writer.write_scalars(step + 1, summary)
+      writer.flush()
+
+      # --------------------------------------------------------------------
+
+      # eval_batch = batch  # we visualize the same bach for simplicty
+      # metrics = partitioned_eval_step(state, eval_batch)
+
+      # imgs_vis = metrics.pop('imgs_vis')
+      # if imgs_vis is not None:
+      #   imgs_vis = imgs_vis * jnp.asarray(STDDEV_RGB) + jnp.asarray(MEAN_RGB)
+      #   imgs_vis = jnp.uint8(jnp.clip(imgs_vis, 0, 255.))
+      #   writer.write_images(step=epoch_1000x, images=dict(imgs_vis=imgs_vis))
+
+      # summary = jax.tree_map(lambda x: x.mean(), metrics)
+      # values = [f"{k}: {v:.6f}" for k, v in sorted(summary.items())]
+      # logging.info('eval epoch: %d, %s', epoch, ', '.join(values))
 
     # ------------------------------------------------------------
     # finished one epoch: save
@@ -533,3 +549,55 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
 
   return state
 
+
+def compute_encoded_tags(
+  state,
+  batched_tags,
+  partitioned_eval_tags_step,
+):
+  # Encoding tags: no data-parallism across nodes
+  logging.info('Encoding tags...')
+  encoded_tags = []
+  for i, tags_batch in enumerate(batched_tags):
+    z_txt = partitioned_eval_tags_step(state, tags_batch)
+    encoded_tags.append(z_txt)
+  encoded_tags = jnp.concatenate(encoded_tags, axis=0)  # type: DeviceArray
+  assert encoded_tags.shape[0] == 1000
+  logging.info('Encoding tags done.')
+  return encoded_tags
+
+
+def run_eval(
+  state,
+  batched_tags,
+  partitioned_eval_tags_step,
+  data_loader_val,
+  partitioned_eval_step,
+  config,
+):
+  tic = time.time()
+  encoded_tags = compute_encoded_tags(state, batched_tags, partitioned_eval_tags_step)
+
+  steps_per_eval = 50000 // config.batch_size
+  eval_metrics = []
+  for _ in range(steps_per_eval):
+    eval_batch = next(data_loader_val)
+    metrics = partitioned_eval_step(state, eval_batch, encoded_tags)
+    eval_metrics.append(metrics)
+    logging.info('{} / {}'.format(_, steps_per_eval))
+
+  eval_metrics = jax.device_get(eval_metrics)
+  eval_metrics = jax.tree_map(lambda *args: np.concatenate(args), *eval_metrics)
+
+  valid = np.where(eval_metrics['label'] >= 0)  # remove padded patch
+  eval_metrics.pop('label')
+  eval_metrics = jax.tree_util.tree_map(lambda x: x[valid], eval_metrics)
+
+  toc = time.time() - tic
+  logging.info('Eval time: {}, {} steps, {} samples'.format(
+    str(datetime.timedelta(seconds=int(toc))),
+    steps_per_eval,
+    len(eval_metrics['test_acc1'])))
+
+  summary = jax.tree_map(lambda x: x.mean(), eval_metrics)
+  return summary

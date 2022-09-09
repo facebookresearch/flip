@@ -20,7 +20,7 @@ vitsize=large
 CONFIG=cfg_mae_${vitsize}
 
 # _normpix_exwd_NOsplit_fastsave
-JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}txt${mask_txt}_s${seed}_p${partitions}st_re${rescale}_laion_a0.5_NOMAE_NOCross_clr${tau}_NOtxtcls_txtw${txtw}
+JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}txt${mask_txt}_s${seed}_p${partitions}st_re${rescale}_laion_a0.5_clr${tau}_evalDBG
 RESUME=''
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
