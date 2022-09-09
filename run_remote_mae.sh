@@ -72,7 +72,6 @@ python3 main.py \
     --config.model.model_txt.decoder.on_use=False \
     --config.model.model_img.decoder.on_use=False \
     --config.model.clr.clr_loss=True \
-    --config.model.model_img.decoder.pool_x_part=False \
     --config.aug.txt.cls_token=False \
     --config.model.model_txt.decoder.loss_weight=${txtw} \
 2>&1 | tee -a $LOGDIR/finetune_\$SSH_ID.log

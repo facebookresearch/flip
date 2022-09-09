@@ -16,11 +16,10 @@ python3 main.py \
     --config.partitioning.partition_states=True \
     --config.aug.area_range=\(0.1\,1.0\) \
     --config.model.model_img.decoder.cross_attention=False \
-    --config.model.model_txt.decoder.cross_attention=True \
+    --config.model.model_txt.decoder.cross_attention=False \
     --config.model.model_img.decoder.on_use=False \
-    --config.model.model_txt.decoder.on_use=True \
-    --config.model.clr.clr_loss=False \
-    --config.model.model_img.decoder.pool_x_part=True \
+    --config.model.model_txt.decoder.on_use=False \
+    --config.model.clr.clr_loss=True \
     --config.model.model_txt.decoder.loss_weight=0.01 \
 
     # --config.resume_dir='gs://kmh-gcp/checkpoints/flax/20220521_221137_scratch_kmh-tpuvm-v3-256-1_cfg_vit_large_50ep_fttl_b1024_wd0.3_lr1e-4_lrd1.0_dp0.2_warm20_s0_beta0.95_p16_dbgp16/checkpoint_62550'

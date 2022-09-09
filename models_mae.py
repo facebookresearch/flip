@@ -849,22 +849,6 @@ class ImageTextLearner(nn.Module):
     self.img_encoder = VisionTransformer(**self.get_config_img())
     self.txt_encoder = LanguageTransformer(**self.get_config_txt())
 
-  def apply_contrast(self, x_img, x_txt):
-    # get the representation vectors
-    z_img = x_img.mean(axis=1)  # avearge pool anyway
-    z_txt = x_txt[:, 0, :]  # cls token anyway
-
-    # apply mlp heads    
-    z_img = self.apply_projection_head(z_img, prefix='img')
-    z_txt = self.apply_projection_head(z_txt, prefix='txt')
-
-    z_img /= jnp.linalg.norm(z_img, axis=-1, keepdims=True) + 1e-8
-    z_txt /= jnp.linalg.norm(z_txt, axis=-1, keepdims=True) + 1e-8
-
-    loss = self.compute_contrastive_loss(z_img, z_txt)
-
-    return loss, z_img, z_txt
-
   def apply_projection_head(self, z, prefix):
     clr = self.config.clr
     for i in range(clr.proj_layers - 1):
@@ -904,10 +888,6 @@ class ImageTextLearner(nn.Module):
 
   @nn.compact
   def __call__(self, inputs, *, train, encode_img=True, encode_txt=True):
-    if not encode_img:
-      from IPython import embed; embed();
-      if (0 == 0): raise NotImplementedError
-
     img = inputs['image']
     # txt = {'txt': inputs['txt'], 'txt_is_valid': inputs['txt_is_valid']}
     txt = inputs['txt']
@@ -920,8 +900,19 @@ class ImageTextLearner(nn.Module):
       x_txt, mask_txt, ids_restore_txt = self.txt_encoder.apply_encoder(txt, train=train)
 
     # apply contrastive learning (clip-like)
-    if self.config.clr.clr_loss and encode_img and encode_txt:
-      loss_clr, z_img, z_txt = self.apply_contrast(x_img, x_txt)
+    if self.config.clr.clr_loss:
+      if encode_img:
+        z_img = x_img.mean(axis=1)  # avearge pool anyway
+        z_img = self.apply_projection_head(z_img, prefix='img')
+        z_img /= jnp.linalg.norm(z_img, axis=-1, keepdims=True) + 1e-8
+      if encode_txt:
+        z_txt = x_txt[:, 0, :]  # cls token anyway
+        z_txt = self.apply_projection_head(z_txt, prefix='txt')
+        z_txt /= jnp.linalg.norm(z_txt, axis=-1, keepdims=True) + 1e-8
+      if encode_img and encode_txt:
+        loss_clr = self.compute_contrastive_loss(z_img, z_txt)
+      else:
+        loss_clr = 0
     else:
       raise NotImplementedError
       loss_clr = 0
@@ -935,12 +926,6 @@ class ImageTextLearner(nn.Module):
       # pred_img = self.img_encoder.apply_decoder((x_img_full, x_txt_part) if self.img_encoder.decoder.cross_attention else x_img_full, train=train)
     else:
       pred_img = None
-
-    if self.img_encoder.decoder.pool_x_part:  # if specified, pool one feature for cross_attention
-      raise NotImplementedError
-      assert self.txt_encoder.decoder.on_use
-      assert self.txt_encoder.decoder.cross_attention
-      x_img_part = jnp.mean(x_img_part, axis=1, keepdims=True)
 
     if self.txt_encoder.decoder.on_use:
       raise NotImplementedError
@@ -965,14 +950,15 @@ class ImageTextLearner(nn.Module):
 
     loss_tot = loss_img + loss_txt * self.txt_encoder.decoder.loss_weight + loss_clr
 
-
     artifacts = {
       'loss': loss_img,  # always plot loss_img in the 'loss' metric
       'loss_clr': loss_clr,
       'loss_img': loss_img,
       'loss_txt': loss_txt}
     
-    # if not train and :
-    #   artifacts['z_img'] = z_img
+    if not train and encode_img:
+      artifacts['z_img'] = z_img
+    if not train and encode_txt:
+      artifacts['z_txt'] = z_txt
 
     return loss_tot, vis, artifacts

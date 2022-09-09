@@ -225,11 +225,11 @@ def eval_tags_step(state, batch, model, rng):
   dropout_rng = jax.random.fold_in(rng, state.step)
 
   outcome = model.apply(variables, batch, train=False, mutable=False, rngs=dict(dropout=dropout_rng), encode_img=False)
-  loss, imgs_vis, artifacts = outcome
+  loss, _, artifacts = outcome
+  z_txt = artifacts['z_txt']
 
-  metrics = {'test_loss': loss, 'imgs_vis': imgs_vis}
-
-  return metrics
+  # metrics = {'test_loss': loss, 'imgs_vis': imgs_vis}
+  return z_txt
 
 
 def prepare_tf_data(xs, batch_size):
@@ -383,15 +383,17 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   # ------------------------------------------
   # build eval_tags_step
   eval_step_fn = functools.partial(eval_tags_step, model=model, rng=rng)  # (state, batch) -> metrics
-  eval_axes = {'test_loss': PartitionSpec(), 'imgs_vis': PartitionSpec('data', None, None, None)}
+  eval_axes = PartitionSpec('data', None,)
   partitioned_eval_tags_step = partitioner.partition(
         eval_step_fn,
         in_axis_resources=(state_axes, partitioner.data_partition_spec),
         out_axis_resources=eval_axes)
 
-  batch = next(iter(data_loader_tags))
-  logging.info('To run eval_tags_step:')
-  outcome = eval_tags_step(state, batch, model=model, rng=rng)
+  # ------------------------------------------
+  # batch = next(iter(data_loader_tags))
+  # logging.info('To run eval_tags_step:')
+  # z_txt = eval_tags_step(state, batch, model=model, rng=rng)
+  # z_txt = partitioned_eval_tags_step(state, batch)
   # ------------------------------------------
 
   # to create partitioned train_step
