@@ -318,6 +318,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   # Create data loader
   # ------------------------------------
   data_loader_train, data_loader_val, data_loader_tags = build_dataloaders(config, partitioner)  # we do not use data_loader_val
+  batched_tags = [d for d in data_loader_tags]
 
   steps_per_epoch = config.samples_per_epoch // config.batch_size  # for lr schedule
   
@@ -396,6 +397,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   # z_txt = partitioned_eval_tags_step(state, batch)
   # ------------------------------------------
 
+  # ------------------------------------------
   # to create partitioned train_step
   train_step_fn = functools.partial(train_step, model=model, rng=rng)  # (state, batch) -> (state, metrics)
   partitioned_train_step = partitioner.partition(
@@ -410,7 +412,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
         eval_step_fn,
         in_axis_resources=(state_axes, partitioner.data_partition_spec),
         out_axis_resources=eval_axes)
-
+  # ------------------------------------------
 
   # ------------------------------------------
   # debug
@@ -487,6 +489,18 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # finished one epoch: eval
     # ------------------------------------------------------------
     if ((epoch + 1) % config.vis_every_epochs == 0 or epoch == epoch_offset) and config.model.visualize:
+      # --------------------------------------------------------------------
+      # Encoding tags: no data-parallism across nodes
+      logging.info('Encoding tags...')
+      encoded_tags = []
+      for i, tags_batch in enumerate(batched_tags):
+        z_txt = partitioned_eval_tags_step(state, tags_batch)
+        encoded_tags.append(z_txt)
+      encoded_tags = jnp.concatenate(encoded_tags, axis=0)  # type: DeviceArray
+      assert encoded_tags.shape[0] == 1000
+      logging.info('Encoding tags done.')
+      # --------------------------------------------------------------------
+
       eval_batch = batch  # we visualize the same bach for simplicty
       metrics = partitioned_eval_step(state, eval_batch)
 

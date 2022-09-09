@@ -261,16 +261,16 @@ def create_split(batch_size, data_layout, train, dtype=tf.float32,
 
   # ---------------------------------------
   # debugging 
-  x = next(iter(ds))
-  batch = decode_fn(x)
+  # x = next(iter(ds))
+  # batch = decode_fn(x)
   # raise NotImplementedError
   # ---------------------------------------
 
   ds = ds.map(decode_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
   ds = ds.batch(batch_size, drop_remainder=True)
 
-  if not train:
-    ds = ds.repeat()
+  # if not train:
+  #   ds = ds.repeat()
 
   ds = ds.prefetch(10)
 
