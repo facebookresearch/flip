@@ -452,8 +452,6 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # train one epoch (one "virtual" epoch)
     # ------------------------------------------------------------
     for i in range(steps_per_epoch):
-      if i >= 0:
-        break
       batch = next(data_loader_train)
       state, metrics = partitioned_train_step(state, batch)
 
@@ -584,7 +582,7 @@ def run_eval(
     eval_batch = next(data_loader_val)
     metrics = partitioned_eval_step(state, eval_batch, encoded_tags)
     eval_metrics.append(metrics)
-    logging.info('{} / {}'.format(_, steps_per_eval))
+    # logging.info('{} / {}'.format(_, steps_per_eval))
 
   eval_metrics = jax.device_get(eval_metrics)
   eval_metrics = jax.tree_map(lambda *args: np.concatenate(args), *eval_metrics)
