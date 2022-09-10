@@ -129,6 +129,7 @@ def get_config():
   # clr config
   config.model.clr = ml_collections.ConfigDict()
   config.model.clr.tau = 0.2
+  config.model.clr.tau_learnable = False
   config.model.clr.proj_layers = 2
   config.model.clr.proj_dim_hidden = 1024
   config.model.clr.proj_dim_out = 256

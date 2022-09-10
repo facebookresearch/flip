@@ -17,6 +17,7 @@ from typing import Any, Callable, Optional, Tuple
 from xml.sax.xmlreader import InputSource
 
 from absl import logging
+import math
 
 import jax
 import jax.numpy as jnp
@@ -874,12 +875,19 @@ class ImageTextLearner(nn.Module):
   def compute_contrastive_loss(self, z0, z1):
     clr = self.config.clr
 
-    # z0 /= jnp.linalg.norm(z0, axis=-1, keepdims=True) + 1e-8
-    # z1 /= jnp.linalg.norm(z1, axis=-1, keepdims=True) + 1e-8
-
     logits = jnp.einsum('nc,mc->nm', z0, z1)
     logging.info('logits.shape: {}'.format(logits.shape))
-    logits /= clr.tau
+
+    if clr.tau_learnable:
+      logit_scale = t5x.layers.param_with_axes(
+          'logit_scale', initializers_util.constant(value=math.log(1 / 0.07)),
+          (1,), jnp.float32, axes=('_null0',))
+      logit_scale = jnp.clip(logit_scale, 0, math.log(100))
+      logits *= jnp.exp(logit_scale)
+      tau = 1 / jnp.exp(logit_scale)
+    else:
+      tau = clr.tau
+      logits /= clr.tau
 
     labels_one_hot = jnp.eye(logits.shape[-1])
 
@@ -887,7 +895,7 @@ class ImageTextLearner(nn.Module):
     loss10 = optax.softmax_cross_entropy(logits=logits.transpose(), labels=labels_one_hot).mean()
 
     loss = (loss01 + loss10) / 2
-    return loss
+    return loss, tau
 
   @nn.compact
   def __call__(self, inputs, *, train, encode_img=True, encode_txt=True):
@@ -915,9 +923,10 @@ class ImageTextLearner(nn.Module):
         z_txt = self.apply_projection_head(z_txt, prefix='txt')
         z_txt /= jnp.linalg.norm(z_txt, axis=-1, keepdims=True) + 1e-8
       if encode_img and encode_txt:
-        loss_clr = self.compute_contrastive_loss(z_img, z_txt)
+        loss_clr, tau = self.compute_contrastive_loss(z_img, z_txt)
       else:
         loss_clr = 0
+        tau = 0
     else:
       raise NotImplementedError
       loss_clr = 0
@@ -959,7 +968,8 @@ class ImageTextLearner(nn.Module):
       'loss': loss_img,  # always plot loss_img in the 'loss' metric
       'loss_clr': loss_clr,
       'loss_img': loss_img,
-      'loss_txt': loss_txt}
+      'loss_txt': loss_txt,
+      'tau': tau}
     
     if not train and encode_img:
       artifacts['z_img'] = z_img

@@ -20,7 +20,7 @@ vitsize=base
 CONFIG=cfg_mae_${vitsize}
 
 # _normpix_exwd_NOsplit_fastsave
-JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}txt${mask_txt}_s${seed}_p${partitions}st_re${rescale}_laion_a0.5_clr${tau}_eval_512d1mlp # _hfclip77
+JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}txt${mask_txt}_s${seed}_p${partitions}st_re${rescale}_laion_a0.5_clrtau_eval_512d1mlp # _hfclip77
 RESUME=''
 # RESUME='gs://kmh-gcp/checkpoints/flax/20220907_051106_maet5x_kmh-tpuvm-v3-512-1_cfg_mae_large_10000ep_b4096_lr1e-4_mk0.0txt0.0_s100_p1st_re1.0_laion_a0.5_NOMAE_NOCross_clr0.1_NOtxtcls_txtw0.1'
 
@@ -77,6 +77,7 @@ python3 main.py \
     --config.model.model_txt.decoder.loss_weight=${txtw} \
     --config.model.clr.proj_layers=1 \
     --config.model.clr.proj_dim_out=512 \
+    --config.model.clr.tau_learnable=True \
 2>&1 | tee -a $LOGDIR/finetune_\$SSH_ID.log
 " 2>&1 | tee -a $LOGDIR/finetune.log
 
