@@ -63,7 +63,7 @@ def parse_laion_example(example_proto):
 # define the decode function
 def decode_example(example, image_size, aug, tokenize_func):
   # decoder the text
-  txt, txt_is_valid = preprocess_text(example['txt'], tokenize_func=tokenize_func)
+  txt, txt_is_valid = preprocess_text(example['txt'], tokenize_func=tokenize_func, aug=aug)
 
   # decoder the image
   image = preprocess_image(example['image'], image_size=image_size, aug=aug) if example['image'] is not None else None
@@ -82,6 +82,19 @@ def tfds_preprocess_text(txt, tokenizer, cls_token, aug_txt):
     padded_token_ids = tf.concat([tf.fill([1,], cls_token), padded_token_ids], axis=0)
     is_valid = tf.concat([tf.fill([1,], 1), is_valid], axis=0)
   return padded_token_ids, is_valid
+
+
+def hf_tokenize(s, tokenizer, aug_txt):
+  txt_enc = tokenizer.encode(
+    s.numpy().decode(),
+    padding='max_length',
+    truncation='longest_first',
+    max_length=aug_txt.max_len,
+    add_special_tokens=True,
+    return_tensors='tf',)
+  txt_enc = txt_enc[0]  # remove the first dim
+  txt_is_valid = tf.ones_like(txt_enc)  # TODO
+  return txt_enc, txt_is_valid
 
 
 def get_txt_tokenize_func(aug_txt):
@@ -103,7 +116,6 @@ def get_txt_tokenize_func(aug_txt):
     vocab_size = tokenizer._wordpiece_tokenizer.vocab_size().numpy()  # including unknown
     return tokenize_func, vocab_size
   elif aug_txt.tokenizer == 'hf_clip':
-    raise NotImplementedError  # TODO{km}: support is_valid
     tokenizer_name = "openai/clip-vit-base-patch32"
     cache_dir = os.path.join("/kmh_data", tokenizer_name)  # point to the same location, in case it is changed
     tokenizer = CLIPTokenizerFast.from_pretrained(tokenizer_name, cache_dir=cache_dir)
@@ -111,28 +123,39 @@ def get_txt_tokenize_func(aug_txt):
   else:
     raise NotImplementedError
 
+  # for hugging face tokenzier
+  tokenize = functools.partial(hf_tokenize, tokenizer=tokenizer, aug_txt=aug_txt)
+  # tokenize = lambda s: tokenizer.encode(
+  #   s.numpy().decode(),
+  #   padding='max_length',
+  #   truncation='longest_first',
+  #   max_length=aug_txt.max_len,
+  #   add_special_tokens=True,
+  #   return_tensors='tf',)
+
   # --------------------------------
+  # from IPython import embed; embed();
+  # if (0 == 0): raise NotImplementedError
+  # debug
   # txt = 'View EPC Rating Graph for this property'
   # s = tokenizer.encode(txt)
   # t = tokenizer.decode(s)
+  # tokenize(tf.constant(txt))
   # --------------------------------
 
-  # for hugging face tokenzier
-  tokenize = lambda s: tokenizer.encode(
-    s.numpy().decode(),
-    padding='max_length',
-    truncation='longest_first',
-    max_length=aug_txt.max_len,
-    add_special_tokens=False,
-    return_tensors='tf',)
   tokenize_tf_func = tf.function(
-      lambda s: tf.py_function(tokenize, inp=[s], Tout=tf.int32),
+      lambda s: tf.py_function(tokenize, inp=[s], Tout=[tf.int32, tf.int32]),
       input_signature=[tf.TensorSpec(None, tf.string)],
   )
+
+  txt = 'View EPC Rating Graph for this property'
+  txt = tf.constant(txt)
+
+  tokenize_tf_func(txt)
   return tokenize_tf_func, vocab_size
 
 
-def preprocess_text(txt, tokenize_func):
+def preprocess_text(txt, tokenize_func, aug):
   txt_enc = tokenize_func(txt)
   return txt_enc
 
@@ -261,8 +284,8 @@ def create_split(batch_size, data_layout, train, dtype=tf.float32,
 
   # ---------------------------------------
   # debugging 
-  # x = next(iter(ds))
-  # batch = decode_fn(x)
+  x = next(iter(ds))
+  batch = decode_fn(x)
   # raise NotImplementedError
   # ---------------------------------------
 

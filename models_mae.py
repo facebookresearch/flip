@@ -16,6 +16,8 @@ import functools
 from typing import Any, Callable, Optional, Tuple
 from xml.sax.xmlreader import InputSource
 
+from absl import logging
+
 import jax
 import jax.numpy as jnp
 import jax.random as random
@@ -876,6 +878,7 @@ class ImageTextLearner(nn.Module):
     # z1 /= jnp.linalg.norm(z1, axis=-1, keepdims=True) + 1e-8
 
     logits = jnp.einsum('nc,mc->nm', z0, z1)
+    logging.info('logits.shape: {}'.format(logits.shape))
     logits /= clr.tau
 
     labels_one_hot = jnp.eye(logits.shape[-1])
