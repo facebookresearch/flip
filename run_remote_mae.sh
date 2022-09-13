@@ -16,7 +16,7 @@ partitions=1
 
 rescale=1.0
 
-vitsize=base
+vitsize=basev2
 CONFIG=cfg_mae_${vitsize}
 
 # _normpix_exwd_NOsplit_fastsave

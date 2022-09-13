@@ -124,6 +124,8 @@ def get_config():
   config.aug.txt.max_len = 32  # clip: 77
   config.aug.txt.cls_token = True
 
+  config.aug.txt.batch_process = False
+
   config.model.model_txt.vocab_size = 30523  # bert: 30522+1
 
   # clr config

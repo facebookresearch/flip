@@ -22,6 +22,10 @@ python3 main.py \
     --config.model.clr.clr_loss=True \
     --config.model.model_txt.decoder.loss_weight=1. \
     --config.model.clr.tau_learnable=True \
+    --config.aug.txt.batch_process=True \
+    --config.aug.txt.tokenizer=hf_clip \
+    --config.aug.txt.max_len=77 \
+    --config.model.model_txt.vocab_size=49408 \
 
     # --config.aug.txt.tokenizer=hf_clip \
     # --config.aug.txt.max_len=77 \

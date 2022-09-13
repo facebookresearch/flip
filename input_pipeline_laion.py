@@ -70,6 +70,13 @@ def decode_example(example, image_size, aug, tokenize_func):
   return {'image': image, 'txt': txt, 'txt_is_valid': txt_is_valid}
 
 
+# define the decode function
+def decode_example_batch(batch, aug, tokenize_func):
+  txt, txt_is_valid = tokenize_func(batch['txt'])
+  image = batch['image']
+  return {'image': image, 'txt': txt, 'txt_is_valid': txt_is_valid}
+
+
 def tfds_preprocess_text(txt, tokenizer, cls_token, aug_txt):
   """
   reference https://github.com/google-research/big_vision/blob/main/big_vision/pp/proj/flaxformer/bert_ops.py
@@ -94,6 +101,19 @@ def hf_tokenize(s, tokenizer, aug_txt):
     return_tensors='tf',)
   txt_enc = txt_enc[0]  # remove the first dim
   txt_is_valid = tf.ones_like(txt_enc)  # TODO
+  return txt_enc, txt_is_valid
+
+
+def hf_tokenize_batch(s_batch, tokenizer, aug_txt):
+  out = tokenizer(
+    [s.decode() for s in s_batch.numpy()],
+    padding='max_length',
+    truncation='longest_first',
+    max_length=aug_txt.max_len,
+    add_special_tokens=True,
+    return_tensors='tf',)
+  txt_enc = out["input_ids"]
+  txt_is_valid = out["attention_mask"]
   return txt_enc, txt_is_valid
 
 
@@ -124,7 +144,10 @@ def get_txt_tokenize_func(aug_txt):
     raise NotImplementedError
 
   # for hugging face tokenzier
-  tokenize = functools.partial(hf_tokenize, tokenizer=tokenizer, aug_txt=aug_txt)
+  if aug_txt.batch_process:
+    tokenize = functools.partial(hf_tokenize_batch, tokenizer=tokenizer, aug_txt=aug_txt)
+  else:
+    tokenize = functools.partial(hf_tokenize, tokenizer=tokenizer, aug_txt=aug_txt)
   # tokenize = lambda s: tokenizer.encode(
   #   s.numpy().decode(),
   #   padding='max_length',
@@ -134,8 +157,6 @@ def get_txt_tokenize_func(aug_txt):
   #   return_tensors='tf',)
 
   # --------------------------------
-  # from IPython import embed; embed();
-  # if (0 == 0): raise NotImplementedError
   # debug
   # txt = 'View EPC Rating Graph for this property'
   # s = tokenizer.encode(txt)
@@ -148,17 +169,19 @@ def get_txt_tokenize_func(aug_txt):
       input_signature=[tf.TensorSpec(None, tf.string)],
   )
 
-  txt = 'View EPC Rating Graph for this property'
-  txt = tf.constant(txt)
+  # txt = 'View EPC Rating Graph for this property'
+  # txt = tf.constant(txt)
 
-  tokenize_tf_func(txt)
+  # tokenize_tf_func(txt)
   return tokenize_tf_func, vocab_size
 
 
 def preprocess_text(txt, tokenize_func, aug):
-  txt_enc = tokenize_func(txt)
-  return txt_enc
-
+  if aug.txt.batch_process:
+    return txt, None  # do not process here
+  else:
+    txt_enc = tokenize_func(txt)
+    return txt_enc
 
 def preprocess_image(image_bytes, dtype=tf.float32, image_size=None, aug=None):
   """Preprocesses the given image for training.
@@ -283,14 +306,20 @@ def create_split(batch_size, data_layout, train, dtype=tf.float32,
   decode_fn = functools.partial(decode_example, image_size=image_size, aug=aug, tokenize_func=tokenize_func)
 
   # ---------------------------------------
-  # debugging 
-  x = next(iter(ds))
-  batch = decode_fn(x)
+  # debugging
+  # x = next(iter(ds))
+  # batch = decode_fn(x)
   # raise NotImplementedError
   # ---------------------------------------
 
   ds = ds.map(decode_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
   ds = ds.batch(batch_size, drop_remainder=True)
+
+  if aug.txt.batch_process:
+    decode_batch_fn = functools.partial(decode_example_batch, aug=aug, tokenize_func=tokenize_func)
+    # x = next(iter(ds))
+    # decode_batch_fn(x)
+    ds = ds.map(decode_batch_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
 
   # if not train:
   #   ds = ds.repeat()
