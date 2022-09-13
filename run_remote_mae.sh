@@ -3,7 +3,7 @@ echo 'code dir: '$STAGEDIR
 # seed=0
 batch=32768  # 4096, 8192, 16384, 32768
 lr=4e-6  # MAE base lr: 1e-4; CLIP base lr: 5e-4/32768*256=3.90625e-06
-ep=10000  # 400M * 30 / 1.28M = 9375
+ep=1600  # 10000  # 400M * 30 / 1.28M = 9375; 400M * 32 / 1.28M = 9375
 
 mask=0.0
 mask_txt=0.0
