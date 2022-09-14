@@ -600,7 +600,8 @@ class LanguageTransformer(nn.Module):
     x = self.encoder_layers['pos_emb'](x)
 
     # masking: length -> length * mask_ratio
-    x, mask, ids_restore = random_mask(self.make_rng('dropout'), x, self.mask_ratio)
+    # x, mask, ids_restore = random_mask(self.make_rng('dropout'), x, self.mask_ratio)
+    mask, ids_restore = None, None
 
     # apply the encoder
     if self.use_attention_mask:
@@ -971,7 +972,7 @@ class ImageTextLearner(nn.Module):
 
     if self.txt_encoder.decoder.on_use:
       raise NotImplementedError
-      loss_txt = self.txt_encoder.compute_loss(txt, pred_txt, mask_txt, is_valid)
+      # loss_txt = self.txt_encoder.compute_loss(txt, pred_txt, mask_txt, is_valid)
     else:
       loss_txt = 0
 

@@ -28,7 +28,7 @@ python3 main.py \
     --config.aug.txt.max_len=77 \
     --config.model.model_txt.vocab_size=49408 \
     --config.aug.txt.batch_process=True \
-    --config.model.model_txt.use_attention_mask=True \
+    --config.model.model_txt.use_attention_mask=False \
     
 
     # --config.aug.txt.tokenizer=hf_clip \
