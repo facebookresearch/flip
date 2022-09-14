@@ -105,8 +105,10 @@ def hf_tokenize(s, tokenizer, aug_txt):
 
 
 def hf_tokenize_batch(s_batch, tokenizer, aug_txt):
+  ss = [s.decode() for s in s_batch.numpy()]
+  # ss = ['black rabbit with white paw on a white background photo']
   out = tokenizer(
-    [s.decode() for s in s_batch.numpy()],
+    ss,
     padding='max_length',
     truncation='longest_first',
     max_length=aug_txt.max_len,
@@ -114,6 +116,7 @@ def hf_tokenize_batch(s_batch, tokenizer, aug_txt):
     return_tensors='tf',)
   txt_enc = out["input_ids"]
   txt_is_valid = out["attention_mask"]
+  txt_enc *= txt_is_valid
   return txt_enc, txt_is_valid
 
 
@@ -316,9 +319,10 @@ def create_split(batch_size, data_layout, train, dtype=tf.float32,
   ds = ds.batch(batch_size, drop_remainder=True)
 
   if aug.txt.batch_process:
+    assert aug.txt.tokenizer in ['hf_clip']
     decode_batch_fn = functools.partial(decode_example_batch, aug=aug, tokenize_func=tokenize_func)
-    # x = next(iter(ds))
-    # decode_batch_fn(x)
+    x = next(iter(ds))
+    decode_batch_fn(x)
     ds = ds.map(decode_batch_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
 
   # if not train:

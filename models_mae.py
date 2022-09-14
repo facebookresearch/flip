@@ -228,7 +228,7 @@ class Encoder1DBlock(nn.Module):
   rescale_init: float = 1.
 
   @nn.compact
-  def __call__(self, inputs, *, deterministic):
+  def __call__(self, inputs, *, deterministic, mask=None):
     """Applies Encoder1DBlock module.
 
     Args:
@@ -256,7 +256,7 @@ class Encoder1DBlock(nn.Module):
         dtype=self.dtype,
         dropout_rate=self.attention_dropout_rate,
         num_heads=self.num_heads,
-    )(x, x)
+    )(x, x, mask=mask)
     x = nn.Dropout(rate=self.dropout_rate)(x, deterministic=deterministic)
     # droppath
     x = nn.Dropout(rate=self.droppath_rate, broadcast_dims=(1, 2), name='droppath_msa')(x, deterministic=deterministic)
@@ -380,7 +380,7 @@ class Encoder(nn.Module):
   rescale_init: float = 1.0
 
   @nn.compact
-  def __call__(self, inputs, *, train):
+  def __call__(self, inputs, *, train, mask=None):
     """Applies Transformer model on the inputs.
 
     Args:
@@ -403,7 +403,7 @@ class Encoder(nn.Module):
           num_heads=self.num_heads,
           layer_id=lyr,
           rescale_init=self.rescale_init,
-        )(x, deterministic=not train)
+        )(x, deterministic=not train, mask=mask,)
     encoded = t5x.layers.LayerNorm(name=self.prefix + '_norm', axes=('embed',))(x)
 
     return encoded
@@ -525,6 +525,7 @@ class LanguageTransformer(nn.Module):
   transformer: Any
   hidden_size: int
   dtype: Any = jnp.float32
+  use_attention_mask: bool = False
   decoder: Any = None
 
   def setup(self):
@@ -602,7 +603,14 @@ class LanguageTransformer(nn.Module):
     x, mask, ids_restore = random_mask(self.make_rng('dropout'), x, self.mask_ratio)
 
     # apply the encoder
-    x = self.encoder_layers['blocks'](x, train=train)
+    if self.use_attention_mask:
+      _, L, _ = x.shape
+      mask = jnp.tril(jnp.ones(shape=(L, L), dtype=jnp.float32)) # make a lower triangle
+      mask = jnp.reshape(mask, (1, 1, L, L))
+    else:
+      mask = None
+
+    x = self.encoder_layers['blocks'](x, train=train, mask=mask)
 
     return x, mask, ids_restore
 

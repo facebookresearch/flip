@@ -21,11 +21,15 @@ python3 main.py \
     --config.model.model_txt.decoder.on_use=False \
     --config.model.clr.clr_loss=True \
     --config.model.model_txt.decoder.loss_weight=1. \
+    --config.model.model_img.mask_ratio=0.0 \
+    --config.model.model_txt.mask_ratio=0.0 \
     --config.model.clr.tau_learnable=True \
-    --config.aug.txt.batch_process=True \
     --config.aug.txt.tokenizer=hf_clip \
     --config.aug.txt.max_len=77 \
     --config.model.model_txt.vocab_size=49408 \
+    --config.aug.txt.batch_process=True \
+    --config.model.model_txt.use_attention_mask=True \
+    
 
     # --config.aug.txt.tokenizer=hf_clip \
     # --config.aug.txt.max_len=77 \

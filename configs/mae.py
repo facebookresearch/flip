@@ -101,6 +101,8 @@ def get_config_txt():
   config.transformer.dropout_rate = 0.0
   config.transformer.droppath_rate = 0.0
 
+  config.use_attention_mask = False
+
   config.decoder = ml_collections.ConfigDict()
   config.decoder.name = 'txt_decoder'
   config.decoder.hidden_size = 256

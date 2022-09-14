@@ -300,7 +300,7 @@ class MultiHeadDotProductAttention(nn.Module):
 
     # Convert the boolean attention mask to an attention bias.
     if mask is not None:
-      raise NotImplementedError
+      # raise NotImplementedError
       # attention mask in the form of attention bias
       attention_bias = lax.select(
           mask > 0,
