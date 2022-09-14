@@ -114,16 +114,6 @@ def build_dataloaders(config, partitioner):
   image_size = config.image_size
   input_dtype = tf.float32
 
-  data_loader_train = create_laion_input_iter(
-      local_batch_size,
-      data_layout,
-      image_size,
-      input_dtype,
-      train=True,
-      cache=False, # config.cache, 
-      seed=config.seed_tf,
-      cfg=config)
-
   # ImageNet tags
   from vocab.class_names import CLIP_IMAGENET_CLASS_NAMES
   data_loader_tags = create_laion_input_iter(
@@ -137,15 +127,15 @@ def build_dataloaders(config, partitioner):
       cfg=config,
       from_tags=CLIP_IMAGENET_CLASS_NAMES)
 
-  # data_loader_train = create_laion_input_iter(
-  #     local_batch_size,
-  #     data_layout,
-  #     image_size,
-  #     input_dtype,
-  #     train=True,
-  #     cache=False, # config.cache, 
-  #     seed=config.seed_tf,
-  #     cfg=config)
+  data_loader_train = create_laion_input_iter(
+      local_batch_size,
+      data_layout,
+      image_size,
+      input_dtype,
+      train=True,
+      cache=False, # config.cache, 
+      seed=config.seed_tf,
+      cfg=config)
 
   # val set is imagenet
   data_loader_val = create_imagenet_input_iter(

@@ -927,7 +927,12 @@ class ImageTextLearner(nn.Module):
         z_img = self.apply_projection_head(z_img, prefix='img')
         z_img /= jnp.linalg.norm(z_img, axis=-1, keepdims=True) + 1e-8
       if encode_txt:
-        z_txt = x_txt[:, 0, :]  # cls token anyway
+        if self.txt_encoder.use_attention_mask:
+          ids_eos = jnp.argmax(jnp.cumsum(is_valid - 1e-6, axis=-1), axis=-1)  # find the last one
+          ids_eos = ids_eos[:, None]
+          z_txt = gather_by_einsum(x_txt, ids_eos).squeeze(axis=1)
+        else:
+          z_txt = x_txt[:, 0, :]  # cls token anyway
         z_txt = self.apply_projection_head(z_txt, prefix='txt')
         z_txt /= jnp.linalg.norm(z_txt, axis=-1, keepdims=True) + 1e-8
       if encode_img and encode_txt:
