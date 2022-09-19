@@ -60,6 +60,7 @@ import t5x.checkpoints
 
 import jax.profiler
 
+import math
 import numpy as np
 import os
 import random as _random
@@ -590,14 +591,14 @@ def run_eval(
   tic = time.time()
   encoded_tags = compute_encoded_tags(state, batched_tags, partitioned_eval_tags_step)
 
-  steps_per_eval = 50000 // config.batch_size
+  steps_per_eval = math.ceil(50000 / config.batch_size)
   eval_metrics = []
   for _ in range(steps_per_eval):
     eval_batch = next(data_loader_val)
     metrics = partitioned_eval_step(state, eval_batch, encoded_tags)
     eval_metrics.append(metrics)
     if config.eval_only:
-      logging.info('{} / {}'.format(_, steps_per_eval))
+      logging.info('{} / {}, shape: {}'.format(_, steps_per_eval, eval_batch['image'].shape))
 
   eval_metrics = jax.device_get(eval_metrics)
   eval_metrics = jax.tree_map(lambda *args: np.concatenate(args), *eval_metrics)
