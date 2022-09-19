@@ -430,6 +430,22 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   # logging.info(jax.tree_map(lambda x: x.shape, outcome))
   # ------------------------------------------
 
+
+  # ------------------------------------------
+  if config.eval_only:
+    logging.info('Eval only...')
+    summary = run_eval(
+      state,
+      batched_tags,
+      partitioned_eval_tags_step,
+      data_loader_val,
+      partitioned_eval_step,
+      config,)
+    values = [f"{k}: {v:.6f}" for k, v in sorted(summary.items())]
+    logging.info('eval: %s', ', '.join(values))
+    return
+  # ------------------------------------------
+
   train_metrics = []
 
   logging.info('Work dir: {}'.format(workdir))
@@ -494,7 +510,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # ------------------------------------------------------------
     # finished one epoch: eval
     # ------------------------------------------------------------
-    if ((epoch + 1) % config.vis_every_epochs == 0 or epoch == epoch_offset) and config.model.visualize:
+    if (epoch + 1) % config.vis_every_epochs == 0 or epoch == epoch_offset:
       # --------------------------------------------------------------------
       summary = run_eval(
         state,
@@ -580,7 +596,8 @@ def run_eval(
     eval_batch = next(data_loader_val)
     metrics = partitioned_eval_step(state, eval_batch, encoded_tags)
     eval_metrics.append(metrics)
-    # logging.info('{} / {}'.format(_, steps_per_eval))
+    if config.eval_only:
+      logging.info('{} / {}'.format(_, steps_per_eval))
 
   eval_metrics = jax.device_get(eval_metrics)
   eval_metrics = jax.tree_map(lambda *args: np.concatenate(args), *eval_metrics)

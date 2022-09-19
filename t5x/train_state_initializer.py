@@ -61,7 +61,7 @@ def create_optimizer(config, params_names, steps_per_epoch):
         opt_util.filter_parameters(params_names, opt_util.filter_bias_and_norm),
         opt_util.filter_parameters(params_names, opt_util.filter_posembed)  # Note: we must exclude posembed wd in adamw
       )
-    logging.info('Apply wd: {}'.format(state_utils.str_flatten_dict(mask)))
+    # logging.info('Apply wd: {}'.format(state_utils.str_flatten_dict(mask)))
 
     opt = getattr(adamw, config.opt_type)  # optax.adamw
     opt = t5x.optimizers.wrap_optax_optimizer(opt)

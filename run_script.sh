@@ -5,8 +5,8 @@ rm -rf tmp
 export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets
 python3 main.py \
     --workdir=./tmp \
-    --config=configs/cfg_mae_dbg.py \
-    --config.batch_size=16 \
+    --config=configs/cfg_mae_base.py \
+    --config.batch_size=32 \
     --config.log_every_steps=10 \
     --config.num_epochs=1000 \
     --config.profile_memory=True \
@@ -19,6 +19,8 @@ python3 main.py \
     --config.model.model_txt.decoder.cross_attention=False \
     --config.model.model_img.decoder.on_use=False \
     --config.model.model_txt.decoder.on_use=False \
+    --config.model.clr.proj_layers=1 \
+    --config.model.clr.proj_dim_out=512 \
     --config.model.clr.clr_loss=True \
     --config.model.model_txt.decoder.loss_weight=1. \
     --config.model.model_img.mask_ratio=0.0 \
@@ -28,9 +30,10 @@ python3 main.py \
     --config.aug.txt.max_len=77 \
     --config.model.model_txt.vocab_size=49408 \
     --config.aug.txt.batch_process=True \
-    --config.model.model_txt.use_attention_mask=False \
+    --config.model.model_txt.use_attention_mask=True \
+    --config.eval_only=True \
+    --config.resume_dir='gs://kmh-gcp/checkpoints/flax/20220914_202349_maet5x_kmh-tpuvm-v3-256-3_cfg_mae_base_10000ep_b32768_lr4e-6_mk0.0txtNO_s100_p1st_re1.0_laion_a0.5_clrtau_eval_512d1mlp_hfclip77b_autoreg_wd0.2_b0.98'
     
-
     # --config.aug.txt.tokenizer=hf_clip \
     # --config.aug.txt.max_len=77 \
     # --config.model.model_txt.vocab_size=49408 \

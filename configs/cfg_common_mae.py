@@ -138,4 +138,7 @@ def get_config():
 
   config.model.clr.clr_loss = True
 
+  # eval
+  config.eval_only = False
+
   return config
