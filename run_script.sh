@@ -32,7 +32,8 @@ python3 main.py \
     --config.aug.txt.batch_process=True \
     --config.model.model_txt.use_attention_mask=True \
     --config.eval_only=True \
-    --config.resume_dir='gs://kmh-gcp/checkpoints/flax/20220914_202349_maet5x_kmh-tpuvm-v3-256-3_cfg_mae_base_10000ep_b32768_lr4e-6_mk0.0txtNO_s100_p1st_re1.0_laion_a0.5_clrtau_eval_512d1mlp_hfclip77b_autoreg_wd0.2_b0.98'
+    --config.aug.eval_pad=0 \
+    --config.resume_dir='gs://kmh-gcp/checkpoints/flax/20220914_202349_maet5x_kmh-tpuvm-v3-256-3_cfg_mae_base_10000ep_b32768_lr4e-6_mk0.0txtNO_s100_p1st_re1.0_laion_a0.5_clrtau_eval_512d1mlp_hfclip77b_autoreg_wd0.2_b0.98' \
     
     # --config.aug.txt.tokenizer=hf_clip \
     # --config.aug.txt.max_len=77 \

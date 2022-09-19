@@ -84,6 +84,8 @@ def get_config():
 
   config.aug.color_jit = None  # [0.4, 0.4, 0.4]  # None to disable; [brightness, contrast, saturation]
 
+  config.aug.eval_pad = 32  # ImageNet default eval: 224 crop from 256 (pad 32)
+
   # memory
   config.profile_memory = False
 

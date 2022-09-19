@@ -325,14 +325,14 @@ def _get_center_crop_window(img_shape, image_size=224):
   return crop_window
   
 
-def _decode_and_center_crop(image_bytes, image_size, **kwargs):
+def _decode_and_center_crop(image_bytes, image_size, pad, **kwargs):
   """Crops to center of image with padding then scales image_size."""
   shape = tf.io.extract_jpeg_shape(image_bytes)
   image_height = shape[0]
   image_width = shape[1]
 
   padded_center_crop_size = tf.cast(
-      ((image_size / (image_size + CROP_PADDING)) *
+      ((image_size / (image_size + pad)) *
        tf.cast(tf.minimum(image_height, image_width), tf.float32)),
       tf.int32)
 

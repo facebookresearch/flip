@@ -71,7 +71,7 @@ def preprocess_for_train(image_bytes, dtype=tf.float32, image_size=None, aug=Non
   return image
 
 
-def preprocess_for_eval(image_bytes, dtype=tf.float32, image_size=None):
+def preprocess_for_eval(image_bytes, dtype=tf.float32, image_size=None, aug=None):
   """Preprocesses the given image for evaluation.
 
   Args:
@@ -82,7 +82,7 @@ def preprocess_for_eval(image_bytes, dtype=tf.float32, image_size=None):
   Returns:
     A preprocessed image `Tensor`.
   """
-  image = _decode_and_center_crop(image_bytes, image_size)
+  image = _decode_and_center_crop(image_bytes, image_size, pad=aug.eval_pad)
   image = tf.reshape(image, [image_size, image_size, 3])
   image = normalize_image(image)
   image = tf.image.convert_image_dtype(image, dtype=dtype)
@@ -141,7 +141,7 @@ def create_split(dataset_builder, batch_size, data_layout, train, dtype=tf.float
       image = preprocess_for_train(example['image'], dtype, image_size, aug=aug)
       label_one_hot = label_one_hot * (1 - aug.label_smoothing) + aug.label_smoothing / num_classes
     else:
-      image = preprocess_for_eval(example['image'], dtype, image_size)
+      image = preprocess_for_eval(example['image'], dtype, image_size, aug=aug)
     
     return {'image': image, 'label': label, 'label_one_hot': label_one_hot}
 

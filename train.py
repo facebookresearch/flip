@@ -147,7 +147,7 @@ def build_dataloaders(config, partitioner):
       train=False,
       cache=config.cache, 
       seed=config.seed_tf,
-      aug=None)
+      aug=config.aug)
   # data_loader_val = None
 
   return data_loader_train, data_loader_val, data_loader_tags
