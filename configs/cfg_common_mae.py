@@ -86,6 +86,8 @@ def get_config():
 
   config.aug.eval_pad = 32  # ImageNet default eval: 224 crop from 256 (pad 32)
 
+  config.aug.flip = True
+
   # memory
   config.profile_memory = False
 

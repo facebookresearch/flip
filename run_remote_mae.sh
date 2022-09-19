@@ -20,7 +20,7 @@ vitsize=base
 CONFIG=cfg_mae_${vitsize}
 
 # _normpix_exwd_NOsplit_fastsave
-JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}txtNO_s${seed}_p${partitions}st_re${rescale}_laion_a0.5_clrtau_eval_512d1mlp_hfclip77b_autoreg_wd0.2_b0.98
+JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}txtNO_s${seed}_p${partitions}st_re${rescale}_laion_a0.9NF_clrtau_eval_512d1mlp_hfclip77b_autoreg_wd0.2_b0.98
 RESUME=''
 # RESUME='gs://kmh-gcp/checkpoints/flax/20220907_051106_maet5x_kmh-tpuvm-v3-512-1_cfg_mae_large_10000ep_b4096_lr1e-4_mk0.0txt0.0_s100_p1st_re1.0_laion_a0.5_NOMAE_NOCross_clr0.1_NOtxtcls_txtw0.1'
 
@@ -66,7 +66,8 @@ python3 main.py \
     --config.opt_mu_dtype=float32 \
     --config.partitioning.partition_states=False \
     --config.resume_dir=${RESUME} \
-    --config.aug.area_range=\(0.5\,1.0\) \
+    --config.aug.area_range=\(0.9\,1.0\) \
+    --config.aug.flip=False \
     --config.model.clr.tau=${tau} \
     --config.model.model_txt.decoder.cross_attention=False \
     --config.model.model_img.decoder.cross_attention=False \

@@ -200,7 +200,8 @@ def preprocess_image(image_bytes, dtype=tf.float32, image_size=None, aug=None):
   crop_func = decode_and_random_crop[aug.crop_ver]
   image = crop_func(image_bytes, image_size, area_range=aug.area_range, aspect_ratio_range=aug.aspect_ratio_range)
   image = tf.reshape(image, [image_size, image_size, 3])
-  image = tf.image.random_flip_left_right(image)
+  if aug.flip:
+    image = tf.image.random_flip_left_right(image)
 
   # advance augs
   if aug.color_jit is not None:
@@ -310,8 +311,8 @@ def create_split(batch_size, data_layout, train, dtype=tf.float32,
 
   # ---------------------------------------
   # debugging
-  # x = next(iter(ds))
-  # batch = decode_fn(x)
+  x = next(iter(ds))
+  batch = decode_fn(x)
   # raise NotImplementedError
   # ---------------------------------------
 

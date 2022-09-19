@@ -42,6 +42,7 @@ def preprocess_for_train(image_bytes, dtype=tf.float32, image_size=None, aug=Non
   Returns:
     A preprocessed image `Tensor`.
   """
+  raise NotImplementedError  # LAION training should not use ImageNet train
   crop_func = decode_and_random_crop[aug.crop_ver]
   image = crop_func(image_bytes, image_size, area_range=aug.area_range, aspect_ratio_range=aug.aspect_ratio_range)
   image = tf.reshape(image, [image_size, image_size, 3])
