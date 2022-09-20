@@ -117,10 +117,10 @@ def build_dataloaders(config, partitioner):
 
   # ImageNet tags
   from vocab.class_names import CLIP_IMAGENET_CLASS_NAMES
-  from vocab.class_names import CLIP_IMAGENET_TEMPLATES
-  from vocab.class_names import CLIP_IMAGENET_TEMPLATES_SHORT
-  tags = []
+  from vocab.class_names import CLIP_IMAGENET_TEMPLATES_FULL, CLIP_IMAGENET_TEMPLATES_SHORT, CLIP_IMAGENET_TEMPLATES_NONE
   templates = CLIP_IMAGENET_TEMPLATES_SHORT
+
+  tags = []
   for c in CLIP_IMAGENET_CLASS_NAMES:
     for t in templates:
       tags.append(t(c))
@@ -226,6 +226,12 @@ def eval_step(state, batch, encoded_tags, model, rng):
 
   z_txt = encoded_tags
   logits = jnp.einsum('nc,mc->nm', z_img, z_txt)
+
+  # --------
+  # dev: for maxout multiple templates
+  # logits = logits.reshape([logits.shape[0], 1000, -1])
+  # logits = jnp.max(logits, axis=-1)
+  # --------
 
   pred_labels = jnp.argmax(logits, -1)
   accuracy = jnp.float32(pred_labels == labels)
@@ -586,13 +592,15 @@ def compute_encoded_tags(
       logging.info('{} / {}'.format(i, len(batched_tags)))
   encoded_tags = jnp.concatenate(encoded_tags, axis=0)  # type: DeviceArray
 
-  e = encoded_tags
+  # ----------------
+  # average multiple templates
   encoded_tags = encoded_tags.reshape([1000, -1, encoded_tags.shape[-1]])  # [1000, 7, 512]
   encoded_tags = encoded_tags.mean(axis=1)
   encoded_tags /= jnp.linalg.norm(encoded_tags, axis=-1, keepdims=True) + 1e-8
-
   assert encoded_tags.shape[0] == 1000
-  logging.info('Encoding tags done.')
+  # ----------------
+
+  logging.info('Encoding tags done: {}'.format(encoded_tags.shape))
   return encoded_tags
 
 

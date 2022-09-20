@@ -235,7 +235,7 @@ CLIP_IMAGENET_CLASS_NAMES = [
 
 # from open_clip/src/training/imagenet_zeroshot_data.py
 
-CLIP_IMAGENET_TEMPLATES = [
+CLIP_IMAGENET_TEMPLATES_FULL = [
     lambda c: f'a bad photo of a {c}.',
     lambda c: f'a photo of many {c}.',
     lambda c: f'a sculpture of a {c}.',
