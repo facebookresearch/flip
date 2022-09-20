@@ -117,6 +117,14 @@ def build_dataloaders(config, partitioner):
 
   # ImageNet tags
   from vocab.class_names import CLIP_IMAGENET_CLASS_NAMES
+  from vocab.class_names import CLIP_IMAGENET_TEMPLATES
+  from vocab.class_names import CLIP_IMAGENET_TEMPLATES_SHORT
+  tags = []
+  templates = CLIP_IMAGENET_TEMPLATES_SHORT
+  for c in CLIP_IMAGENET_CLASS_NAMES:
+    for t in templates:
+      tags.append(t(c))
+
   data_loader_tags = create_laion_input_iter(
       8,  # local_batch_size=8
       data_layout,
@@ -126,7 +134,7 @@ def build_dataloaders(config, partitioner):
       cache=False, # config.cache, 
       seed=config.seed_tf,
       cfg=config,
-      from_tags=CLIP_IMAGENET_CLASS_NAMES)
+      from_tags=tags)
 
   data_loader_train = create_laion_input_iter(
       local_batch_size,
@@ -325,7 +333,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   # Create data loader
   # ------------------------------------
   data_loader_train, data_loader_val, data_loader_tags = build_dataloaders(config, partitioner)  # we do not use data_loader_val
-  batched_tags = [d for d in data_loader_tags]
+  batched_tags = [d for d in data_loader_tags]  # 1000x80 or 1000x7
 
   steps_per_epoch = config.samples_per_epoch // config.batch_size  # for lr schedule
   
@@ -574,7 +582,15 @@ def compute_encoded_tags(
   for i, tags_batch in enumerate(batched_tags):
     z_txt = partitioned_eval_tags_step(state, tags_batch)
     encoded_tags.append(z_txt)
+    if i % 100 == 0:
+      logging.info('{} / {}'.format(i, len(batched_tags)))
   encoded_tags = jnp.concatenate(encoded_tags, axis=0)  # type: DeviceArray
+
+  e = encoded_tags
+  encoded_tags = encoded_tags.reshape([1000, -1, encoded_tags.shape[-1]])  # [1000, 7, 512]
+  encoded_tags = encoded_tags.mean(axis=1)
+  encoded_tags /= jnp.linalg.norm(encoded_tags, axis=-1, keepdims=True) + 1e-8
+
   assert encoded_tags.shape[0] == 1000
   logging.info('Encoding tags done.')
   return encoded_tags
