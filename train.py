@@ -117,8 +117,8 @@ def build_dataloaders(config, partitioner):
 
   # ImageNet tags
   from vocab.class_names import CLIP_IMAGENET_CLASS_NAMES
-  from vocab.class_names import CLIP_IMAGENET_TEMPLATES_FULL, CLIP_IMAGENET_TEMPLATES_SHORT, CLIP_IMAGENET_TEMPLATES_NONE
-  templates = CLIP_IMAGENET_TEMPLATES_NONE
+  # CLIP_IMAGENET_TEMPLATES_FULL, CLIP_IMAGENET_TEMPLATES_SHORT, CLIP_IMAGENET_TEMPLATES_NONE
+  from vocab.class_names import CLIP_IMAGENET_TEMPLATES_SHORT as templates
 
   tags = []
   for c in CLIP_IMAGENET_CLASS_NAMES:

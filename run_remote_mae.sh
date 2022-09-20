@@ -1,7 +1,7 @@
 echo 'code dir: '$STAGEDIR
 
 # seed=0
-batch=16384  # 4096, 8192, 16384, 32768
+batch=32768  # 4096, 8192, 16384, 32768
 lr=4e-6  # MAE base lr: 1e-4; CLIP base lr: 5e-4/32768*256=3.90625e-06
 ep=10000  # 10000  # 400M * 30 / 1.28M = 9375; 400M * 32 / 1.28M = 9375
 
@@ -16,13 +16,13 @@ partitions=1
 
 rescale=1.0
 
-vitsize=large
+vitsize=base
 CONFIG=cfg_mae_${vitsize}
 
 # _normpix_exwd_NOsplit_fastsave
-JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}txtNO_s${seed}_p${partitions}st_re${rescale}_laion_a0.5_clrtau_ev1_512d1mlp_evonly # _hfclip77b_autoreg_wd0.2_b0.98
-# RESUME=''
-RESUME='gs://kmh-gcp/checkpoints/flax/20220910_212550_maet5x_kmh-tpuvm-v3-512-1_cfg_mae_large_10000ep_b16384_lr4e-6_mk0.0txt0.0_s100_p1st_re1.0_laion_a0.5_clrtau_eval_512d1mlp'
+JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}txtNO_s${seed}_p${partitions}st_re${rescale}_laion_a0.5_clrtau_ev7_512d1mlp_wd0.2_b0.98  # _hfclip77b_autoreg
+RESUME=''
+# RESUME='gs://kmh-gcp/checkpoints/flax/20220910_212550_maet5x_kmh-tpuvm-v3-512-1_cfg_mae_large_10000ep_b16384_lr4e-6_mk0.0txt0.0_s100_p1st_re1.0_laion_a0.5_clrtau_eval_512d1mlp'
 
 WORKDIR=gs://kmh-gcp/checkpoints/${JOBNAME}
 LOGDIR=/kmh_data/logs/${JOBNAME}
@@ -79,7 +79,9 @@ python3 main.py \
     --config.model.clr.proj_layers=1 \
     --config.model.clr.proj_dim_out=512 \
     --config.model.clr.tau_learnable=True \
-    --config.eval_only=True \
+    --config.opt.b2=0.98 \
+    --config.opt.weight_decay=0.2 \
+    --config.eval_only=False \
     --config.aug.eval_pad=0 \
 2>&1 | tee -a $LOGDIR/finetune_\$SSH_ID.log
 " 2>&1 | tee -a $LOGDIR/finetune.log
@@ -91,6 +93,7 @@ python3 main.py \
 
     # --config.opt.b2=0.98 \
     # --config.opt.weight_decay=0.2 \
+
     # --config.aug.txt.tokenizer=hf_clip \
     # --config.aug.txt.max_len=77 \
     # --config.model.model_txt.vocab_size=49408 \
