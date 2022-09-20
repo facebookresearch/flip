@@ -118,7 +118,7 @@ def build_dataloaders(config, partitioner):
   # ImageNet tags
   from vocab.class_names import CLIP_IMAGENET_CLASS_NAMES
   from vocab.class_names import CLIP_IMAGENET_TEMPLATES_FULL, CLIP_IMAGENET_TEMPLATES_SHORT, CLIP_IMAGENET_TEMPLATES_NONE
-  templates = CLIP_IMAGENET_TEMPLATES_SHORT
+  templates = CLIP_IMAGENET_TEMPLATES_NONE
 
   tags = []
   for c in CLIP_IMAGENET_CLASS_NAMES:
@@ -617,12 +617,12 @@ def run_eval(
 
   steps_per_eval = math.ceil(50000 / config.batch_size)
   eval_metrics = []
-  for _ in range(steps_per_eval):
+  for i in range(steps_per_eval):
     eval_batch = next(data_loader_val)
     metrics = partitioned_eval_step(state, eval_batch, encoded_tags)
     eval_metrics.append(metrics)
-    if config.eval_only:
-      logging.info('{} / {}, shape: {}'.format(_, steps_per_eval, eval_batch['image'].shape))
+    if config.eval_only and i % 10 == 0:
+      logging.info('{} / {}, shape: {}'.format(i, steps_per_eval, eval_batch['image'].shape))
 
   eval_metrics = jax.device_get(eval_metrics)
   eval_metrics = jax.tree_map(lambda *args: np.concatenate(args), *eval_metrics)
