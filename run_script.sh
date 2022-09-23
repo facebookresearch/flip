@@ -5,7 +5,7 @@ rm -rf tmp
 export TFDS_DATA_DIR=gs://kmh-gcp/tensorflow_datasets
 python3 main.py \
     --workdir=./tmp \
-    --config=configs/cfg_mae_large.py \
+    --config=configs/cfg_mae_dbg.py \
     --config.batch_size=32 \
     --config.log_every_steps=10 \
     --config.num_epochs=1000 \
@@ -27,9 +27,11 @@ python3 main.py \
     --config.model.model_img.mask_ratio=0.0 \
     --config.model.model_txt.mask_ratio=0.0 \
     --config.model.clr.tau_learnable=True \
-    --config.eval_only=True \
-    --config.aug.eval_pad=0 \
-    --config.resume_dir='gs://kmh-gcp/checkpoints/flax/20220910_212550_maet5x_kmh-tpuvm-v3-512-1_cfg_mae_large_10000ep_b16384_lr4e-6_mk0.0txt0.0_s100_p1st_re1.0_laion_a0.5_clrtau_eval_512d1mlp' \
+    --config.model.clr.proj_out_bias=False \
+
+    # --config.eval_only=True \
+    # --config.aug.eval_pad=0 \
+    # --config.resume_dir='gs://kmh-gcp/checkpoints/flax/20220910_212550_maet5x_kmh-tpuvm-v3-512-1_cfg_mae_large_10000ep_b16384_lr4e-6_mk0.0txt0.0_s100_p1st_re1.0_laion_a0.5_clrtau_eval_512d1mlp' \
 
     # --config.resume_dir='gs://kmh-gcp/checkpoints/flax/20220910_190756_maet5x_kmh-tpuvm-v3-256-3_cfg_mae_base_10000ep_b32768_lr4e-6_mk0.0txt0.0_s100_p1st_re1.0_laion_a0.5_clrtau_eval_512d1mlp'\
     # --config.resume_dir='gs://kmh-gcp/checkpoints/flax/20220914_163137_maet5x_kmh-tpuvm-v3-256-2_cfg_mae_base_10000ep_b32768_lr4e-6_mk0.0txtNO_s100_p1st_re1.0_laion_a0.5_clrtau_eval_512d1mlp' \

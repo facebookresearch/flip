@@ -140,6 +140,8 @@ def get_config():
   config.model.clr.proj_dim_hidden = 1024
   config.model.clr.proj_dim_out = 256
 
+  config.model.clr.proj_out_bias = True  #  bias of the output proj layer
+
   config.model.clr.clr_loss = True
 
   # eval

@@ -877,6 +877,7 @@ class ImageTextLearner(nn.Module):
       dtype=self.dtype,
       kernel_init=mlp_kernel_init,
       bias_init=mlp_bias_init,
+      use_bias=clr.proj_out_bias,
       kernel_axes=('_null0', '_null1'),
       name='{}_mlp{}'.format(prefix, clr.proj_layers))(z)
     return z
