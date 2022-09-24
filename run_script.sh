@@ -28,6 +28,7 @@ python3 main.py \
     --config.model.model_txt.mask_ratio=0.0 \
     --config.model.clr.tau_learnable=True \
     --config.model.clr.proj_out_bias=False \
+    --config.model.model_img.ln_pre=True \
 
     # --config.eval_only=True \
     # --config.aug.eval_pad=0 \

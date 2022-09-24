@@ -144,6 +144,8 @@ def get_config():
 
   config.model.clr.clr_loss = True
 
+  config.model.model_img.ln_pre = False
+
   # eval
   config.eval_only = False
 

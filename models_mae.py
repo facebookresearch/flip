@@ -378,6 +378,7 @@ class Encoder(nn.Module):
   droppath_rate: float = 0.0
   prefix: str = 'encoder'
   rescale_init: float = 1.0
+  ln_pre: bool = False
 
   @nn.compact
   def __call__(self, inputs, *, train, mask=None):
@@ -393,6 +394,10 @@ class Encoder(nn.Module):
     assert inputs.ndim == 3  # (batch, len, emb)
 
     x = inputs
+
+    if self.ln_pre:
+      x = t5x.layers.LayerNorm(name=self.prefix + '_norm_pre', axes=('embed',))(x)
+
     for lyr in range(self.num_layers):
       x = Encoder1DBlock(
           mlp_dim=self.mlp_dim,
@@ -657,6 +662,7 @@ class VisionTransformer(nn.Module):
   classifier: str = 'token'
   dtype: Any = jnp.float32
   decoder: Any = None
+  ln_pre: bool = False
 
   def patchify(self, imgs):
       """
@@ -810,7 +816,7 @@ class VisionTransformer(nn.Module):
     encoder_layers['pos_emb'] = Add2DPositionEmbs(sincos=self.sincos, use_cls_token=use_cls_token, name='posembed_encoder')
     if use_cls_token:
       encoder_layers['cls_token'] = t5x.layers.param_with_axes('cls', clstoken_init, (1, 1, self.hidden_size), jnp.float32, axes=('_null0', '_null1', 'embed'))
-    encoder_layers['blocks'] = Encoder(name='Transformer', **self.transformer, prefix='encoder')
+    encoder_layers['blocks'] = Encoder(name='Transformer', **self.transformer, prefix='encoder', ln_pre=self.ln_pre)
     self.encoder_layers = encoder_layers
 
     # ------------------------

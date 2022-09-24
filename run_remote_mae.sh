@@ -20,7 +20,7 @@ vitsize=basev2
 CONFIG=cfg_mae_${vitsize}
 
 # _normpix_exwd_NOsplit_fastsave
-JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}txtNO_s${seed}_p${partitions}st_re${rescale}_laion_a0.5_clrtau_ev7_512d1mlp_wd0.2_b0.98_hfclip77b_autoreg
+JOBNAME=flax/$(date +%Y%m%d_%H%M%S)_maet5x_${VM_NAME}_${CONFIG}_${ep}ep_b${batch}_lr${lr}_mk${mask}txtNO_s${seed}_p${partitions}st_re${rescale}_laion_a0.5_clrtau_ev7_512d1mlp_wd0.2_b0.98_hfclip77b_autoreg_NOpbias_preln
 RESUME=''
 # RESUME='gs://kmh-gcp/checkpoints/flax/20220910_212550_maet5x_kmh-tpuvm-v3-512-1_cfg_mae_large_10000ep_b16384_lr4e-6_mk0.0txt0.0_s100_p1st_re1.0_laion_a0.5_clrtau_eval_512d1mlp'
 
@@ -88,6 +88,8 @@ python3 main.py \
     --config.model.model_txt.vocab_size=49408 \
     --config.aug.txt.batch_process=True \
     --config.model.model_txt.use_attention_mask=True \
+    --config.model.clr.proj_out_bias=False \
+    --config.model.model_img.ln_pre=True \
 2>&1 | tee -a $LOGDIR/finetune_\$SSH_ID.log
 " 2>&1 | tee -a $LOGDIR/finetune.log
 
