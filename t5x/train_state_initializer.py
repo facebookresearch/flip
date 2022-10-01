@@ -6,7 +6,10 @@ import optax
 import functools
 
 from flax import traverse_util
-from jax.interpreters.sharded_jit import PartitionSpec
+try:
+    from jax.interpreters.sharded_jit import PartitionSpec
+except ImportError:
+    from jax.interpreters.pxla import PartitionSpec
 
 import t5x.train_state as train_state_lib
 import t5x.optimizers

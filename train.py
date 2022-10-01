@@ -36,7 +36,10 @@ from flax.training import train_state
 import jax
 import jax.numpy as jnp
 from jax import random
-from jax.interpreters.sharded_jit import PartitionSpec
+try:
+    from jax.interpreters.sharded_jit import PartitionSpec
+except ImportError:
+    from jax.interpreters.pxla import PartitionSpec
 import ml_collections
 import optax
 import tensorflow as tf
