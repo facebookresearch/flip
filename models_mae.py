@@ -931,7 +931,8 @@ class ImageTextLearner(nn.Module):
     # apply contrastive learning (clip-like)
     if self.config.clr.clr_loss:
       if encode_img:
-        z_img = x_img.mean(axis=1)  # avearge pool anyway
+        # z_img = x_img.mean(axis=1)  # avearge pool anyway
+        z_img = x_img[:, 0, :]  # use cls token
         z_img = self.apply_projection_head(z_img, prefix='img')
         z_img /= jnp.linalg.norm(z_img, axis=-1, keepdims=True) + 1e-8
       if encode_txt:
