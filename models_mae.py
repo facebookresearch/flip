@@ -957,12 +957,13 @@ class ImageTextLearner(nn.Module):
       loss_clr = 0
 
     # apply both decoders
-    # x_img_full, x_img_part = self.img_encoder.apply_unshuffle(x_img, ids_restore_img)
+    
     # x_txt_full, x_txt_part = self.txt_encoder.apply_unshuffle(x_txt, ids_restore_txt)
 
     if self.img_encoder.decoder.on_use:
-      raise NotImplementedError
-      # pred_img = self.img_encoder.apply_decoder((x_img_full, x_txt_part) if self.img_encoder.decoder.cross_attention else x_img_full, train=train)
+      # raise NotImplementedError
+      x_img_full, x_img_part = self.img_encoder.apply_unshuffle(x_img, ids_restore_img)
+      pred_img = self.img_encoder.apply_decoder((x_img_full, x_txt_part) if self.img_encoder.decoder.cross_attention else x_img_full, train=train)
     else:
       pred_img = None
 
@@ -974,7 +975,7 @@ class ImageTextLearner(nn.Module):
 
     # compute losses
     if self.img_encoder.decoder.on_use:
-      raise NotImplementedError
+      #raise NotImplementedError
       loss_img = self.img_encoder.compute_loss(img, pred_img, mask_img)
       vis = self.img_encoder.visualization(img, pred_img, mask_img)
     else:
@@ -994,6 +995,7 @@ class ImageTextLearner(nn.Module):
       'loss_clr': loss_clr,
       'loss_img': loss_img,
       'loss_txt': loss_txt,
+      'lost_tot': loss_tot,
       'tau': tau}
     
     if not train and encode_img:
