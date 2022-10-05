@@ -370,7 +370,19 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   if config.resume_dir != '':
     state = ckp.restore_checkpoint(checkpointer, path=config.resume_dir)
   elif config.pretrain_dir != '':
-    raise NotImplementedError
+    # raise NotImplementedError
+    logging.info('Initializing train_state...')
+    state = p_init_fn(rng_init)
+    logging.info('Initializing train_state done.')
+
+    path = config.pretrain_dir
+    step = t5x.checkpoints.latest_step(path)
+    path_chkpt = path if step is None else t5x.checkpoints.get_checkpoint_dir(path, step)
+    state = checkpointer.restore(
+      path=path_chkpt, fallback_state=state.state_dict(),
+      state_transformation_fns=[remove_optimizer_state]
+    )
+
   else:
     logging.info('Initializing train_state...')
     state = p_init_fn(rng_init)
@@ -642,3 +654,9 @@ def run_eval(
 
   summary = jax.tree_map(lambda x: x.mean(), eval_metrics)
   return summary
+
+
+def remove_optimizer_state(ckpt_optimizer_state, optimizer_state):
+    logging.info("pop state")
+    ckpt_optimizer_state.pop("state")
+    return ckpt_optimizer_state
