@@ -741,7 +741,8 @@ class VisionTransformer(nn.Module):
     x = self.encoder_layers['pos_emb'](x)
 
     # masking: length -> length * mask_ratio
-    x, mask, ids_restore = random_mask(self.make_rng('dropout'), x, self.mask_ratio)
+    mask_ratio = self.mask_ratio if train else 0.0
+    x, mask, ids_restore = random_mask(self.make_rng('dropout'), x, mask_ratio)
     ids_restore = jnp.reshape(ids_restore, [n, h, w])  # carries the shape info
 
     if use_cls_token:
