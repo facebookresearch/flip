@@ -518,7 +518,98 @@ def random_mask(rng, x, mask_ratio, bias=None):
   mask = gather_by_einsum(mask, ids_restore)
   mask = t5x.layers.with_sharding_constraint(mask, ('batch', 'length'))
 
+
+  # for debug
+  # ndevice = jax.device_count()
+  # print(ndevice)
+  # B, L, C = x_masked.shape
+  # nd = min(ndevice, B)
+  # x_masked = jnp.reshape(x_masked, [nd, B // nd, L, C])
+  # x_masked = jnp.concatenate([x_masked] * 2, axis=1)
+  # x_masked = jnp.reshape(x_masked, [N * 2, L, C])
+  # x_masked = jnp.reshape(x_masked, [x_masked.shape[0] // 2, 2, x_masked.shape[1], x_masked.shape[2]]).mean(axis=1)
+  # x_masked = t5x.layers.with_sharding_constraint(x_masked, ('batch', 'length', 'embed'))
+  
+
+  # mask = jnp.concatenate([mask] * 2, axis=0)
+  # ids_restore = jnp.concatenate([ids_restore] * 2, axis=0)
+
+
   return x_masked, mask, ids_restore
+
+
+def random_mask_repeat(rng, x, mask_ratio, bias=None, mode="complementary", repeat=1):
+  """
+  x: [N, L, C] input
+  bias: [N, L], an additional map to the noise map (small is keep, large is remove)
+  """
+
+  N, L, _ = x.shape  # batch, length, dim
+  len_keep = int(L * (1 - mask_ratio))
+
+  noise = random.uniform(rng, shape=x.shape[:2])  
+
+  if bias is not None:
+    noise += bias
+
+  ids_shuffle = jnp.argsort(noise, axis=1)  # ascend: small is keep, large is remove
+  ids_restore = jnp.argsort(ids_shuffle, axis=1)
+
+  assert repeat * len_keep <= L
+
+  all_mask = []
+  all_x_masked = []
+  all_ids_restore = []
+
+  for i in range(repeat):
+    # keep the first subset
+    if mode == "complementary":
+      ids_keep = ids_shuffle[:, i * len_keep:(i * len_keep + len_keep)]
+    else:
+      raise NotImplementedError
+    x_masked = gather_by_einsum(x, ids_keep)
+
+    x_masked = t5x.layers.with_sharding_constraint(x_masked, ('batch', 'length', 'embed'))
+
+    # generate the binary mask: 0 is keep, 1 is remove
+    mask = jnp.ones([N, L])
+    mask = t5x.layers.with_sharding_constraint(mask, ('batch', 'length'))
+    if mode == "complementary":
+      mask = mask.at[:, i * len_keep:(i * len_keep + len_keep)].set(0)
+    else:
+      raise NotImplementedError
+    # unshuffle to get the binary mask
+    mask = gather_by_einsum(mask, ids_restore)
+    mask = t5x.layers.with_sharding_constraint(mask, ('batch', 'length'))
+
+    all_mask.append(mask)
+    all_x_masked.append(x_masked)
+    all_ids_restore.append(ids_restore)
+  
+  def _concat_by_device(x_list):
+    ## TODO support partition > 1
+    shape = list(x_list[0].shape)
+    nd = min(jax.device_count(), shape[0])
+  
+    x_list = [jnp.reshape(x, [nd, shape[0] // nd] + shape[1:]) for x in x_list]
+    x = jnp.concatenate(x_list, axis=1)
+    x = jnp.reshape(x, [shape[0] * len(x_list)] + shape[1:])
+    
+    return x
+
+  all_x_masked = _concat_by_device(all_x_masked)
+  all_mask = _concat_by_device(all_mask)
+  all_ids_restore = _concat_by_device(all_ids_restore)
+
+  # all_x_masked = jnp.concatenate(all_x_masked, axis=0)
+  # all_mask = jnp.concatenate(all_mask, axis=0)
+  # all_ids_restore = jnp.concatenate(all_ids_restore, axis=0)
+
+  # all_x_masked = t5x.layers.with_sharding_constraint(all_x_masked, ('batch', 'length', 'embed'))
+  # all_mask = t5x.layers.with_sharding_constraint(all_mask, ('batch', 'length'))
+  # all_ids_restore = t5x.layers.with_sharding_constraint(all_ids_restore, ('batch', 'length'))
+
+  return all_x_masked, all_mask, all_ids_restore
 
 
 class LanguageTransformer(nn.Module):
@@ -743,6 +834,7 @@ class VisionTransformer(nn.Module):
     # masking: length -> length * mask_ratio
     mask_ratio = self.mask_ratio if train else 0.0
     x, mask, ids_restore = random_mask(self.make_rng('dropout'), x, mask_ratio)
+    n = x.shape[0]
     ids_restore = jnp.reshape(ids_restore, [n, h, w])  # carries the shape info
 
     if use_cls_token:
@@ -754,6 +846,41 @@ class VisionTransformer(nn.Module):
     x = self.encoder_layers['blocks'](x, train=train)
 
     return x, mask, ids_restore
+
+  def apply_encoder_multi(self, inputs, train, repeat_mode="none", repeat_sample=1):
+    use_cls_token = (self.classifier == 'token')
+    assert use_cls_token  # kaiming: TODO: support both?
+
+    x = self.encoder_layers['patch_emb'](inputs)
+
+    n, h, w, c = x.shape
+    x = jnp.reshape(x, [n, h * w, c])
+
+    x = self.encoder_layers['pos_emb'](x)
+
+    if train and repeat_mode != "none":
+      # masking: length -> length * mask_ratio
+      mask_ratio = self.mask_ratio if train else 0.0
+      x, mask, ids_restore = random_mask_repeat(
+        self.make_rng('dropout'), x, mask_ratio, mode=repeat_mode, repeat=repeat_sample
+      )
+      ids_restore = jnp.reshape(ids_restore, [n * repeat_sample, h, w])  # carries the shape info
+    else:
+      # masking: length -> length * mask_ratio
+      mask_ratio = self.mask_ratio if train else 0.0
+      x, mask, ids_restore = random_mask(self.make_rng('dropout'), x, mask_ratio)
+      ids_restore = jnp.reshape(ids_restore, [n, h, w])  # carries the shape info
+
+    if use_cls_token:
+      cls = self.encoder_layers['cls_token']
+      cls = jnp.tile(cls, [n * repeat_sample, 1, 1])
+      x = jnp.concatenate([cls, x], axis=1)
+
+    # apply the encoder
+    x = self.encoder_layers['blocks'](x, train=train)
+
+    return x, mask, ids_restore
+
 
   def apply_unshuffle(self, x, ids_restore):
     """bottleneck projection, unshuffle, add pos emb"""
@@ -889,11 +1016,14 @@ class ImageTextLearner(nn.Module):
       name='{}_mlp{}'.format(prefix, clr.proj_layers))(z)
     return z
   
-  def compute_contrastive_loss(self, z0, z1):
+  def compute_contrastive_loss(self, z0, z1, repeat=1):
     clr = self.config.clr
 
     logits = jnp.einsum('nc,mc->nm', z0, z1)
     logging.info('logits.shape: {}'.format(logits.shape))
+    n, m = logits.shape[0], logits.shape[1]
+
+    assert n == m * repeat
 
     if clr.tau_learnable:
       logit_scale = t5x.layers.param_with_axes(
@@ -906,10 +1036,31 @@ class ImageTextLearner(nn.Module):
       tau = clr.tau
       logits /= clr.tau
 
-    labels_one_hot = jnp.eye(logits.shape[-1])
+    labels_one_hot = jnp.eye(m)
 
-    loss01 = optax.softmax_cross_entropy(logits=logits, labels=labels_one_hot).mean()
-    loss10 = optax.softmax_cross_entropy(logits=logits.transpose(), labels=labels_one_hot).mean()
+    if repeat == 1:
+      loss01 = optax.softmax_cross_entropy(logits=logits, labels=labels_one_hot).mean()
+      loss10 = optax.softmax_cross_entropy(logits=logits.transpose(), labels=labels_one_hot).mean()
+    else:
+      #from jax.experimental.host_callback import call
+
+      nd = min(jax.device_count(), m)
+      labels_one_hot = jnp.reshape(labels_one_hot, [nd, 1, m // nd, m])
+      labels_one_hot = jnp.tile(labels_one_hot, [1, repeat, 1, 1])
+      logits = jnp.reshape(logits, [nd, repeat, m // nd, m])
+      loss01 = optax.softmax_cross_entropy(logits=logits, labels=labels_one_hot).mean()
+
+      # -> (nd, m/nd, repeat, m)
+      logits = jnp.transpose(logits, axes=[0, 2, 1, 3])
+      labels_one_hot = jnp.transpose(labels_one_hot, axes=[0, 2, 1, 3])
+      logits = jnp.reshape(logits, [m, repeat, m])
+      labels_one_hot = jnp.reshape(labels_one_hot, [m, repeat, m])
+      # call(lambda x: print(x.shape, x), labels_one_hot)
+      loss10 = optax.softmax_cross_entropy(
+        logits=logits.transpose(),
+        labels=labels_one_hot.transpose(),
+      ).mean()
+      #loss10 = 0.0
 
     loss = (loss01 + loss10) / 2
     return loss, tau
@@ -925,7 +1076,16 @@ class ImageTextLearner(nn.Module):
 
     # apply both encoders
     if encode_img:
-      x_img, mask_img, ids_restore_img = self.img_encoder.apply_encoder(img, train=train)
+      repeat_mode = self.config.get("mask_repeat_mode", "none")
+      repeat = self.config.get("mask_repeat", 1)
+      if train and repeat_mode != "none":
+        # print(img.shape)
+        x_img, mask_img, ids_restore_img = self.img_encoder.apply_encoder_multi(
+          img, train=train, repeat_mode=repeat_mode, repeat_sample=repeat
+        )
+        # print(x_img.shape, mask_img.shape, ids_restore_img.shape)
+      else:
+        x_img, mask_img, ids_restore_img = self.img_encoder.apply_encoder(img, train=train)
     if encode_txt:
       x_txt, mask_txt, ids_restore_txt = self.txt_encoder.apply_encoder(txt, train=train)
 
@@ -948,7 +1108,8 @@ class ImageTextLearner(nn.Module):
         z_txt = self.apply_projection_head(z_txt, prefix='txt')
         z_txt /= jnp.linalg.norm(z_txt, axis=-1, keepdims=True) + 1e-8
       if encode_img and encode_txt:
-        loss_clr, tau = self.compute_contrastive_loss(z_img, z_txt)
+        # z_img = z_img.reshape([z_img.shape[0] // 2, 2, z_img.shape[1]]).mean(axis=1)
+        loss_clr, tau = self.compute_contrastive_loss(z_img, z_txt, repeat=repeat)
       else:
         loss_clr = 0
         tau = 0
@@ -960,7 +1121,7 @@ class ImageTextLearner(nn.Module):
     
     # x_txt_full, x_txt_part = self.txt_encoder.apply_unshuffle(x_txt, ids_restore_txt)
 
-    if self.img_encoder.decoder.on_use:
+    if encode_img and self.img_encoder.decoder.on_use:
       # raise NotImplementedError
       x_img_full, x_img_part = self.img_encoder.apply_unshuffle(x_img, ids_restore_img)
       pred_img = self.img_encoder.apply_decoder((x_img_full, x_txt_part) if self.img_encoder.decoder.cross_attention else x_img_full, train=train)
@@ -974,8 +1135,10 @@ class ImageTextLearner(nn.Module):
       pred_txt = None
 
     # compute losses
-    if self.img_encoder.decoder.on_use:
+    if encode_img and self.img_encoder.decoder.on_use:
       #raise NotImplementedError
+      if train and repeat > 1:
+        img = jnp.tile(img, [repeat, 1, 1])
       loss_img = self.img_encoder.compute_loss(img, pred_img, mask_img)
       vis = self.img_encoder.visualization(img, pred_img, mask_img)
     else:
