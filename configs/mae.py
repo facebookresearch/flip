@@ -79,6 +79,8 @@ def get_config_img():
 
   config.decoder.on_use = True  # whehter img has decoders?
 
+  config.decoder.loss_weight = 1.0
+
   return config
 
 
