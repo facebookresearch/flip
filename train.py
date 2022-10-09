@@ -191,6 +191,7 @@ def train_step(state, batch, model, rng):
     outcome = model.apply(
         {'params': params, **state.flax_mutables},
         inputs=batch,
+        capture_intermediates=False,
         mutable=mutable,
         rngs=dict(dropout=dropout_rng),
         train=True)
@@ -209,11 +210,22 @@ def train_step(state, batch, model, rng):
   lr = state._optimizer.optimizer_def.metric_learning_rate_fn(state.step)
   metrics['learning_rate'] = lr
 
+  # print(new_mutables['intermediates'].keys())
+  # print(new_mutables['intermediates']['z0'])
+
+  # new_mutables = flax.core.frozen_dict.unfreeze(new_mutables)
+  # intermediates = new_mutables.pop("intermediates")
+  # new_mutables = flax.core.frozen_dict.freeze(new_mutables)
+
   new_state = state.apply_gradient(
     grads,
     learning_rate=None,  # TODO: not used in adamw
     flax_mutables=new_mutables)
-  return new_state, metrics
+
+  
+
+  #return new_state, metrics, intermediates
+  return new_state, metrics, None
 
 
 def eval_step(state, batch, encoded_tags, model, rng):
@@ -439,7 +451,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   partitioned_train_step = partitioner.partition(
         train_step_fn,
         in_axis_resources=(state_axes, partitioner.data_partition_spec),
-        out_axis_resources=(state_axes, None),
+        out_axis_resources=(state_axes, None, None),
         donate_argnums=(0,))
 
   eval_step_fn = functools.partial(eval_step, model=model, rng=rng)  # (state, batch) -> metrics
@@ -497,7 +509,12 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # ------------------------------------------------------------
     for i in range(steps_per_epoch):
       batch = next(data_loader_train)
-      state, metrics = partitioned_train_step(state, batch)
+      state, metrics, intermediates = partitioned_train_step(state, batch)
+
+      # print("z0", intermediates['z0'])
+      # print("z1", intermediates['z1'])
+      # print("q0", intermediates['q0'])
+      # print("q1", intermediates['q1'])
 
       if epoch == epoch_offset and i == 0 and partitioner._num_partitions > 8:
         print_sanity_check(batch, shard_id)

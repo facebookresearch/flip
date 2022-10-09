@@ -30,6 +30,7 @@ import t5x.layers
 
 from utils import posembed_util
 from utils import initializers_util
+from utils.memory_queue import MemQueue
 
 
 Array = Any
@@ -995,6 +996,10 @@ class ImageTextLearner(nn.Module):
     self.img_encoder = VisionTransformer(**self.get_config_img())
     self.txt_encoder = LanguageTransformer(**self.get_config_txt())
 
+    if self.config.clr.get("momentum_queue", 0) > 0:
+      self.img_queue = MemQueue(queue_size=self.config.clr.momentum_queue, queue_dim=self.config.clr.proj_dim_out)
+      self.txt_queue = MemQueue(queue_size=self.config.clr.momentum_queue, queue_dim=self.config.clr.proj_dim_out)
+
   def apply_projection_head(self, z, prefix):
     clr = self.config.clr
     for i in range(clr.proj_layers - 1):
@@ -1019,48 +1024,113 @@ class ImageTextLearner(nn.Module):
   def compute_contrastive_loss(self, z0, z1, repeat=1):
     clr = self.config.clr
 
-    logits = jnp.einsum('nc,mc->nm', z0, z1)
-    logging.info('logits.shape: {}'.format(logits.shape))
-    n, m = logits.shape[0], logits.shape[1]
-
-    assert n == m * repeat
-
     if clr.tau_learnable:
       logit_scale = t5x.layers.param_with_axes(
           'logit_scale', initializers_util.constant(value=math.log(1 / 0.07)),
           (1,), jnp.float32, axes=('_null0',))
       logit_scale = jnp.clip(logit_scale, 0, math.log(100))
-      logits *= jnp.exp(logit_scale)
       tau = 1 / jnp.exp(logit_scale)
     else:
       tau = clr.tau
-      logits /= clr.tau
+      logit_scale = None
 
-    labels_one_hot = jnp.eye(m)
+    def _get_logits(a, b, logit_scale):
+      x = jnp.einsum('nc,mc->nm', a, b)
+      
+      if clr.tau_learnable:
+        x *= jnp.exp(logit_scale)
+      else:
+        x /= clr.tau
+      
+      return x
+    
+    logits = _get_logits(z0, z1, logit_scale)
+    logging.info('logits.shape: {}'.format(logits.shape))
+    n, m = logits.shape[0], logits.shape[1]
+    assert n == m * repeat
 
-    if repeat == 1:
-      loss01 = optax.softmax_cross_entropy(logits=logits, labels=labels_one_hot).mean()
-      loss10 = optax.softmax_cross_entropy(logits=logits.transpose(), labels=labels_one_hot).mean()
-    else:
-      #from jax.experimental.host_callback import call
+    if clr.get("momentum_queue", 0) > 0:
+      assert repeat == 1
+      q0 = self.img_queue.get_queue()
+      q1 = self.txt_queue.get_queue()
 
-      nd = min(jax.device_count(), m)
-      labels_one_hot = jnp.reshape(labels_one_hot, [nd, 1, m // nd, m])
-      labels_one_hot = jnp.tile(labels_one_hot, [1, repeat, 1, 1])
-      logits = jnp.reshape(logits, [nd, repeat, m // nd, m])
-      loss01 = optax.softmax_cross_entropy(logits=logits, labels=labels_one_hot).mean()
+      q0 = jax.lax.stop_gradient(q0) 
+      q1 = jax.lax.stop_gradient(q1) 
 
-      # -> (nd, m/nd, repeat, m)
-      logits = jnp.transpose(logits, axes=[0, 2, 1, 3])
-      labels_one_hot = jnp.transpose(labels_one_hot, axes=[0, 2, 1, 3])
-      logits = jnp.reshape(logits, [m, repeat, m])
-      labels_one_hot = jnp.reshape(labels_one_hot, [m, repeat, m])
-      # call(lambda x: print(x.shape, x), labels_one_hot)
-      loss10 = optax.softmax_cross_entropy(
-        logits=logits.transpose(),
-        labels=labels_one_hot.transpose(),
+      #print(z0.shape, z1.shape, q0.shape, q1.shape)
+
+      logits_q0 = _get_logits(z0, q1, logit_scale)
+      
+      logging.info('logits_q0.shape: {}'.format(logits_q0.shape))
+      
+      qsize = q1.shape[0]
+      labels_one_hot = jnp.eye(n, n + qsize)
+      loss01 = optax.softmax_cross_entropy(
+        logits=jnp.concatenate([logits, logits_q0], axis=1),
+        labels=labels_one_hot,
       ).mean()
-      #loss10 = 0.0
+      #loss01 = 0.0
+
+
+      # from jax.experimental.host_callback import call
+      # call(lambda x: print("logits", x.shape, x), logits)
+      # call(lambda x: print("logits_q0", x.shape, x), logits_q0)
+      # z0sum = jnp.sum(z0, axis=1)
+      # z1sum = jnp.sum(z1, axis=1)
+      # q0sum = jnp.sum(q0, axis=1)
+      # q1sum = jnp.sum(q1, axis=1)
+
+      # self.sow('intermediates', 'z0', z0sum)
+      # self.sow('intermediates', 'z1', z1sum)
+      # self.sow('intermediates', 'q0', q0sum)
+      # self.sow('intermediates', 'q1', q1sum)
+
+
+      #call(lambda x: print(x), z0sum)
+      #call(lambda x: print(x), z1sum)
+      #print(q0sum)
+      #print(q1sum)
+      # call(lambda x: print("q0", x.shape, x), q0sum)
+      # call(lambda x: print("q1", x.shape, x), q1sum)
+      #call(lambda x: print("l", x.shape, x), labels_one_hot)
+
+      # logits10 = _get_logits(z1, z0, logit_scale)       # transpose --> OOM
+      # logits_q1 = _get_logits(z1, q0, logit_scale)
+      # logging.info('logits_q1.shape: {}'.format(logits_q1.shape))
+      # loss10 = optax.softmax_cross_entropy(
+      #   logits=jnp.concatenate([logits10, logits_q1], axis=1),
+      #   labels=labels_one_hot,
+      # ).mean()
+      loss10 = 0.0
+
+      self.img_queue.update_queue(z0)
+      self.txt_queue.update_queue(z1)
+    else:
+      labels_one_hot = jnp.eye(m)
+
+      if repeat == 1:
+        loss01 = optax.softmax_cross_entropy(logits=logits, labels=labels_one_hot).mean()
+        loss10 = optax.softmax_cross_entropy(logits=logits.transpose(), labels=labels_one_hot).mean()
+      else:
+        #from jax.experimental.host_callback import call
+
+        nd = min(jax.device_count(), m)
+        labels_one_hot = jnp.reshape(labels_one_hot, [nd, 1, m // nd, m])
+        labels_one_hot = jnp.tile(labels_one_hot, [1, repeat, 1, 1])
+        logits = jnp.reshape(logits, [nd, repeat, m // nd, m])
+        loss01 = optax.softmax_cross_entropy(logits=logits, labels=labels_one_hot).mean()
+
+        # -> (nd, m/nd, repeat, m)
+        logits = jnp.transpose(logits, axes=[0, 2, 1, 3])
+        labels_one_hot = jnp.transpose(labels_one_hot, axes=[0, 2, 1, 3])
+        logits = jnp.reshape(logits, [m, repeat, m])
+        labels_one_hot = jnp.reshape(labels_one_hot, [m, repeat, m])
+        # call(lambda x: print(x.shape, x), labels_one_hot)
+        loss10 = optax.softmax_cross_entropy(
+          logits=logits.transpose(),
+          labels=labels_one_hot.transpose(),
+        ).mean()
+        #loss10 = 0.0
 
     loss = (loss01 + loss10) / 2
     return loss, tau
