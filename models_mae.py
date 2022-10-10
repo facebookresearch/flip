@@ -1051,57 +1051,26 @@ class ImageTextLearner(nn.Module):
 
     if clr.get("momentum_queue", 0) > 0:
       assert repeat == 1
-      q0 = self.img_queue.get_queue()
       q1 = self.txt_queue.get_queue()
-
-      q0 = jax.lax.stop_gradient(q0) 
-      q1 = jax.lax.stop_gradient(q1) 
-
-      #print(z0.shape, z1.shape, q0.shape, q1.shape)
-
-      logits_q0 = _get_logits(z0, q1, logit_scale)
-      
-      logging.info('logits_q0.shape: {}'.format(logits_q0.shape))
-      
-      qsize = q1.shape[0]
-      labels_one_hot = jnp.eye(n, n + qsize)
+      q1 = self.txt_queue.get_queue()
+      logits_z0z1 = _get_logits(z0, z1, logit_scale) 
+      logits_z0q1 = _get_logits(z0, q1, logit_scale)
+      labels_one_hot = jnp.eye(n, n + q1.shape[0])
       loss01 = optax.softmax_cross_entropy(
-        logits=jnp.concatenate([logits, logits_q0], axis=1),
+        logits=jnp.concatenate([logits_z0z1, logits_z0q1], axis=1),
         labels=labels_one_hot,
       ).mean()
-      #loss01 = 0.0
+      
 
-
-      # from jax.experimental.host_callback import call
-      # call(lambda x: print("logits", x.shape, x), logits)
-      # call(lambda x: print("logits_q0", x.shape, x), logits_q0)
-      # z0sum = jnp.sum(z0, axis=1)
-      # z1sum = jnp.sum(z1, axis=1)
-      # q0sum = jnp.sum(q0, axis=1)
-      # q1sum = jnp.sum(q1, axis=1)
-
-      # self.sow('intermediates', 'z0', z0sum)
-      # self.sow('intermediates', 'z1', z1sum)
-      # self.sow('intermediates', 'q0', q0sum)
-      # self.sow('intermediates', 'q1', q1sum)
-
-
-      #call(lambda x: print(x), z0sum)
-      #call(lambda x: print(x), z1sum)
-      #print(q0sum)
-      #print(q1sum)
-      # call(lambda x: print("q0", x.shape, x), q0sum)
-      # call(lambda x: print("q1", x.shape, x), q1sum)
-      #call(lambda x: print("l", x.shape, x), labels_one_hot)
-
-      # logits10 = _get_logits(z1, z0, logit_scale)       # transpose --> OOM
-      # logits_q1 = _get_logits(z1, q0, logit_scale)
-      # logging.info('logits_q1.shape: {}'.format(logits_q1.shape))
-      # loss10 = optax.softmax_cross_entropy(
-      #   logits=jnp.concatenate([logits10, logits_q1], axis=1),
-      #   labels=labels_one_hot,
-      # ).mean()
-      loss10 = 0.0
+      q0 = self.img_queue.get_queue()
+      q0 = jax.lax.stop_gradient(q0) 
+      logits_z1z0 = _get_logits(z1, z0, logit_scale) 
+      logits_z1q0 = _get_logits(z1, q0, logit_scale)
+      labels_one_hot = jnp.eye(n, n + q0.shape[0])
+      loss10 = optax.softmax_cross_entropy(
+        logits=jnp.concatenate([logits_z1z0, logits_z1q0], axis=1),
+        labels=labels_one_hot,
+      ).mean()
 
       self.img_queue.update_queue(z0)
       self.txt_queue.update_queue(z1)
@@ -1133,7 +1102,7 @@ class ImageTextLearner(nn.Module):
         #loss10 = 0.0
 
     loss = (loss01 + loss10) / 2
-    return loss, tau
+    return loss, tau, loss01, loss10
 
   @nn.compact
   def __call__(self, inputs, *, train, encode_img=True, encode_txt=True):
@@ -1179,10 +1148,12 @@ class ImageTextLearner(nn.Module):
         z_txt /= jnp.linalg.norm(z_txt, axis=-1, keepdims=True) + 1e-8
       if encode_img and encode_txt:
         # z_img = z_img.reshape([z_img.shape[0] // 2, 2, z_img.shape[1]]).mean(axis=1)
-        loss_clr, tau = self.compute_contrastive_loss(z_img, z_txt, repeat=repeat)
+        loss_clr, tau, loss01, loss10 = self.compute_contrastive_loss(z_img, z_txt, repeat=repeat)
       else:
         loss_clr = 0
         tau = 0
+        loss01 = 0
+        loss10 = 0
     else:
       raise NotImplementedError
       loss_clr = 0
@@ -1228,7 +1199,9 @@ class ImageTextLearner(nn.Module):
       'loss_clr': loss_clr,
       'loss_img': loss_img,
       'loss_txt': loss_txt,
-      'lost_tot': loss_tot,
+      'loss_tot': loss_tot,
+      'loss_clr01': loss01,
+      'loss_clr10': loss10,
       'tau': tau}
     
     if not train and encode_img:
