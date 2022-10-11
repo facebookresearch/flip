@@ -63,6 +63,7 @@ import t5x.checkpoints
 
 import jax.profiler
 
+import copy
 import math
 import numpy as np
 import os
@@ -362,9 +363,9 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   # Create model
   # ------------------------------------
   model = models_mae.ImageTextLearner(config=config.model)
-  
+  init_batch = next(data_loader_train)
   p_init_fn, state_axes, state_shape = create_train_state(
-    config, model, steps_per_epoch, partitioner, init_batch=next(data_loader_train))
+    config, model, steps_per_epoch, partitioner, init_batch=init_batch)
   rng_init, rng = jax.random.split(rng)
 
   t5x.model_info.log_model_info(None, state_shape, partitioner)
@@ -390,10 +391,20 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     path = config.pretrain_dir
     step = t5x.checkpoints.latest_step(path)
     path_chkpt = path if step is None else t5x.checkpoints.get_checkpoint_dir(path, step)
-    state = checkpointer.restore(
-      path=path_chkpt, fallback_state=state.state_dict(),
-      state_transformation_fns=[remove_optimizer_state]
-    )
+
+    if config.get("pretrain_from_embedding16", False):
+      old_config = copy.deepcopy(config)
+      params_new = load_old_state(old_config, state, init_batch, steps_per_epoch, path_chkpt)
+      params_new = partitioner.move_params_to_devices(params_new, state_axes.params)
+      state = state.replace_params(params_new)
+      del params_new
+      checkpointer.save(state)
+      return 
+    else: 
+      state = checkpointer.restore(
+        path=path_chkpt, fallback_state=state.state_dict(),
+        state_transformation_fns=[remove_optimizer_state]
+      )
 
   else:
     logging.info('Initializing train_state...')
@@ -677,3 +688,87 @@ def remove_optimizer_state(ckpt_optimizer_state, optimizer_state):
     logging.info("pop state")
     ckpt_optimizer_state.pop("state")
     return ckpt_optimizer_state
+  
+
+def load_old_state(old_config, state, init_batch, steps_per_epoch, path_chkpt):
+    ######## pretrain from different embedding size
+    old_config.model.model_img.patches.size = (16, 16)
+    model_old = models_mae.ImageTextLearner(config=old_config.model)
+    old_partitioner = t5x.partitioning.PjitPartitioner(**old_config.partitioning, backend="cpu")
+    old_partitioner._logical_axis_rules += (('_null0', None),)
+    old_partitioner._logical_axis_rules += (('_null1', None),)
+    old_partitioner._logical_axis_rules += (('_null2', None),)
+    old_partitioner._logical_axis_rules += (('classes', None),)
+    old_p_init_fn, old_state_axes, old_state_shape = create_train_state(
+      old_config, model_old, steps_per_epoch, old_partitioner, init_batch=init_batch)
+    rng = random.PRNGKey(old_config.seed_jax)
+    rng_init, rng = jax.random.split(rng)
+    old_state = old_p_init_fn(rng_init)
+    old_checkpointer = t5x.checkpoints.Checkpointer(
+      train_state=old_state_shape,
+      partitioner=old_partitioner,
+      checkpoints_dir="./tmp",
+      keep=None,  # TODO: move to config
+    )
+    old_state = old_checkpointer.restore(
+      path=path_chkpt, fallback_state=old_state.state_dict(),
+      state_transformation_fns=[remove_optimizer_state],
+    )
+
+    params_new = old_state.params
+    params_new = flax.core.frozen_dict.unfreeze(params_new)      
+    p = params_new["img_encoder"]["embedding"]["kernel"]
+    new_shape = state.params["img_encoder"]["embedding"]["kernel"].shape
+    
+    logging.info(f"resize patch embedding to {new_shape}.")
+    p = jax.image.resize(
+      image=p,
+      shape=new_shape,
+      method=jax.image.ResizeMethod.CUBIC,
+    )
+    params_new["img_encoder"]["embedding"]["kernel"] = p
+
+    old_pos_shape = params_new["img_encoder"]['posembed_encoder']['pos_embedding'].shape
+    pos_shape = state.params["img_encoder"]['posembed_encoder']['pos_embedding'].shape
+    # print(old_pos_shape, pos_shape)
+    if old_pos_shape != pos_shape:
+      params_new["img_encoder"]['posembed_encoder']['pos_embedding'] = state.params["img_encoder"]['posembed_encoder']['pos_embedding']
+      logging.info(f"drop pos embedding due to {old_pos_shape} vs {pos_shape}")
+
+    params_new = flax.core.frozen_dict.freeze(params_new)
+    # print(params_new["img_encoder"]['posembed_encoder'].keys())
+    # print(state_axes.params["img_encoder"]['posembed_encoder'].keys())
+
+    del (
+      old_state, old_checkpointer, old_partitioner, model_old, old_state_axes, old_state_shape
+    )
+   
+    return params_new
+
+    # del (
+    #   old_state, model_old, old_p_init_fn, old_state_shape, old_state_axes, old_checkpointer, old_partitioner
+    # )
+
+# def remove_pos_embed(ckpt_optimizer_state, optimizer_state):
+#   if 'posembed_encoder' in ckpt_optimizer_state['target']["img_encoder"] and \
+#     'posembed_encoder' in optimizer_state['target']["img_encoder"]:
+#     shape_ckpt = ckpt_optimizer_state['target']["img_encoder"]['posembed_encoder']['pos_embedding']['metadata']['shape']
+#     shape_opt = list(optimizer_state['target']["img_encoder"]['posembed_encoder']['pos_embedding'].shape)
+#     if not(shape_ckpt == shape_opt):
+#       logging.info('Removing pre-trained posembed_encoder.')
+#       ckpt_optimizer_state['target']["img_encoder"].pop('posembed_encoder')
+#   return ckpt_optimizer_state
+
+
+# def rename_embedding(ckpt_optimizer_state, optimizer_state):
+#   if 'kernel' in ckpt_optimizer_state['target']["img_encoder"]["embedding"] and \
+#     'kernel' in optimizer_state['target']["img_encoder"]["embedding"]:
+#     shape_ckpt = ckpt_optimizer_state['target']["img_encoder"]['embedding']['kernel']['metadata']['shape']
+#     shape_opt = list(optimizer_state['target']["img_encoder"]['embedding']['kernel'].shape)
+#     if not (shape_ckpt == shape_opt):
+#       logging.info(f'Rename pre-trained embedding.')
+      
+#       ckpt_optimizer_state['target']["img_encoder"]["embedding_tmp"] =  ckpt_optimizer_state['target']["img_encoder"]['embedding']
+#       ckpt_optimizer_state['target']["img_encoder"].pop('embedding')
+
+#   return ckpt_optimizer_state
