@@ -1089,16 +1089,27 @@ class ImageTextLearner(nn.Module):
         logits = jnp.reshape(logits, [nd, repeat, m // nd, m])
         loss01 = optax.softmax_cross_entropy(logits=logits, labels=labels_one_hot).mean()
 
-        # -> (nd, m/nd, repeat, m)
-        logits = jnp.transpose(logits, axes=[0, 2, 1, 3])
-        labels_one_hot = jnp.transpose(labels_one_hot, axes=[0, 2, 1, 3])
-        logits = jnp.reshape(logits, [m, repeat, m])
-        labels_one_hot = jnp.reshape(labels_one_hot, [m, repeat, m])
-        # call(lambda x: print(x.shape, x), labels_one_hot)
-        loss10 = optax.softmax_cross_entropy(
-          logits=logits.transpose(),
-          labels=labels_one_hot.transpose(),
-        ).mean()
+        if clr.get("repeat_avg", False):
+          # (nd, repeat, m // nd, m) --> (nd, m // nd, m)
+          logits = jnp.mean(logits, axis=1)
+          logits = jnp.reshape(logits, [m, m])
+          labels_one_hot = jnp.eye(m)
+          loss10 = optax.softmax_cross_entropy(
+            logits=logits.transpose(),
+            labels=labels_one_hot,
+          ).mean()
+        else:
+          # -> (nd, m/nd, repeat, m)
+          logits = jnp.transpose(logits, axes=[0, 2, 1, 3])
+          labels_one_hot = jnp.transpose(labels_one_hot, axes=[0, 2, 1, 3])
+          logits = jnp.reshape(logits, [m, repeat, m])
+          labels_one_hot = jnp.reshape(labels_one_hot, [m, repeat, m])
+          # call(lambda x: print(x.shape, x), labels_one_hot)
+          loss10 = optax.softmax_cross_entropy(
+            logits=logits.transpose(),
+            labels=labels_one_hot.transpose(),
+          ).mean()
+
         #loss10 = 0.0
 
     loss = (loss01 + loss10) / 2
