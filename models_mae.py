@@ -821,7 +821,7 @@ class VisionTransformer(nn.Module):
     axis=1)
     return imgs_vis
 
-  def apply_encoder(self, inputs, train):
+  def apply_encoder(self, inputs, train, full_prob=0.0):
     use_cls_token = (self.classifier == 'token')
     assert use_cls_token  # kaiming: TODO: support both?
 
@@ -834,6 +834,10 @@ class VisionTransformer(nn.Module):
 
     # masking: length -> length * mask_ratio
     mask_ratio = self.mask_ratio if train else 0.0
+    assert full_prob == 0.0
+    if full_prob > 0 and random.uniform(self.make_rng('dropout')) <= full_prob:
+      mask_ratio = 0.0
+
     x, mask, ids_restore = random_mask(self.make_rng('dropout'), x, mask_ratio)
     n = x.shape[0]
     ids_restore = jnp.reshape(ids_restore, [n, h, w])  # carries the shape info
@@ -848,7 +852,7 @@ class VisionTransformer(nn.Module):
 
     return x, mask, ids_restore
 
-  def apply_encoder_multi(self, inputs, train, repeat_mode="none", repeat_sample=1):
+  def apply_encoder_multi(self, inputs, train, repeat_mode="none", repeat_sample=1, full_prob=0.0):
     use_cls_token = (self.classifier == 'token')
     assert use_cls_token  # kaiming: TODO: support both?
 
@@ -859,16 +863,22 @@ class VisionTransformer(nn.Module):
 
     x = self.encoder_layers['pos_emb'](x)
 
-    if train and repeat_mode != "none":
+    mask_ratio = self.mask_ratio if train else 0.0
+    assert full_prob == 0.0
+    if full_prob > 0 and random.uniform(self.make_rng('dropout')) <= full_prob: # not working for comp
+      mask_ratio = 0.0
+      repeat_sample = 1
+
+    if train and repeat_mode != "none" and repeat_sample > 1:
       # masking: length -> length * mask_ratio
-      mask_ratio = self.mask_ratio if train else 0.0
+     
       x, mask, ids_restore = random_mask_repeat(
         self.make_rng('dropout'), x, mask_ratio, mode=repeat_mode, repeat=repeat_sample
       )
       ids_restore = jnp.reshape(ids_restore, [n * repeat_sample, h, w])  # carries the shape info
     else:
       # masking: length -> length * mask_ratio
-      mask_ratio = self.mask_ratio if train else 0.0
+      
       x, mask, ids_restore = random_mask(self.make_rng('dropout'), x, mask_ratio)
       ids_restore = jnp.reshape(ids_restore, [n, h, w])  # carries the shape info
 
@@ -1021,7 +1031,7 @@ class ImageTextLearner(nn.Module):
       name='{}_mlp{}'.format(prefix, clr.proj_layers))(z)
     return z
   
-  def compute_contrastive_loss(self, z0, z1, repeat=1):
+  def compute_contrastive_loss(self, z0, z1):
     clr = self.config.clr
 
     if clr.tau_learnable:
@@ -1047,7 +1057,8 @@ class ImageTextLearner(nn.Module):
     logits = _get_logits(z0, z1, logit_scale)
     logging.info('logits.shape: {}'.format(logits.shape))
     n, m = logits.shape[0], logits.shape[1]
-    assert n == m * repeat
+    # assert n == m * repeat
+    repeat = n // m 
 
     if clr.get("momentum_queue", 0) > 0:
       assert repeat == 1
@@ -1128,14 +1139,15 @@ class ImageTextLearner(nn.Module):
     if encode_img:
       repeat_mode = self.config.get("mask_repeat_mode", "none")
       repeat = self.config.get("mask_repeat", 1)
+      full_prob = self.config.get("mask_full_prob", 0.0)
       if train and repeat_mode != "none":
         # print(img.shape)
         x_img, mask_img, ids_restore_img = self.img_encoder.apply_encoder_multi(
-          img, train=train, repeat_mode=repeat_mode, repeat_sample=repeat
+          img, train=train, repeat_mode=repeat_mode, repeat_sample=repeat, full_prob=full_prob,
         )
         # print(x_img.shape, mask_img.shape, ids_restore_img.shape)
       else:
-        x_img, mask_img, ids_restore_img = self.img_encoder.apply_encoder(img, train=train)
+        x_img, mask_img, ids_restore_img = self.img_encoder.apply_encoder(img, train=train, full_prob=full_prob)
     if encode_txt:
       x_txt, mask_txt, ids_restore_txt = self.txt_encoder.apply_encoder(txt, train=train)
 
@@ -1159,7 +1171,7 @@ class ImageTextLearner(nn.Module):
         z_txt /= jnp.linalg.norm(z_txt, axis=-1, keepdims=True) + 1e-8
       if encode_img and encode_txt:
         # z_img = z_img.reshape([z_img.shape[0] // 2, 2, z_img.shape[1]]).mean(axis=1)
-        loss_clr, tau, loss01, loss10 = self.compute_contrastive_loss(z_img, z_txt, repeat=repeat)
+        loss_clr, tau, loss01, loss10 = self.compute_contrastive_loss(z_img, z_txt)
       else:
         loss_clr = 0
         tau = 0
