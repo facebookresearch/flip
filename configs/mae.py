@@ -81,6 +81,9 @@ def get_config_img():
 
   config.decoder.loss_weight = 1.0
 
+  config.transformer.remat_policy = "none"
+
+
   return config
 
 
