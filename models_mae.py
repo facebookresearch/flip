@@ -1084,10 +1084,11 @@ class ImageTextLearner(nn.Module):
       logits_z0z1 = _get_logits(z0, z1, logit_scale) 
       logits_z0q1 = _get_logits(z0, q1, logit_scale)
       labels_one_hot = jnp.eye(n, n + q1.shape[0])
-      loss01 = optax.softmax_cross_entropy(
+      loss01 = clr_loss(
+        config=clr,
         logits=jnp.concatenate([logits_z0z1, logits_z0q1], axis=1),
         labels=labels_one_hot,
-      ).mean()
+      )
       
 
       q0 = self.img_queue.get_queue()
@@ -1095,10 +1096,11 @@ class ImageTextLearner(nn.Module):
       logits_z1z0 = _get_logits(z1, z0, logit_scale) 
       logits_z1q0 = _get_logits(z1, q0, logit_scale)
       labels_one_hot = jnp.eye(n, n + q0.shape[0])
-      loss10 = optax.softmax_cross_entropy(
+      loss10 = clr_loss(
+        config=clr,
         logits=jnp.concatenate([logits_z1z0, logits_z1q0], axis=1),
         labels=labels_one_hot,
-      ).mean()
+      )
 
       self.img_queue.update_queue(z0)
       self.txt_queue.update_queue(z1)
@@ -1106,8 +1108,8 @@ class ImageTextLearner(nn.Module):
       labels_one_hot = jnp.eye(m)
 
       if repeat == 1:
-        loss01 = optax.softmax_cross_entropy(logits=logits, labels=labels_one_hot).mean()
-        loss10 = optax.softmax_cross_entropy(logits=logits.transpose(), labels=labels_one_hot).mean()
+        loss01 = clr_loss(config=clr, logits=logits, labels=labels_one_hot)
+        loss10 = clr_loss(config=clr, logits=logits.transpose(), labels=labels_one_hot)
       else:
         #from jax.experimental.host_callback import call
 
@@ -1115,17 +1117,18 @@ class ImageTextLearner(nn.Module):
         labels_one_hot = jnp.reshape(labels_one_hot, [nd, 1, m // nd, m])
         labels_one_hot = jnp.tile(labels_one_hot, [1, repeat, 1, 1])
         logits = jnp.reshape(logits, [nd, repeat, m // nd, m])
-        loss01 = optax.softmax_cross_entropy(logits=logits, labels=labels_one_hot).mean()
+        loss01 = clr_loss(config=clr, logits=logits, labels=labels_one_hot)
 
         if clr.get("repeat_avg", False):
           # (nd, repeat, m // nd, m) --> (nd, m // nd, m)
           logits = jnp.mean(logits, axis=1)
           logits = jnp.reshape(logits, [m, m])
           labels_one_hot = jnp.eye(m)
-          loss10 = optax.softmax_cross_entropy(
+          loss10 = clr_loss(
+            config=clr,
             logits=logits.transpose(),
             labels=labels_one_hot,
-          ).mean()
+          )
         else:
           # -> (nd, m/nd, repeat, m)
           logits = jnp.transpose(logits, axes=[0, 2, 1, 3])
@@ -1133,10 +1136,11 @@ class ImageTextLearner(nn.Module):
           logits = jnp.reshape(logits, [m, repeat, m])
           labels_one_hot = jnp.reshape(labels_one_hot, [m, repeat, m])
           # call(lambda x: print(x.shape, x), labels_one_hot)
-          loss10 = optax.softmax_cross_entropy(
+          loss10 = clr_loss(
+            config=clr,
             logits=logits.transpose(),
             labels=labels_one_hot.transpose(),
-          ).mean()
+          )
 
         #loss10 = 0.0
 
@@ -1250,3 +1254,33 @@ class ImageTextLearner(nn.Module):
       artifacts['z_txt'] = z_txt
 
     return loss_tot, vis, artifacts
+
+
+def clr_loss(config, logits, labels):
+  loss_type = config.get("loss_type", "ce")
+  if loss_type == "ce":
+    return optax.softmax_cross_entropy(logits=logits, labels=labels).mean()
+  elif loss_type == "focal":
+    gamma = config.get("focal_gamma", 2.0)
+    alpha = config.get("focal_alpha", 0.25)
+    norm = config.get("focal_norm", "sigmoid")
+    logging.info(f"use focal loss with gamma{gamma} and alpah{alpha} and norm{norm}")
+
+    if norm == "sigmoid":
+      p = jax.nn.sigmoid(logits)
+      ce_loss = optax.sigmoid_binary_cross_entropy(logits, labels)
+    elif norm == "softmax":
+      p = jax.nn.softmax(logits)
+      ce_loss = -labels * jax.nn.log_softmax(logits, axis=-1)
+    else:
+      raise NotImplementedError
+    p_t = p * labels + (1 - p) * (1 - labels)
+    loss = ce_loss * ((1 - p_t) ** gamma)
+
+    if alpha >= 0:
+      alpha_t = alpha * labels + (1 - alpha) * (1 - labels)
+      loss = alpha_t * loss
+    return jnp.sum(ce_loss, axis=1).mean()
+  else:
+    raise NotImplementedError
+
