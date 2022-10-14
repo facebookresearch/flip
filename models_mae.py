@@ -1109,34 +1109,34 @@ class ImageTextLearner(nn.Module):
     else:
       if repeat == 1:
         # memory-efficient implementation
-        # logits = jnp.einsum('nc,mc->nm', z0, z1)
-        # logging.info('logits.shape: {}'.format(logits.shape))
-        # logits /= tau
+        logits = jnp.einsum('nc,mc->nm', z0, z1)
+        logging.info('logits.shape: {}'.format(logits.shape))
+        logits /= tau
 
-        # # ---------------------------------------------------------------------------
-        # logits_pos = jnp.einsum('nc,nc->n', z0, z1)  # easier to take the diagonal (positive)
-        # logits_pos /= tau
+        # ---------------------------------------------------------------------------
+        logits_pos = jnp.einsum('nc,nc->n', z0, z1)  # easier to take the diagonal (positive)
+        logits_pos /= tau
 
-        # # hand-written log_softmax
-        # # we do not need to shift x_max as it is well-bound after l2-normalization
-        # exp_logits = jnp.exp(logits)
-        # logsumexp_logits01 = jnp.log(jnp.sum(exp_logits, axis=-1))  # [N,]
-        # logsumexp_logits10 = jnp.log(jnp.sum(exp_logits, axis=0))  # [N,]
+        # hand-written log_softmax
+        # we do not need to shift x_max as it is well-bound after l2-normalization
+        exp_logits = jnp.exp(logits)
+        logsumexp_logits01 = jnp.log(jnp.sum(exp_logits, axis=-1))  # [N,]
+        logsumexp_logits10 = jnp.log(jnp.sum(exp_logits, axis=0))  # [N,]
 
-        # loss01 = -(logits_pos - logsumexp_logits01)  # [N,]
-        # loss10 = -(logits_pos - logsumexp_logits10)  # [N,]
+        loss01 = -(logits_pos - logsumexp_logits01)  # [N,]
+        loss10 = -(logits_pos - logsumexp_logits10)  # [N,]
 
-        # loss01 = loss01.mean()
-        # loss10 = loss10.mean()
+        loss01 = loss01.mean()
+        loss10 = loss10.mean()
 
         # # lazy implementation:
-        logits = _get_logits(z0, z1, logit_scale)
-        logits = t5x.layers.with_sharding_constraint(logits, ('batch', 'length'))
-        logging.info('logits.shape: {}'.format(logits.shape))
-        labels_one_hot = jnp.eye(m)
-        labels_one_hot = t5x.layers.with_sharding_constraint(labels_one_hot, ('batch', 'length'))
-        loss01 = clr_loss(config=clr, logits=logits, labels=labels_one_hot)
-        loss10 = clr_loss(config=clr, logits=logits.transpose(), labels=labels_one_hot)
+        # logits = _get_logits(z0, z1, logit_scale)
+        # logits = t5x.layers.with_sharding_constraint(logits, ('batch', 'length'))
+        # logging.info('logits.shape: {}'.format(logits.shape))
+        # labels_one_hot = jnp.eye(m)
+        # labels_one_hot = t5x.layers.with_sharding_constraint(labels_one_hot, ('batch', 'length'))
+        # loss01 = clr_loss(config=clr, logits=logits, labels=labels_one_hot)
+        # loss10 = clr_loss(config=clr, logits=logits.transpose(), labels=labels_one_hot)
       else:
         logits = _get_logits(z0, z1, logit_scale)
         logits = t5x.layers.with_sharding_constraint(logits, ('batch', 'length'))
