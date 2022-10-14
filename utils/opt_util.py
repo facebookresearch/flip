@@ -35,6 +35,19 @@ def filter_posembed(path: Tuple[Any], val: jnp.ndarray):
         return False
     return True
 
+# ---------------------------------------------------------
+# freeze parameters (e.g CLIP Encoder)
+# ---------------------------------------------------------
+def filter_freeze_keys(path: Tuple[Any], val: jnp.ndarray, keys=[]):
+    """Filter to exclude img feature extractor"""
+    del val
+    name = '.'.join(path)
+    for k in keys:
+        if k in name:
+            return False
+
+    return True
+
 
 # ---------------------------------------------------------
 # the entrance function:
@@ -43,3 +56,5 @@ def filter_parameters(params, filter_fn):
     """Filter the params based on filter_fn."""
     params_to_filter = nest.map_structure_with_path(filter_fn, params)
     return params_to_filter
+
+

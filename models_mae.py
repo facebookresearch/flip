@@ -1169,6 +1169,10 @@ class ImageTextLearner(nn.Module):
         # print(x_img.shape, mask_img.shape, ids_restore_img.shape)
       else:
         x_img, mask_img, ids_restore_img = self.img_encoder.apply_encoder(img, train=train, full_prob=full_prob)
+      
+      if self.config.get("freeze_img", False):
+        logging.info("stop gradient for img encoder")
+        x_img = jax.lax.stop_gradient(x_img)
     if encode_txt:
       x_txt, mask_txt, ids_restore_txt = self.txt_encoder.apply_encoder(txt, train=train)
 

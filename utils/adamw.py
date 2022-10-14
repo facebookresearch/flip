@@ -11,7 +11,7 @@ from optax._src import utils
 
 from optax._src import transform
 from optax._src.transform import _update_moment, _bias_correction, ScaleByAdamState
-
+from optax._src.wrappers import MaskedState
 
 
 ScalarOrSchedule = Union[float, base.Schedule]
@@ -220,3 +220,60 @@ def _update_moment(updates, moments, decay, order):
   """Compute the exponential moving average of the `order`-th moment."""
   return jax.tree_map(
       lambda g, t: (1 - decay) * (g ** order) + decay * t, updates, moments)
+
+
+# ------------------------------------------
+# Masked optimizer
+# ------------------------------------------
+import optax
+def masked(
+    inner: base.GradientTransformation,
+    mask: Union[base.PyTree, Callable[[base.Params], base.PyTree]]
+) -> base.GradientTransformation:
+  """Mask updates so only some are transformed, the rest are passed through.
+  For example, it is common to skip weight decay for BatchNorm scale and all
+  bias parameters. In many networks, these are the only parameters with only
+  one dimension. So, you may create a mask function to mask these out as
+  follows::
+    mask_fn = lambda p: jax.tree_map(lambda x: x.ndim != 1, p)
+    weight_decay = optax.masked(optax.add_decayed_weights(0.001), mask_fn)
+  You may alternatively create the mask pytree upfront::
+    mask = jax.tree_map(lambda x: x.ndim != 1, params)
+    weight_decay = optax.masked(optax.add_decayed_weights(0.001), mask)
+  For the ``inner`` transform, state will only be stored for the parameters that
+  have a mask value of ``True``.
+  Args:
+    inner: Inner transformation to mask.
+    mask: a PyTree with same structure as (or a prefix of) the params PyTree, or
+      a Callable that returns such a pytree given the params/updates. The leaves
+      should be booleans, ``True`` for leaves/subtrees you want to apply the
+      transformation to, and ``False`` for those you want to skip. The mask must
+      be static for the gradient transformation to be jit-compilable.
+  Returns:
+    New GradientTransformation wrapping ``inner``.
+  """
+  def mask_pytree(pytree, mask_tree):
+    return jax.tree_map(lambda m, p: p if m else None, mask_tree, pytree)
+
+  def init_fn(params):
+    mask_tree = mask(params) if callable(mask) else mask
+    masked_params = mask_pytree(params, mask_tree)
+    return MaskedState(inner_state=inner.init(masked_params))
+
+  def update_fn(updates, state, params=None):
+    mask_tree = mask(updates) if callable(mask) else mask
+    masked_updates = mask_pytree(updates, mask_tree)
+    masked_params = None if params is None else mask_pytree(params, mask_tree)
+
+    new_masked_updates, new_inner_state = inner.update(
+        masked_updates, state.inner_state, masked_params)
+
+    # new_updates = jax.tree_map(
+    #     lambda m, new_u, old_u: new_u if m else old_u,
+    #     mask_tree, new_masked_updates, updates)  # this takes the old updates
+    new_updates = jax.tree_map(
+        lambda m, new_u: new_u if m else 0.,
+        mask_tree, new_masked_updates)  # this takes zero
+    return new_updates, MaskedState(inner_state=new_inner_state)
+
+  return base.GradientTransformation(init_fn, update_fn)

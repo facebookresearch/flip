@@ -66,7 +66,19 @@ def create_optimizer(config, params_names, steps_per_epoch):
       )
     logging.info('Apply wd: {}'.format(state_utils.str_flatten_dict(mask)))
 
-    opt = getattr(adamw, config.opt_type)  # optax.adamw
+    freeze_keys = config.model.get("freeze_keys", [])
+    if len(freeze_keys) > 0:
+      opt_inner = getattr(adamw, config.opt_type)  # optax.adamw
+      filter_func = functools.partial(opt_util.filter_freeze_keys, keys=freeze_keys)
+
+      mask_trainable = opt_util.filter_parameters(params_names, filter_func)
+      logging.info('Trainable: {}'.format(t5x.state_utils.str_flatten_dict(mask_trainable)))
+
+      def opt(**kwargs) -> optax._src.base.GradientTransformation:  # same type as opt
+        return adamw.masked(inner=opt_inner(**kwargs), mask=mask_trainable)
+    else:
+      opt = getattr(adamw, config.opt_type)  # optax.adamw
+    
     opt = t5x.optimizers.wrap_optax_optimizer(opt)
     opt = opt(learning_rate=learning_rate_fn, **config.opt, mask=mask, mu_dtype=getattr(jnp, config.opt_mu_dtype))
     opt.metric_learning_rate_fn = learning_rate_fn  # hack for metric
