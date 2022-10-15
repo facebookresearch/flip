@@ -207,8 +207,8 @@ class OptaxStatePartitionRules:
       optax.ScaleByAdamState:
           lambda state, params_axes: optax.ScaleByAdamState(
               count=None, mu=params_axes, nu=params_axes),
-      utils.adamw.ScaleByAdaRowsState:
-          utils.adamw.PartitionRuleScaleByAdaRowsState,
+      # utils.adamw.ScaleByAdaRowsState:
+      #     utils.adamw.PartitionRuleScaleByAdaRowsState,
       optax.ScaleByBeliefState:
           lambda state, params_axes: optax.ScaleByBeliefState(
               count=None, mu=params_axes, nu=params_axes),

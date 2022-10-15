@@ -911,9 +911,17 @@ class PjitPartitioner(BasePjitPartitioner):
 def revise_axes(name, axes):
   if not name.startswith('state/param_states'):
     return axes
+  
+  # # hack 
+  # keys = ["Dense_0/kernel", "Dense_1/kernel"]
+  # if ("img_encoder" not in name) or (not any([k in name for k in keys])):
+  #   return axes
+
   if type(axes) is not PartitionSpec:
     return axes
+  
   if len(axes) == 2:
+    # print(name, axes)
     if axes[0] == None and axes[1] == 'model':
       axes = PartitionSpec('data', 'model')
     elif axes[0] == 'model' and axes[1] == None:

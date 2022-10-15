@@ -3,6 +3,7 @@ from typing import Any, Callable, NamedTuple, Optional, Union
 import chex
 import jax
 import jax.numpy as jnp
+from matplotlib.cbook import flatten
 
 from optax._src import base
 from optax._src import combine
@@ -10,7 +11,8 @@ from optax._src import numerics
 from optax._src import utils
 
 from optax._src import transform
-from optax._src.transform import _update_moment, _bias_correction, ScaleByAdamState
+# from optax._src.transform import _update_moment, _bias_correction, ScaleByAdamState
+from optax._src.transform import _bias_correction, ScaleByAdamState
 from optax._src.wrappers import MaskedState
 
 
@@ -36,6 +38,7 @@ def adamw(
     mu_dtype: Optional[Any] = None,
     weight_decay: float = 1e-4,
     mask: Optional[Union[Any, Callable[[base.Params], Any]]] = None,
+    flatten_params: Optional[bool] = False,
 ) -> base.GradientTransformation:
   """Adam with weight decay regularization.
 
@@ -73,7 +76,7 @@ def adamw(
   """
   return combine.chain(
       _scale_by_adam(
-          b1=b1, b2=b2, eps=eps, eps_root=eps_root, mu_dtype=mu_dtype),
+          b1=b1, b2=b2, eps=eps, eps_root=eps_root, mu_dtype=mu_dtype, flatten_params=flatten_params),
       transform.add_decayed_weights(weight_decay, mask),
       _scale_by_learning_rate(learning_rate),
   )
@@ -86,6 +89,7 @@ def _scale_by_adam(
     eps: float = 1e-8,
     eps_root: float = 0.0,
     mu_dtype: Optional[Any] = None,
+    flatten_params: Optional[bool] = False,
 ) -> base.GradientTransformation:
   """Rescale updates according to the Adam algorithm.
 
@@ -107,16 +111,26 @@ def _scale_by_adam(
 
   mu_dtype = utils.canonicalize_dtype(mu_dtype)
 
+  def reshape_and_zeros_like(param):
+    if len(param.shape) == 2:
+      return jnp.zeros_like(param).reshape([-1, 1])  # hack it could be [-1, 2] or other
+    else:
+      return jnp.zeros_like(param)    
+
   def init_fn(params):
-    mu = jax.tree_map(  # First moment
-        lambda t: jnp.zeros_like(t, dtype=mu_dtype), params)
-    nu = jax.tree_map(jnp.zeros_like, params)  # Second moment
+    if flatten_params:
+      mu = jax.tree_map(reshape_and_zeros_like, params)
+      nu = jax.tree_map(reshape_and_zeros_like, params)
+    else:
+      mu = jax.tree_map(  # First moment
+          lambda t: jnp.zeros_like(t, dtype=mu_dtype), params)
+      nu = jax.tree_map(jnp.zeros_like, params)  # Second moment
     return ScaleByAdamState(count=jnp.zeros([], jnp.int32), mu=mu, nu=nu)
 
   def update_fn(updates, state, params=None):
     del params
-    mu = _update_moment(updates, state.mu, b1, 1)
-    nu = _update_moment(updates, state.nu, b2, 2)
+    mu = _update_moment(updates, state.mu, b1, 1, flatten_params=flatten_params)
+    nu = _update_moment(updates, state.nu, b2, 2, flatten_params=flatten_params)
     count_inc = numerics.safe_int32_increment(state.count)
     mu_hat = _bias_correction(mu, b1, count_inc)
     nu_hat = _bias_correction(nu, b2, count_inc)
@@ -128,98 +142,102 @@ def _scale_by_adam(
   return base.GradientTransformation(init_fn, update_fn)
 
 
-# ------------------------------------------
-# AdaRows optimizer
-# ------------------------------------------
-class ScaleByAdaRowsState(NamedTuple):
-  """State for the AdaRows algorithm."""
-  count: chex.Array  # shape=(), dtype=jnp.int32.
-  mu: base.Updates
-  nu: base.Updates
+# # ------------------------------------------
+# # AdaRows optimizer
+# # ------------------------------------------
+# class ScaleByAdaRowsState(NamedTuple):
+#   """State for the AdaRows algorithm."""
+#   count: chex.Array  # shape=(), dtype=jnp.int32.
+#   mu: base.Updates
+#   nu: base.Updates
 
 
-def adarows(
-    learning_rate: ScalarOrSchedule,
-    b1: float = 0.9,
-    b2: float = 0.999,
-    eps: float = 1e-8,
-    eps_root: float = 0.0,
-    mu_dtype: Optional[Any] = None,
-    weight_decay: float = 1e-4,
-    mask: Optional[Union[Any, Callable[[base.Params], Any]]] = None,
-) -> base.GradientTransformation:
-  """Kaiming: experimental AdamW per row
+# def adarows(
+#     learning_rate: ScalarOrSchedule,
+#     b1: float = 0.9,
+#     b2: float = 0.999,
+#     eps: float = 1e-8,
+#     eps_root: float = 0.0,
+#     mu_dtype: Optional[Any] = None,
+#     weight_decay: float = 1e-4,
+#     mask: Optional[Union[Any, Callable[[base.Params], Any]]] = None,
+# ) -> base.GradientTransformation:
+#   """Kaiming: experimental AdamW per row
 
-  Returns:
-    the corresponding `GradientTransformation`.
-  """
-  return combine.chain(
-      _scale_by_adam_per_rows(
-          b1=b1, b2=b2, eps=eps, eps_root=eps_root, mu_dtype=mu_dtype),
-      transform.add_decayed_weights(weight_decay, mask),
-      _scale_by_learning_rate(learning_rate),
-  )
-
-
-def PartitionRuleScaleByAdaRowsState(state, params_axes):
-  nu_params_axes = jax.tree_map(lambda g: g if len(g) != 2 else type(g)('_null0',), params_axes)
-  return ScaleByAdaRowsState(count=None, mu=params_axes, nu=nu_params_axes)
+#   Returns:
+#     the corresponding `GradientTransformation`.
+#   """
+#   return combine.chain(
+#       _scale_by_adam_per_rows(
+#           b1=b1, b2=b2, eps=eps, eps_root=eps_root, mu_dtype=mu_dtype),
+#       transform.add_decayed_weights(weight_decay, mask),
+#       _scale_by_learning_rate(learning_rate),
+#   )
 
 
-def _scale_by_adam_per_rows(
-    b1: float = 0.9,
-    b2: float = 0.999,
-    eps: float = 1e-8,
-    eps_root: float = 0.0,
-    mu_dtype: Optional[Any] = None,
-) -> base.GradientTransformation:
-  """Rescale updates per row according to the Adam algorithm.
-
-  Returns:
-    An (init_fn, update_fn) tuple.
-  """
-
-  mu_dtype = utils.canonicalize_dtype(mu_dtype)
-  nu_dtype = utils.canonicalize_dtype(jnp.float32)
-
-  # e.g., in_channel=1024, out_channel=4096
-  # kernel: (1024, 4096)
-  # nu is reduced over axis=4096, and nu.shape=(1024,)
-  axis_col = 0
-  axis_row = 1
-
-  def init_fn(params):
-    mu = jax.tree_map(lambda t: jnp.zeros_like(t, dtype=mu_dtype), params)  # First moment
-
-    nu = jax.tree_map(lambda t: jnp.zeros_like(
-      t if t.ndim != 2 else jnp.mean(t, axis=axis_row, keepdims=True),
-      dtype=nu_dtype), params)  # Second moment
-
-    return ScaleByAdaRowsState(count=jnp.zeros([], jnp.int32), mu=mu, nu=nu)
-
-  def update_fn(updates, state, params=None):
-    del params
-    mu = _update_moment(updates, state.mu, b1, 1)  # no change
-    # nu = _update_moment(updates, state.nu, b2, 2)  # original adam
-
-    nu = jax.tree_map(lambda g: g**2 if g.ndim != 2 else jnp.mean(g**2, axis=axis_row, keepdims=True), updates)
-    nu = jax.tree_map(lambda g, t: (1 - b2) * g + b2 * t, nu, state.nu)
-
-    count_inc = numerics.safe_int32_increment(state.count)
-    mu_hat = _bias_correction(mu, b1, count_inc)
-    nu_hat = _bias_correction(nu, b2, count_inc)
-    updates = jax.tree_map(
-        lambda m, v: m / (jnp.sqrt(v + eps_root) + eps), mu_hat, nu_hat)
-    mu = utils.cast_tree(mu, mu_dtype)
-    return updates, ScaleByAdaRowsState(count=count_inc, mu=mu, nu=nu)
-
-  return base.GradientTransformation(init_fn, update_fn)
+# def PartitionRuleScaleByAdaRowsState(state, params_axes):
+#   nu_params_axes = jax.tree_map(lambda g: g if len(g) != 2 else type(g)('_null0',), params_axes)
+#   return ScaleByAdaRowsState(count=None, mu=params_axes, nu=nu_params_axes)
 
 
-def _update_moment(updates, moments, decay, order):
+# def _scale_by_adam_per_rows(
+#     b1: float = 0.9,
+#     b2: float = 0.999,
+#     eps: float = 1e-8,
+#     eps_root: float = 0.0,
+#     mu_dtype: Optional[Any] = None,
+# ) -> base.GradientTransformation:
+#   """Rescale updates per row according to the Adam algorithm.
+
+#   Returns:
+#     An (init_fn, update_fn) tuple.
+#   """
+
+#   mu_dtype = utils.canonicalize_dtype(mu_dtype)
+#   nu_dtype = utils.canonicalize_dtype(jnp.float32)
+
+#   # e.g., in_channel=1024, out_channel=4096
+#   # kernel: (1024, 4096)
+#   # nu is reduced over axis=4096, and nu.shape=(1024,)
+#   axis_col = 0
+#   axis_row = 1
+
+#   def init_fn(params):
+#     mu = jax.tree_map(lambda t: jnp.zeros_like(t, dtype=mu_dtype), params)  # First moment
+
+#     nu = jax.tree_map(lambda t: jnp.zeros_like(
+#       t if t.ndim != 2 else jnp.mean(t, axis=axis_row, keepdims=True),
+#       dtype=nu_dtype), params)  # Second moment
+
+#     return ScaleByAdaRowsState(count=jnp.zeros([], jnp.int32), mu=mu, nu=nu)
+
+#   def update_fn(updates, state, params=None):
+#     del params
+#     mu = _update_moment(updates, state.mu, b1, 1)  # no change
+#     # nu = _update_moment(updates, state.nu, b2, 2)  # original adam
+
+#     nu = jax.tree_map(lambda g: g**2 if g.ndim != 2 else jnp.mean(g**2, axis=axis_row, keepdims=True), updates)
+#     nu = jax.tree_map(lambda g, t: (1 - b2) * g + b2 * t, nu, state.nu)
+
+#     count_inc = numerics.safe_int32_increment(state.count)
+#     mu_hat = _bias_correction(mu, b1, count_inc)
+#     nu_hat = _bias_correction(nu, b2, count_inc)
+#     updates = jax.tree_map(
+#         lambda m, v: m / (jnp.sqrt(v + eps_root) + eps), mu_hat, nu_hat)
+#     mu = utils.cast_tree(mu, mu_dtype)
+#     return updates, ScaleByAdaRowsState(count=count_inc, mu=mu, nu=nu)
+
+#   return base.GradientTransformation(init_fn, update_fn)
+
+
+def _update_moment(updates, moments, decay, order, flatten_params=False):
   """Compute the exponential moving average of the `order`-th moment."""
-  return jax.tree_map(
-      lambda g, t: (1 - decay) * (g ** order) + decay * t, updates, moments)
+  if flatten_params:
+      return jax.tree_map(
+        lambda g, t: (1 - decay) * (g ** order) + decay * t.reshape(g.shape), updates, moments)
+  else:
+    return jax.tree_map(
+        lambda g, t: (1 - decay) * (g ** order) + decay * t, updates, moments)
 
 
 # ------------------------------------------
