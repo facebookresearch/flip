@@ -556,6 +556,64 @@ def random_mask(rng, x, mask_ratio, bias=None):
   return x_masked, mask, ids_restore
 
 
+def random_mask_text(rng, x, mask_ratio, bias=None, is_valid=None):
+  """
+  x: [N, L, C] input
+  bias: [N, L], an additional map to the noise map (small is keep, large is remove)
+  """
+
+  N, L, _ = x.shape  # batch, length, dim
+  len_keep = int(L * (1 - mask_ratio))
+
+  noise = random.uniform(rng, shape=x.shape[:2])  
+
+  if bias is not None:
+    noise += bias
+
+  if is_valid is not None:
+    noise -= is_valid  # mask non-valid first
+
+  ids_shuffle = jnp.argsort(noise, axis=1)  # ascend: small is keep, large is remove
+  ids_restore = jnp.argsort(ids_shuffle, axis=1)
+
+  # keep the first subset
+  ids_keep = ids_shuffle[:, :len_keep]
+  x_masked = gather_by_einsum(x, ids_keep)
+
+  # from jax.experimental.host_callback import call
+  # call(lambda x: print(x.shape, x), is_valid)
+  # call(lambda x: print(x.shape, x), ids_keep)
+
+  x_masked = t5x.layers.with_sharding_constraint(x_masked, ('batch', 'length', 'embed'))
+
+  # generate the binary mask: 0 is keep, 1 is remove
+  mask = jnp.ones([N, L])
+  mask = t5x.layers.with_sharding_constraint(mask, ('batch', 'length'))
+  mask = mask.at[:, :len_keep].set(0)
+  # unshuffle to get the binary mask
+  mask = gather_by_einsum(mask, ids_restore)
+  mask = t5x.layers.with_sharding_constraint(mask, ('batch', 'length'))
+
+
+  # for debug
+  # ndevice = jax.device_count()
+  # print(ndevice)
+  # B, L, C = x_masked.shape
+  # nd = min(ndevice, B)
+  # x_masked = jnp.reshape(x_masked, [nd, B // nd, L, C])
+  # x_masked = jnp.concatenate([x_masked] * 2, axis=1)
+  # x_masked = jnp.reshape(x_masked, [N * 2, L, C])
+  # x_masked = jnp.reshape(x_masked, [x_masked.shape[0] // 2, 2, x_masked.shape[1], x_masked.shape[2]]).mean(axis=1)
+  # x_masked = t5x.layers.with_sharding_constraint(x_masked, ('batch', 'length', 'embed'))
+  
+
+  # mask = jnp.concatenate([mask] * 2, axis=0)
+  # ids_restore = jnp.concatenate([ids_restore] * 2, axis=0)
+
+
+  return x_masked, mask, ids_restore
+
+
 def random_mask_repeat(rng, x, mask_ratio, bias=None, mode="complementary", repeat=1):
   """
   x: [N, L, C] input
@@ -706,7 +764,7 @@ class LanguageTransformer(nn.Module):
 
     return loss
 
-  def apply_encoder(self, inputs, train):
+  def apply_encoder(self, inputs, train, is_valid=None):
     x = inputs
     
     x = self.encoder_layers['token_emb'](x)
@@ -714,8 +772,10 @@ class LanguageTransformer(nn.Module):
     x = self.encoder_layers['pos_emb'](x)
 
     # masking: length -> length * mask_ratio
-    # x, mask, ids_restore = random_mask(self.make_rng('dropout'), x, self.mask_ratio)
-    mask, ids_restore = None, None
+    if self.mask_ratio > 0:
+      x, mask, ids_restore = random_mask_text(self.make_rng('dropout'), x, self.mask_ratio, is_valid=is_valid)
+    else:
+      mask, ids_restore = None, None
 
     # apply the encoder
     if self.use_attention_mask:
@@ -1206,7 +1266,7 @@ class ImageTextLearner(nn.Module):
         logging.info("stop gradient for img encoder")
         x_img = jax.lax.stop_gradient(x_img)
     if encode_txt:
-      x_txt, mask_txt, ids_restore_txt = self.txt_encoder.apply_encoder(txt, train=train)
+      x_txt, mask_txt, ids_restore_txt = self.txt_encoder.apply_encoder(txt, train=train, is_valid=is_valid)
 
     # apply contrastive learning (clip-like)
     if self.config.clr.clr_loss:
