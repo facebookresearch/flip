@@ -1117,9 +1117,11 @@ class ImageTextLearner(nn.Module):
           'logit_scale', initializers_util.constant(value=math.log(1 / 0.07)),
           (1,), jnp.float32, axes=('_null0',))
       logit_scale = jnp.clip(logit_scale, 0, math.log(100))
-      tau = 1 / jnp.exp(logit_scale)
+      scale = jnp.exp(logit_scale)
+      tau = 1 / scale
     else:
       tau = clr.tau
+      scale = 1 / tau
       logit_scale = None
 
     def _get_logits(a, b, logit_scale):
@@ -1173,11 +1175,11 @@ class ImageTextLearner(nn.Module):
           # memory-efficient implementation
           logits = jnp.einsum('nc,mc->nm', z0, z1)
           logging.info('logits.shape: {}'.format(logits.shape))
-          logits /= tau
+          logits *= scale
 
           # ---------------------------------------------------------------------------
           logits_pos = jnp.einsum('nc,nc->n', z0, z1)  # easier to take the diagonal (positive)
-          logits_pos /= tau
+          logits_pos *= scale
 
           # hand-written log_softmax
           # we do not need to shift x_max as it is well-bound after l2-normalization
