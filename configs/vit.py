@@ -148,6 +148,23 @@ def get_l16_config():
 
 
 @_register
+def get_l14_config():
+  """Returns the ViT-L/14 configuration."""
+  config = ml_collections.ConfigDict()
+  config.name = 'ViT-L_14'
+  config.patches = ml_collections.ConfigDict({'size': (14, 14)})
+  config.hidden_size = 1024
+  config.transformer = ml_collections.ConfigDict()
+  config.transformer.mlp_dim = 4096
+  config.transformer.num_heads = 16
+  config.transformer.num_layers = 24
+  config.transformer.attention_dropout_rate = 0.0
+  config.transformer.dropout_rate = 0.1
+  config.classifier = 'token'
+  return config
+
+
+@_register
 def get_h14_config():
   """Returns the ViT-H/14 configuration."""
   config = ml_collections.ConfigDict()
