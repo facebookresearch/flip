@@ -136,7 +136,9 @@ def _scale_by_adam(
     nu_hat = _bias_correction(nu, b2, count_inc)
     updates = jax.tree_map(
         lambda m, v: m / (jnp.sqrt(v + eps_root) + eps), mu_hat, nu_hat)
-    mu = utils.cast_tree(mu, mu_dtype)
+    # mu = utils.cast_tree(mu, mu_dtype)
+    mu = jax.tree_map(lambda a, b: a.reshape(b.shape), mu, state.mu)
+    nu = jax.tree_map(lambda a, b: a.reshape(b.shape), nu, state.nu)
     return updates, ScaleByAdamState(count=count_inc, mu=mu, nu=nu)
 
   return base.GradientTransformation(init_fn, update_fn)
