@@ -192,7 +192,6 @@ def train_step(state, batch, model, rng):
     outcome = model.apply(
         {'params': params, **state.flax_mutables},
         inputs=batch,
-        capture_intermediates=False,
         mutable=mutable,
         rngs=dict(dropout=dropout_rng),
         train=True)
@@ -225,8 +224,8 @@ def train_step(state, batch, model, rng):
 
   
 
-  #return new_state, metrics, intermediates
-  return new_state, metrics, None
+  #return new_state, metrics
+  return new_state, metrics
 
 
 def eval_step(state, batch, encoded_tags, model, rng):
@@ -387,6 +386,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     logging.info('Initializing train_state...')
     state = p_init_fn(rng_init)
     logging.info('Initializing train_state done.')
+    logging.info('load pretrain')
 
     path = config.pretrain_dir
     step = t5x.checkpoints.latest_step(path)
@@ -462,7 +462,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   partitioned_train_step = partitioner.partition(
         train_step_fn,
         in_axis_resources=(state_axes, partitioner.data_partition_spec),
-        out_axis_resources=(state_axes, None, None),
+        out_axis_resources=(state_axes, None),
         donate_argnums=(0,))
 
   eval_step_fn = functools.partial(eval_step, model=model, rng=rng)  # (state, batch) -> metrics
@@ -520,7 +520,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # ------------------------------------------------------------
     for i in range(steps_per_epoch):
       batch = next(data_loader_train)
-      state, metrics, intermediates = partitioned_train_step(state, batch)
+      state, metrics = partitioned_train_step(state, batch)
 
       # print("z0", intermediates['z0'])
       # print("z1", intermediates['z1'])
@@ -536,10 +536,10 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
         logging.info('Initial compilation completed.')
         start_time = time.time()  # log the time after compilation
 
-      # if epoch == epoch_offset and i == 0:
-      #   jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
-      #   logging.info('Saving init debug checkpoint: {}'.format(workdir))
-      #   checkpointer.save(state)
+      if epoch == epoch_offset and i == 0:
+        jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
+        logging.info('Saving init debug checkpoint: {}'.format(workdir))
+        checkpointer.save(state)
 
       if config.get('log_every_steps'):
         train_metrics.append(metrics)
