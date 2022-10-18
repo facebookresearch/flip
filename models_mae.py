@@ -400,10 +400,10 @@ class Encoder(nn.Module):
     if self.remat_policy not in (None, 'none'):
       logging.info(f"remat policy: {self.remat_policy}")
       if self.remat_policy == 'minimal':
-        logging.info("activation checkpointing")
         policy = jax.checkpoint_policies.checkpoint_dots_with_no_batch_dims
       else:
         policy = None
+      logging.info(f"activation checkpointing {self.remat_policy}")
       BlockLayer = remat(  # pylint: disable=invalid-name
           Encoder1DBlock,
           prevent_cse=True,
@@ -573,6 +573,9 @@ def random_mask_text(rng, x, mask_ratio, bias=None, is_valid=None):
 
   if is_valid is not None:
     noise -= is_valid  # mask non-valid first
+  
+  # always keep cls token
+  noise = noise.at[:, 0].set(-100)
 
   ids_shuffle = jnp.argsort(noise, axis=1)  # ascend: small is keep, large is remove
   ids_restore = jnp.argsort(ids_shuffle, axis=1)
@@ -581,8 +584,9 @@ def random_mask_text(rng, x, mask_ratio, bias=None, is_valid=None):
   ids_keep = ids_shuffle[:, :len_keep]
   x_masked = gather_by_einsum(x, ids_keep)
 
+
   # from jax.experimental.host_callback import call
-  # call(lambda x: print(x.shape, x), is_valid)
+  # # call(lambda x: print(x.shape, x), is_valid)
   # call(lambda x: print(x.shape, x), ids_keep)
 
   x_masked = t5x.layers.with_sharding_constraint(x_masked, ('batch', 'length', 'embed'))
@@ -772,9 +776,10 @@ class LanguageTransformer(nn.Module):
 
     x = self.encoder_layers['pos_emb'](x)
 
+    mask_ratio = self.mask_ratio if train else 0.0
     # masking: length -> length * mask_ratio
-    if self.mask_ratio > 0:
-      x, mask, ids_restore = random_mask_text(self.make_rng('dropout'), x, self.mask_ratio, is_valid=is_valid)
+    if mask_ratio > 0:
+      x, mask, ids_restore = random_mask_text(self.make_rng('dropout'), x, mask_ratio, is_valid=is_valid)
     else:
       mask, ids_restore = None, None
 
@@ -1287,7 +1292,12 @@ class ImageTextLearner(nn.Module):
           ids_eos = ids_eos[:, None]
           z_txt = gather_by_einsum(x_txt, ids_eos).squeeze(axis=1)
         else:
-          z_txt = x_txt[:, 0, :]  # cls token anyway
+          if self.config.clr.get("txt_cls_token", True):
+            z_txt = x_txt[:, 0, :]  # cls token anyway
+          else:
+            logging.info("use avg pool for txt")
+            z_txt = x_txt.mean(axis=1)
+          
         z_txt = self.apply_projection_head(z_txt, prefix='txt')
         z_txt /= jnp.linalg.norm(z_txt, axis=-1, keepdims=True) + 1e-8
       if encode_img and encode_txt:
