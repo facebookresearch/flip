@@ -927,10 +927,10 @@ def revise_axes(name, axes):
     elif axes[0] == 'model' and axes[1] == None:
       # axes = PartitionSpec('model', 'data')
       axes = PartitionSpec('data', 'model')
-    # elif axes[0] == None and axes[1] == 'data':
-    #   axes = PartitionSpec('model', 'data')
-    # elif axes[0] == 'data' and axes[1] == None:
-    #   axes = PartitionSpec('data', 'model')
+    elif axes[0] == None and axes[1] == 'data':
+      axes = PartitionSpec('model', 'data')
+    elif axes[0] == 'data' and axes[1] == None:
+      axes = PartitionSpec('data', 'model')
     return axes
   else:
     return axes

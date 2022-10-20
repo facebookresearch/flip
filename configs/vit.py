@@ -198,6 +198,23 @@ def get_h16_config():
   return config
 
 
+@_register
+def get_g14_config():
+  """Returns the ViT-g/14 configuration."""
+  config = ml_collections.ConfigDict()
+  config.name = 'ViT-g_14'
+  config.patches = ml_collections.ConfigDict({'size': (14, 14)})
+  config.hidden_size = 1408
+  config.transformer = ml_collections.ConfigDict()
+  config.transformer.mlp_dim = 6144
+  config.transformer.num_heads = 16
+  config.transformer.num_layers = 40
+  config.transformer.attention_dropout_rate = 0.0
+  config.transformer.dropout_rate = 0.1
+  config.classifier = 'token'
+  return config
+
+
 
 # ViT-X/8
 #########
