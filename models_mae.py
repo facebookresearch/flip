@@ -704,6 +704,7 @@ class LanguageTransformer(nn.Module):
   dtype: Any = jnp.float32
   use_attention_mask: bool = False
   decoder: Any = None
+  test_mask: bool = True
 
   def setup(self):
     """
@@ -776,7 +777,7 @@ class LanguageTransformer(nn.Module):
 
     x = self.encoder_layers['pos_emb'](x)
 
-    mask_ratio = self.mask_ratio if train else 0.0
+    mask_ratio = self.mask_ratio if train or self.test_mask else 0.0
     # masking: length -> length * mask_ratio
     if mask_ratio > 0:
       x, mask, ids_restore = random_mask_text(self.make_rng('dropout'), x, mask_ratio, is_valid=is_valid)
@@ -838,6 +839,7 @@ class VisionTransformer(nn.Module):
   dtype: Any = jnp.float32
   decoder: Any = None
   ln_pre: bool = False
+  test_mask: bool = False
 
   def patchify(self, imgs):
       """
@@ -916,7 +918,7 @@ class VisionTransformer(nn.Module):
     x = self.encoder_layers['pos_emb'](x)
 
     # masking: length -> length * mask_ratio
-    mask_ratio = self.mask_ratio if train else 0.0
+    mask_ratio = self.mask_ratio if train or self.test_mask else 0.0
     assert full_prob == 0.0
     if full_prob > 0 and random.uniform(self.make_rng('dropout')) <= full_prob:
       mask_ratio = 0.0
@@ -946,7 +948,7 @@ class VisionTransformer(nn.Module):
 
     x = self.encoder_layers['pos_emb'](x)
 
-    mask_ratio = self.mask_ratio if train else 0.0
+    mask_ratio = self.mask_ratio if train or self.test_mask else 0.0
     assert full_prob == 0.0
     if full_prob > 0 and random.uniform(self.make_rng('dropout')) <= full_prob: # not working for comp
       mask_ratio = 0.0
