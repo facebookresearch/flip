@@ -536,10 +536,10 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
         logging.info('Initial compilation completed.')
         start_time = time.time()  # log the time after compilation
 
-      if epoch == epoch_offset and i == 0:
-        jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
-        logging.info('Saving init debug checkpoint: {}'.format(workdir))
-        checkpointer.save(state)
+      # if epoch == epoch_offset and i == 0:
+      #   jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
+      #   logging.info('Saving init debug checkpoint: {}'.format(workdir))
+      #   checkpointer.save(state)
 
       if config.get('log_every_steps'):
         train_metrics.append(metrics)
@@ -568,7 +568,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # ------------------------------------------------------------
     # finished one epoch: eval
     # ------------------------------------------------------------
-    if (epoch + 1) % config.vis_every_epochs == 0 or epoch == epoch_offset:
+    vis_every_epochs = 20 if epoch < 400 else config.vis_every_epochs
+    if (epoch + 1) % vis_every_epochs == 0 or epoch == epoch_offset:
       # --------------------------------------------------------------------
       summary = run_eval(
         state,
