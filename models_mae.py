@@ -1278,6 +1278,7 @@ class ImageTextLearner(nn.Module):
     if encode_txt:
       x_txt, mask_txt, ids_restore_txt = self.txt_encoder.apply_encoder(txt, train=train, is_valid=is_valid)
 
+
     # apply contrastive learning (clip-like)
     if self.config.clr.clr_loss:
       if encode_img:
@@ -1301,6 +1302,10 @@ class ImageTextLearner(nn.Module):
           
         z_txt = self.apply_projection_head(z_txt, prefix='txt')
         z_txt /= jnp.linalg.norm(z_txt, axis=-1, keepdims=True) + 1e-8
+        if self.config.get("freeze_txt", False):
+          logging.info("stop gradient for txt encoder and proj")
+          z_txt = jax.lax.stop_gradient(z_txt)
+
       if encode_img and encode_txt:
         # z_img = z_img.reshape([z_img.shape[0] // 2, 2, z_img.shape[1]]).mean(axis=1)
         loss_clr, tau, loss01, loss10 = self.compute_contrastive_loss(z_img, z_txt)
