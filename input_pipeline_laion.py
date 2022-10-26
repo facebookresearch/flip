@@ -246,7 +246,7 @@ def preprocess_image_for_eval(image_bytes, dtype=tf.float32, image_size=None):
 
 
 def create_split(batch_size, data_layout, train, dtype=tf.float32,
-                 image_size=None, cache=False, seed=0, cfg=None, from_tags=None):
+                 image_size=None, cache=False, seed=0, cfg=None, from_tags=None, laion_path=None):
   """Creates a split from the ImageNet dataset using TensorFlow Datasets.
 
   Args:
@@ -265,8 +265,13 @@ def create_split(batch_size, data_layout, train, dtype=tf.float32,
   num_shards = data_layout.num_shards
 
   if from_tags is None:  # loading LAION
-    laion400m_dataset_path = "gs://kmh-gcp/laion-400m/tfrecord_dataset_img480"
-    filenames = tf.io.gfile.glob(laion400m_dataset_path + "/*.tfrecord")  # len: 41408 (647*64)
+    if laion_path is None:
+      # 400m by default
+      laion_dataset_path = "gs://kmh-gcp/laion-400m/tfrecord_dataset_img480"
+    else:
+      laion_dataset_path = laion_path
+    logging.info(f"laion data path{laion_dataset_path}")
+    filenames = tf.io.gfile.glob(laion_dataset_path + "/*.tfrecord")  # len: 41408 (647*64)
     filenames.sort()
 
     if train:

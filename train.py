@@ -84,10 +84,10 @@ def create_imagenet_input_iter(local_batch_size, data_layout, image_size, dtype,
 
 
 def create_laion_input_iter(local_batch_size, data_layout, image_size, dtype, train,
-                      cache, seed=0, cfg=None, from_tags=None):
+                      cache, seed=0, cfg=None, from_tags=None, laion_path=None,):
   ds = input_pipeline_laion.create_split(
       local_batch_size, data_layout, image_size=image_size, dtype=dtype,
-      train=train, cache=cache, seed=seed, cfg=cfg, from_tags=from_tags)
+      train=train, cache=cache, seed=seed, cfg=cfg, from_tags=from_tags, laion_path=laion_path)
 
   # ------------------------------------------------
   # x = next(iter(ds))
@@ -140,6 +140,8 @@ def build_dataloaders(config, partitioner):
       cfg=config,
       from_tags=tags)
 
+  laion_path = config.get("laion_path", "gs://kmh-gcp/laion-400m/tfrecord_dataset_img480")
+
   data_loader_train = create_laion_input_iter(
       local_batch_size,
       data_layout,
@@ -148,7 +150,8 @@ def build_dataloaders(config, partitioner):
       train=True,
       cache=False, # config.cache, 
       seed=config.seed_tf,
-      cfg=config)
+      cfg=config,
+      laion_path=laion_path)
 
   # val set is imagenet
   data_loader_val = create_imagenet_input_iter(
