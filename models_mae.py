@@ -705,6 +705,7 @@ class LanguageTransformer(nn.Module):
   use_attention_mask: bool = False
   decoder: Any = None
   test_mask: bool = True
+  priority_mask: bool = True
 
   def setup(self):
     """
@@ -780,7 +781,10 @@ class LanguageTransformer(nn.Module):
     mask_ratio = self.mask_ratio if train or self.test_mask else 0.0
     # masking: length -> length * mask_ratio
     if mask_ratio > 0:
-      x, mask, ids_restore = random_mask_text(self.make_rng('dropout'), x, mask_ratio, is_valid=is_valid)
+      x, mask, ids_restore = random_mask_text(
+        self.make_rng('dropout'), x, mask_ratio, 
+        is_valid=is_valid if self.priority_mask else None
+      )
     else:
       mask, ids_restore = None, None
 
