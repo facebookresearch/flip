@@ -342,7 +342,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
   writer = metric_writers.create_default_writer(
       logdir=workdir, just_logging=jax.process_index() != 0)
 
-  image_size = 224  # TODO: move to config and model
+  image_size = config.image_size
 
   # ------------------------------------
   # Create partitioner
@@ -406,7 +406,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     else: 
       state = checkpointer.restore(
         path=path_chkpt, fallback_state=state.state_dict(),
-        state_transformation_fns=[remove_optimizer_state]
+        state_transformation_fns=[remove_optimizer_state, remove_pos_embed]
       )
 
   else:
@@ -753,15 +753,15 @@ def load_old_state(old_config, state, init_batch, steps_per_epoch, path_chkpt):
     #   old_state, model_old, old_p_init_fn, old_state_shape, old_state_axes, old_checkpointer, old_partitioner
     # )
 
-# def remove_pos_embed(ckpt_optimizer_state, optimizer_state):
-#   if 'posembed_encoder' in ckpt_optimizer_state['target']["img_encoder"] and \
-#     'posembed_encoder' in optimizer_state['target']["img_encoder"]:
-#     shape_ckpt = ckpt_optimizer_state['target']["img_encoder"]['posembed_encoder']['pos_embedding']['metadata']['shape']
-#     shape_opt = list(optimizer_state['target']["img_encoder"]['posembed_encoder']['pos_embedding'].shape)
-#     if not(shape_ckpt == shape_opt):
-#       logging.info('Removing pre-trained posembed_encoder.')
-#       ckpt_optimizer_state['target']["img_encoder"].pop('posembed_encoder')
-#   return ckpt_optimizer_state
+def remove_pos_embed(ckpt_optimizer_state, optimizer_state):
+  if 'posembed_encoder' in ckpt_optimizer_state['target']["img_encoder"] and \
+    'posembed_encoder' in optimizer_state['target']["img_encoder"]:
+    shape_ckpt = ckpt_optimizer_state['target']["img_encoder"]['posembed_encoder']['pos_embedding']['metadata']['shape']
+    shape_opt = list(optimizer_state['target']["img_encoder"]['posembed_encoder']['pos_embedding'].shape)
+    if not(shape_ckpt == shape_opt):
+      logging.info('Removing pre-trained posembed_encoder.')
+      ckpt_optimizer_state['target']["img_encoder"].pop('posembed_encoder')
+  return ckpt_optimizer_state
 
 
 # def rename_embedding(ckpt_optimizer_state, optimizer_state):
