@@ -958,7 +958,7 @@ class VisionTransformer(nn.Module):
       mask_ratio = 0.0
       repeat_sample = 1
 
-    if train and repeat_mode != "none" and repeat_sample > 1:
+    if repeat_mode != "none" and repeat_sample > 1 and mask_ratio > 0:
       # masking: length -> length * mask_ratio
      
       x, mask, ids_restore = random_mask_repeat(
@@ -1268,7 +1268,7 @@ class ImageTextLearner(nn.Module):
       repeat_mode = self.config.get("mask_repeat_mode", "none")
       repeat = self.config.get("mask_repeat", 1)
       full_prob = self.config.get("mask_full_prob", 0.0)
-      if train and repeat_mode != "none":
+      if repeat_mode != "none":
         # print(img.shape)
         x_img, mask_img, ids_restore_img = self.img_encoder.apply_encoder_multi(
           img, train=train, repeat_mode=repeat_mode, repeat_sample=repeat, full_prob=full_prob,
@@ -1291,6 +1291,16 @@ class ImageTextLearner(nn.Module):
         else:
           z_img = x_img.mean(axis=1)  # avearge pool anyway
         z_img = self.apply_projection_head(z_img, prefix='img')
+        
+        if self.config.get("test_comp_mask", False) and (not train):
+          repeat = self.config.get("mask_repeat", 1)
+          logging.info(f"test with complentary mask repeat{repeat}")
+          bs = z_img.shape[0]
+          nd = min(jax.device_count(), bs)
+          z_img = jnp.reshape(z_img, (nd, repeat, bs // (repeat * nd), -1))
+          z_img = z_img.mean(axis = 1)
+          z_img = jnp.reshape(z_img, (bs // repeat, -1))
+        
         z_img /= jnp.linalg.norm(z_img, axis=-1, keepdims=True) + 1e-8
       if encode_txt:
         if self.txt_encoder.use_attention_mask:
