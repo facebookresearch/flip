@@ -571,7 +571,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     # ------------------------------------------------------------
     # finished one epoch: eval
     # ------------------------------------------------------------
-    vis_every_epochs = 20 if epoch < 400 else config.vis_every_epochs
+    #vis_every_epochs = 20 if epoch < 400 else config.vis_every_epochs
+    vis_every_epochs = config.vis_every_epochs
     if (epoch + 1) % vis_every_epochs == 0 or epoch == epoch_offset:
       # --------------------------------------------------------------------
       summary = run_eval(
