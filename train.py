@@ -122,15 +122,25 @@ def build_dataloaders(config, partitioner):
   # ImageNet tags
   from vocab.class_names import CLIP_IMAGENET_CLASS_NAMES
   # CLIP_IMAGENET_TEMPLATES_FULL, CLIP_IMAGENET_TEMPLATES_SHORT, CLIP_IMAGENET_TEMPLATES_NONE
-  from vocab.class_names import CLIP_IMAGENET_TEMPLATES_SHORT as templates
+
+  imagenet_templates = config.get("imagenet_templates", "short")
+  if imagenet_templates == "short":
+    from vocab.class_names import CLIP_IMAGENET_TEMPLATES_SHORT as templates
+    tag_batch = 8
+  elif imagenet_templates == "long":
+    from vocab.class_names import CLIP_IMAGENET_TEMPLATES_FULL as templates
+    tag_batch = 64
 
   tags = []
   for c in CLIP_IMAGENET_CLASS_NAMES:
     for t in templates:
       tags.append(t(c))
+    
+
+  print(f"length of templates: {len(templates)}")
 
   data_loader_tags = create_laion_input_iter(
-      8,  # local_batch_size=8
+      tag_batch,  # local_batch_size=8
       data_layout,
       image_size,
       input_dtype,
@@ -525,6 +535,10 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
       batch = next(data_loader_train)
       state, metrics = partitioned_train_step(state, batch)
 
+      # if epoch == epoch_offset and i == 0:
+      #   costs = partitioned_train_step.lower(state, batch).compile().cost_analysis()
+      #   logging.info(f"flops: {costs[0].get('flops', None)}")
+
       # print("z0", intermediates['z0'])
       # print("z1", intermediates['z1'])
       # print("q0", intermediates['q0'])
@@ -668,6 +682,12 @@ def run_eval(
   for i in range(steps_per_eval):
     eval_batch = next(data_loader_val)
     metrics = partitioned_eval_step(state, eval_batch, encoded_tags)
+
+    # if i == 0:
+    #     costs = partitioned_eval_step.lower(state, eval_batch, encoded_tags).compile().cost_analysis()
+    #     print(costs)
+    #     logging.info(f"eval flops: {costs[0].get('flops', None)}")
+
     eval_metrics.append(metrics)
     if config.eval_only and i % 10 == 0:
       logging.info('{} / {}, shape: {}'.format(i, steps_per_eval, eval_batch['image'].shape))
