@@ -2,6 +2,7 @@
 import contextlib
 from typing import Any, Callable, Iterable, Mapping, Optional, Sequence, Tuple, Type, Union
 
+from functools import partial
 from absl import logging
 import jax
 import jax.numpy as jnp
@@ -37,6 +38,32 @@ def log_model_info(log_file: Optional[str],
       np.add, jax.tree_map(np.size, state_dict['target']))
   total_num_states = jax.tree_util.tree_reduce(
       np.add, jax.tree_map(np.size, state_dict['state']))
+
+  def _cal_params_by_name(name: str, arr: Optional[np.ndarray], filter_name: str):
+    if isinstance(arr, dict) and not arr:
+      return 0
+    
+    if filter_name in name:
+      return np.size(arr)
+    else:
+      return 0
+  
+  image_num_params = jax.tree_util.tree_reduce(
+      np.add, jax.tree_map(
+        partial(_cal_params_by_name, filter_name="img_encoder"),
+        state_utils.get_name_tree(state_dict['target'], keep_empty_nodes=True),
+        state_dict['target']
+      )
+  )
+
+  txt_num_params = jax.tree_util.tree_reduce(
+    np.add, jax.tree_map(
+      partial(_cal_params_by_name, filter_name="txt_encoder"),
+      state_utils.get_name_tree(state_dict['target'], keep_empty_nodes=True),
+      state_dict['target']
+    )
+  )
+
 
   logical_axes = partitioner.get_logical_axes(full_train_state).state_dict()
 
@@ -102,6 +129,10 @@ def log_model_info(log_file: Optional[str],
 
     _log_info_and_write_to_file(writer, 'Total number of parameters (1e6): %.6f',
                                 total_num_params / 1e6)
+    _log_info_and_write_to_file(writer, 'Total number of image encoder parameters (1e6): %.6f',
+                                image_num_params / 1e6)
+    _log_info_and_write_to_file(writer, 'Total number of txt encoder parameters (1e6): %.6f',
+                                txt_num_params / 1e6)
     _log_info_and_write_to_file(writer, 'Total number of parameter_states (1e6): %.6f',
                                 total_num_states / 1e6)
 
