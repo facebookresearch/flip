@@ -33,120 +33,121 @@ import configs.mae as mae
 
 
 def get_config():
-  """Get the hyperparameter configuration to train on TPUs."""
-  config = ml_collections.ConfigDict()
+    """Get the hyperparameter configuration to train on TPUs."""
+    config = ml_collections.ConfigDict()
 
-  # As defined in the `models` module.
-  # config.model = 'ResNet50'
-  # `name` argument of tensorflow_datasets.builder()
-  config.dataset = 'imagenet2012:5.*.*'
+    # As defined in the `models` module.
+    # config.model = 'ResNet50'
+    # `name` argument of tensorflow_datasets.builder()
+    config.eval_dataset = "imagenet2012:5.*.*"
+    config.laion_path = "gs://kmh-gcp/laion-400m/tfrecord_dataset_img480"
 
-  config.learning_rate = 1.5e-4  # this is the base lr
-  config.warmup_epochs = 40.0
-  config.min_abs_lr = 0.  # this is abs lr
-  config.warmup_abs_lr = 0.  # this is abs lr
+    config.learning_rate = 1.5e-4  # this is the base lr
+    config.warmup_epochs = 40.0
+    config.min_abs_lr = 0.0  # this is abs lr
+    config.warmup_abs_lr = 0.0  # this is abs lr
 
-  config.num_epochs = 100.0
-  config.log_every_steps = 100
-  config.save_every_epochs = 50
+    config.num_epochs = 100.0
+    config.log_every_steps = 100
+    config.save_every_epochs = 50
 
-  # If num_train_steps==-1 then the number of training steps is calculated from
-  # num_epochs using the entire dataset. Similarly for steps_per_eval.
-  config.num_train_steps = -1
-  config.steps_per_eval = -1
+    # If num_train_steps==-1 then the number of training steps is calculated from
+    # num_epochs using the entire dataset. Similarly for steps_per_eval.
+    config.num_train_steps = -1
+    config.steps_per_eval = -1
 
-  # Consider setting the batch size to max(tpu_chips * 256, 8 * 1024) if you
-  # train on a larger pod slice.
-  config.batch_size = 4096
-  config.cache = True
+    # Consider setting the batch size to max(tpu_chips * 256, 8 * 1024) if you
+    # train on a larger pod slice.
+    config.batch_size = 4096
+    config.cache = True
 
-  # optimizer config
-  config.opt_type = 'adamw'
-  config.opt = ml_collections.ConfigDict()
-  config.opt.b1 = 0.9
-  config.opt.b2 = 0.95
-  config.opt.weight_decay = 0.05
-  
-  config.opt_mu_dtype = 'float32'
+    # optimizer config
+    config.opt_type = "adamw"
+    config.opt = ml_collections.ConfigDict()
+    config.opt.b1 = 0.9
+    config.opt.b2 = 0.95
+    config.opt.weight_decay = 0.05
 
-  config.exclude_wd = True  # exclude some weight decays (bias, norm, cls, posembed)
+    config.opt_mu_dtype = "float32"
 
-  # aug config
-  config.aug = ml_collections.ConfigDict()
+    config.exclude_wd = True  # exclude some weight decays (bias, norm, cls, posembed)
 
-  config.aug.area_range = (0.2, 1)
-  config.aug.aspect_ratio_range = (3. / 4, 4. / 3.)
-  config.aug.crop_ver = 'v4'  # v1, v3
+    # aug config
+    config.aug = ml_collections.ConfigDict()
 
-  config.aug.label_smoothing = 0.0  # not used
+    config.aug.area_range = (0.2, 1)
+    config.aug.aspect_ratio_range = (3.0 / 4, 4.0 / 3.0)
+    config.aug.crop_ver = "v4"  # v1, v3
 
-  config.aug.autoaug = None  # autoaug, randaug, or None
+    config.aug.label_smoothing = 0.0  # not used
 
-  config.aug.color_jit = None  # [0.4, 0.4, 0.4]  # None to disable; [brightness, contrast, saturation]
+    config.aug.autoaug = None  # autoaug, randaug, or None
 
-  config.aug.eval_pad = 32  # ImageNet default eval: 224 crop from 256 (pad 32)
+    config.aug.color_jit = (
+        None  # [0.4, 0.4, 0.4]  # None to disable; [brightness, contrast, saturation]
+    )
 
-  config.aug.flip = True
+    config.aug.eval_pad = 32  # ImageNet default eval: 224 crop from 256 (pad 32)
 
-  # memory
-  config.profile_memory = False
+    config.aug.flip = True
 
-  # utils
-  config.resume_dir = ''
-  config.vis_every_epochs = 20.
+    # memory
+    config.profile_memory = False
 
-  config.pretrain_dir = ''
-  config.pretrain_fmt = 'jax'  # 't5x'
+    # utils
+    config.resume_dir = ""
+    config.vis_every_epochs = 20.0
 
-  # seeds
-  config.seed_jax = 0
-  config.seed_tf = 0
-  config.seed_pt = 0
+    config.pretrain_dir = ""
+    config.pretrain_fmt = "jax"  # 't5x'
 
-  # torchload
-  config.torchload = ml_collections.ConfigDict()
-  # config.torchload.data_dir = '/kmh_data/imagenet_full_size/061417'
-  config.torchload.data_dir = '/datasets/imagenet-1k'
-  config.torchload.num_workers = 32
+    # seeds
+    config.seed_jax = 0
+    config.seed_tf = 0
+    config.seed_pt = 0
 
-  # partitioning
-  config.partitioning = ml_collections.ConfigDict()
-  config.partitioning.num_partitions = 1
-  config.partitioning.partition_states = False
+    # torchload
+    config.torchload = ml_collections.ConfigDict()
+    # config.torchload.data_dir = '/kmh_data/imagenet_full_size/061417'
+    config.torchload.data_dir = "/datasets/imagenet-1k"
+    config.torchload.num_workers = 32
 
-  # misc
-  config.image_size = 224
+    # partitioning
+    config.partitioning = ml_collections.ConfigDict()
+    config.partitioning.num_partitions = 1
+    config.partitioning.partition_states = False
 
-  config.samples_per_epoch = 1281167  # define a "virtual" epoch
+    # misc
+    config.image_size = 224
 
-  # image+text model config
-  config.model = mae.get_config()  # ViT-B/16
+    config.samples_per_epoch = 1281167  # define a "virtual" epoch
 
-  # text aug config
-  config.aug.txt = ml_collections.ConfigDict()
-  config.aug.txt.tokenizer = 'tf_bert'  # 'tf_bert' 'hf_clip'
-  config.aug.txt.max_len = 32  # clip: 77
-  config.aug.txt.cls_token = True
+    # image+text model config
+    config.model = mae.get_config()  # ViT-B/16
 
-  config.aug.txt.batch_process = False
+    # text aug config
+    config.aug.txt = ml_collections.ConfigDict()
+    config.aug.txt.tokenizer = "tf_bert"  # 'tf_bert' 'hf_clip'
+    config.aug.txt.max_len = 32  # clip: 77
+    config.aug.txt.cls_token = True
 
-  config.model.model_txt.vocab_size = 30523  # bert: 30522+1
+    config.aug.txt.batch_process = False
 
-  # clr config
-  config.model.clr = ml_collections.ConfigDict()
-  config.model.clr.tau = 0.2
-  config.model.clr.tau_learnable = False
-  config.model.clr.proj_layers = 2
-  config.model.clr.proj_dim_hidden = 1024
-  config.model.clr.proj_dim_out = 256
+    config.model.model_txt.vocab_size = 30523  # bert: 30522+1
 
-  config.model.clr.proj_out_bias = True  #  bias of the output proj layer
+    # clr config
+    config.model.clr = ml_collections.ConfigDict()
+    config.model.clr.tau = 0.2
+    config.model.clr.tau_learnable = False
+    config.model.clr.proj_dim_out = 256
 
-  config.model.clr.clr_loss = True
+    config.model.clr.proj_out_bias = True  #  bias of the output proj layer
 
-  config.model.model_img.ln_pre = False
+    config.model.clr.clr_loss = True
 
-  # eval
-  config.eval_only = False
+    # config.model.model_img.ln_pre = False
 
-  return config
+    # eval
+    config.eval_only = False
+
+    return config

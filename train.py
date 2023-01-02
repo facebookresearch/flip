@@ -1,44 +1,34 @@
 import datetime
 import time
-import torch.utils.data
-import torch
-import random as _random
 import os
 import numpy as np
 import math
-import copy
 import jax.profiler
-import t5x.checkpoints
-import t5x.model_info
-import t5x.rng
-import t5x.partitioning
-from t5x.train_state_initializer import create_train_state
-from utils.torchloader_util import MEAN_RGB, STDDEV_RGB
-from utils import logging_util
-from utils import torchloader_util
-from utils import checkpoint_util as ckp
-from utils import (
-    summary_util as summary_util,
-)  # must be after 'from clu import metric_writers'
+
 import models_mae
 import input_pipeline_laion
-import input_pipeline
+import input_pipeline_imagenet
 import tensorflow_datasets as tfds
 import tensorflow as tf
-import optax
 import ml_collections
 from jax import random
 import jax.numpy as jnp
 import jax
 from flax.training import train_state
 from flax.training import common_utils
-from flax import jax_utils
-import flax
 from clu import metric_writers
 from absl import logging
-from typing import Any
 import functools
 import warnings
+
+import t5x.checkpoints
+import t5x.model_info
+import t5x.rng
+import t5x.partitioning
+from t5x.train_state_initializer import create_train_state
+
+from utils import logging_util
+from utils import checkpoint_util as ckp
 
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -52,6 +42,7 @@ except ImportError:
 
 
 def create_imagenet_input_iter(
+    dataset,
     local_batch_size,
     data_layout,
     image_size,
@@ -61,8 +52,8 @@ def create_imagenet_input_iter(
     seed=0,
     aug=None,
 ):
-    dataset_builder = tfds.builder("imagenet2012:5.*.*")
-    ds = input_pipeline.create_split(
+    dataset_builder = tfds.builder(dataset)
+    ds = input_pipeline_imagenet.create_split(
         dataset_builder,
         local_batch_size,
         data_layout,
@@ -74,47 +65,76 @@ def create_imagenet_input_iter(
         aug=aug,
     )
 
-    ds = map(functools.partial(prepare_tf_data,
-             batch_size=local_batch_size), ds)
+    ds = map(functools.partial(prepare_tf_data, batch_size=local_batch_size), ds)
     return ds
 
 
 def create_laion_input_iter(
+    dataset_path,
     local_batch_size,
     data_layout,
     image_size,
-    dtype,
     train,
     cache,
     seed=0,
     cfg=None,
-    from_tags=None,
-    laion_path=None,
 ):
     ds = input_pipeline_laion.create_split(
+        dataset_path,
         local_batch_size,
         data_layout,
         image_size=image_size,
-        dtype=dtype,
         train=train,
         cache=cache,
         seed=seed,
         cfg=cfg,
-        from_tags=from_tags,
-        laion_path=laion_path,
     )
 
-    # ------------------------------------------------
-    # x = next(iter(ds))
-    # ------------------------------------------------
-
-    ds = map(functools.partial(prepare_tf_data,
-             batch_size=local_batch_size), ds)
+    ds = map(functools.partial(prepare_tf_data, batch_size=local_batch_size), ds)
     return ds
 
 
-def build_dataloaders(config, partitioner):
+def create_tags_input_iter(
+    tags,
+    local_batch_size,
+    image_size,
+    train,
+    cache,
+    seed=0,
+    cfg=None,
+):
+    ds = input_pipeline_laion.create_tags_split(
+        tags,
+        local_batch_size,
+        image_size=image_size,
+        train=train,
+        cache=cache,
+        seed=seed,
+        cfg=cfg,
+    )
 
+    ds = map(functools.partial(prepare_tf_data, batch_size=local_batch_size), ds)
+    return ds
+
+
+def prepare_tf_data(xs, batch_size):
+    """Convert a input batch from tf Tensors to numpy arrays."""
+
+    def _prepare(x):
+        # Use _numpy() for zero-copy conversion between TF and NumPy.
+        x = x._numpy()  # pylint: disable=protected-access
+
+        if x.shape[0] != batch_size:
+            pads = -np.ones((batch_size - x.shape[0],) + x.shape[1:], dtype=x.dtype)
+            x = np.concatenate([x, pads], axis=0)
+
+        # do not reshape into (local_devices, -1, ...)
+        return x.reshape((-1,) + x.shape[1:])
+
+    return jax.tree_map(_prepare, xs)
+
+
+def build_dataloaders(config, partitioner):
     batch_size = config.batch_size
 
     data_layout = partitioner.get_data_layout(batch_size)
@@ -122,8 +142,7 @@ def build_dataloaders(config, partitioner):
     num_shards = data_layout.num_shards
 
     if batch_size % num_shards > 0:
-        raise ValueError(
-            "Batch size must be divisible by the number of devices")
+        raise ValueError("Batch size must be divisible by the number of devices")
     local_batch_size = batch_size // num_shards
 
     # ----------------------------------------
@@ -139,8 +158,6 @@ def build_dataloaders(config, partitioner):
     # ImageNet tags
     from vocab.class_names import CLIP_IMAGENET_CLASS_NAMES
 
-    # CLIP_IMAGENET_TEMPLATES_FULL, CLIP_IMAGENET_TEMPLATES_SHORT, CLIP_IMAGENET_TEMPLATES_NONE
-
     imagenet_templates = config.get("imagenet_templates", "short")
     if imagenet_templates == "short":
         from vocab.class_names import CLIP_IMAGENET_TEMPLATES_SHORT as templates
@@ -150,6 +167,8 @@ def build_dataloaders(config, partitioner):
         from vocab.class_names import CLIP_IMAGENET_TEMPLATES_FULL as templates
 
         tag_batch = 64
+    else:
+        raise NotImplementedError
 
     tags = []
     for c in CLIP_IMAGENET_CLASS_NAMES:
@@ -158,36 +177,30 @@ def build_dataloaders(config, partitioner):
 
     print(f"length of templates: {len(templates)}")
 
-    data_loader_tags = create_laion_input_iter(
-        tag_batch,  # local_batch_size=8
-        data_layout,
+    data_loader_tags = create_tags_input_iter(
+        tags,
+        tag_batch,
         image_size,
-        input_dtype,
         train=False,
-        cache=False,  # config.cache,
+        cache=False,
         seed=config.seed_tf,
         cfg=config,
-        from_tags=tags,
-    )
-
-    laion_path = config.get(
-        "laion_path", "gs://kmh-gcp/laion-400m/tfrecord_dataset_img480"
     )
 
     data_loader_train = create_laion_input_iter(
+        config.laion_path,
         local_batch_size,
         data_layout,
         image_size,
-        input_dtype,
         train=True,
         cache=False,  # config.cache,
         seed=config.seed_tf,
         cfg=config,
-        laion_path=laion_path,
     )
 
     # val set is imagenet
     data_loader_val = create_imagenet_input_iter(
+        config.eval_dataset,
         local_batch_size,
         data_layout,
         image_size,
@@ -197,7 +210,6 @@ def build_dataloaders(config, partitioner):
         seed=config.seed_tf,
         aug=config.aug,
     )
-    # data_loader_val = None
 
     return data_loader_train, data_loader_val, data_loader_tags
 
@@ -232,7 +244,7 @@ def train_step(state, batch, model, rng):
             rngs=dict(dropout=dropout_rng),
             train=True,
         )
-        (loss, _, artifacts), new_mutables = outcome
+        (loss, artifacts), new_mutables = outcome
         return loss, (new_mutables, artifacts)
 
     grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
@@ -240,25 +252,16 @@ def train_step(state, batch, model, rng):
 
     new_mutables, artifacts = aux[1]
 
-    # metrics = {'loss': loss}
     metrics = {**artifacts}
 
     # only for metric logging
     lr = state._optimizer.optimizer_def.metric_learning_rate_fn(state.step)
     metrics["learning_rate"] = lr
 
-    # print(new_mutables['intermediates'].keys())
-    # print(new_mutables['intermediates']['z0'])
-
-    # new_mutables = flax.core.frozen_dict.unfreeze(new_mutables)
-    # intermediates = new_mutables.pop("intermediates")
-    # new_mutables = flax.core.frozen_dict.freeze(new_mutables)
-
     new_state = state.apply_gradient(
         grads, learning_rate=None, flax_mutables=new_mutables  # TODO: not used in adamw
     )
 
-    # return new_state, metrics
     return new_state, metrics
 
 
@@ -275,19 +278,13 @@ def eval_step(state, batch, encoded_tags, model, rng):
         rngs=dict(dropout=dropout_rng),
         encode_txt=False,
     )
-    loss, _, artifacts = outcome
+    _, artifacts = outcome
     z_img = artifacts["z_img"]
 
     labels = batch["label"]
 
     z_txt = encoded_tags
     logits = jnp.einsum("nc,mc->nm", z_img, z_txt)
-
-    # --------
-    # dev: for maxout multiple templates
-    # logits = logits.reshape([logits.shape[0], 1000, -1])
-    # logits = jnp.max(logits, axis=-1)
-    # --------
 
     pred_labels = jnp.argmax(logits, -1)
     accuracy = jnp.float32(pred_labels == labels)
@@ -317,35 +314,10 @@ def eval_tags_step(state, batch, model, rng):
         rngs=dict(dropout=dropout_rng),
         encode_img=False,
     )
-    loss, _, artifacts = outcome
+    _, artifacts = outcome
     z_txt = artifacts["z_txt"]
 
-    # metrics = {'test_loss': loss, 'imgs_vis': imgs_vis}
     return z_txt
-
-
-def prepare_tf_data(xs, batch_size):
-    """Convert a input batch from PyTorch Tensors to numpy arrays."""
-    local_device_count = jax.local_device_count()
-
-    def _prepare(x):
-        # Use _numpy() for zero-copy conversion between TF and NumPy.
-        x = x._numpy()  # pylint: disable=protected-access
-
-        if x.shape[0] != batch_size:
-            pads = - \
-                np.ones((batch_size - x.shape[0],) +
-                        x.shape[1:], dtype=x.dtype)
-            x = np.concatenate([x, pads], axis=0)
-
-        # reshape (host_batch_size, height, width, 3) to
-        # (local_devices, device_batch_size, height, width, 3)
-        # return x.reshape((local_device_count, -1) + x.shape[1:])
-        return x.reshape(
-            (-1,) + x.shape[1:]
-        )  # do not reshape into (local_devices, -1, ...)
-
-    return jax.tree_map(_prepare, xs)
 
 
 def profile_memory(workdir):
@@ -354,26 +326,6 @@ def profile_memory(workdir):
         logging.info("Saving memory.prof...")
         os.system("cd ~; gsutil cp /tmp/memory.prof {}".format(workdir))
         logging.info("Saved memory.prof.")
-
-
-def seed_worker(worker_id, shard_id):
-    # worker_seed = torch.initial_seed() % 2**32 + shard_id
-    worker_seed = worker_id + shard_id * 10000
-    np.random.seed(worker_seed)
-    _random.seed(worker_seed)
-
-    # logging_util.verbose_on()
-    # logging.info('worker_id: {}, shard_id: {}, worker_seed: {}'.format(worker_id, shard_id, worker_seed))
-    # logging_util.verbose_off()
-
-
-def set_seed_torch(seed):
-    rng_torch = torch.Generator()
-    rng_torch.manual_seed(seed)
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-    _random.seed(seed)
-    return rng_torch
 
 
 def train_and_evaluate(
@@ -391,9 +343,7 @@ def train_and_evaluate(
     # ------------------------------------
     # Set random seeds
     # ------------------------------------
-    # rng_torch = set_seed_torch(config.seed_pt)
     tf.random.set_seed(config.seed_tf + jax.process_index())
-
     t5x.rng.set_hardware_rng_ops()
     rng = random.PRNGKey(config.seed_jax)
     # ------------------------------------
@@ -401,8 +351,6 @@ def train_and_evaluate(
     writer = metric_writers.create_default_writer(
         logdir=workdir, just_logging=jax.process_index() != 0
     )
-
-    image_size = config.image_size
 
     # ------------------------------------
     # Create partitioner
@@ -418,7 +366,7 @@ def train_and_evaluate(
     # ------------------------------------
     data_loader_train, data_loader_val, data_loader_tags = build_dataloaders(
         config, partitioner
-    )  # we do not use data_loader_val
+    )
     batched_tags = [d for d in data_loader_tags]  # 1000x80 or 1000x7
 
     steps_per_epoch = config.samples_per_epoch // config.batch_size  # for lr schedule
@@ -426,7 +374,7 @@ def train_and_evaluate(
     # ------------------------------------
     # Create model
     # ------------------------------------
-    model = models_mae.ImageTextLearner(config=config.model)
+    model = models_mae.FLIP(config=config.model)
     init_batch = next(data_loader_train)
     p_init_fn, state_axes, state_shape = create_train_state(
         config, model, steps_per_epoch, partitioner, init_batch=init_batch
@@ -442,7 +390,6 @@ def train_and_evaluate(
         train_state=state_shape,
         partitioner=partitioner,
         checkpoints_dir=workdir,
-        keep=None,  # TODO: move to config
     )
 
     if config.resume_dir != "":
@@ -457,117 +404,56 @@ def train_and_evaluate(
         path = config.pretrain_dir
         step = t5x.checkpoints.latest_step(path)
         path_chkpt = (
-            path if step is None else t5x.checkpoints.get_checkpoint_dir(
-                path, step)
+            path if step is None else t5x.checkpoints.get_checkpoint_dir(path, step)
         )
 
-        if config.get("pretrain_from_embedding16", False):
-            old_config = copy.deepcopy(config)
-            params_new = load_old_state(
-                old_config, state, init_batch, steps_per_epoch, path_chkpt
-            )
-            params_new = partitioner.move_params_to_devices(
-                params_new, state_axes.params
-            )
-            state = state.replace_params(params_new)
-            del params_new
-            checkpointer.save(state)
-            return
-        else:
-            state = checkpointer.restore(
-                path=path_chkpt,
-                fallback_state=state.state_dict(),
-                state_transformation_fns=[
-                    remove_optimizer_state, remove_pos_embed],
-            )
-
+        state = checkpointer.restore(
+            path=path_chkpt,
+            fallback_state=state.state_dict(),
+            state_transformation_fns=[remove_optimizer_state, remove_pos_embed],
+        )
     else:
         logging.info("Initializing train_state...")
         state = p_init_fn(rng_init)
         logging.info("Initializing train_state done.")
-        # stds = jax.tree_util.tree_map(lambda x: (x.shape, np.array(x).std()), state.params)
-        # logging.info('std: {}'.format(stds))
 
     t5x.model_info.log_state_info(state)
-
-    # ------------------------------------------
-    # for debugging with real tensors
-    # batch = next(iter(data_loader_train))
-    # mutable = [k for k in state.flax_mutables]
-    # outcome = model.apply(
-    #     {'params': state.params, **state.flax_mutables},
-    #     inputs=batch,
-    #     mutable=mutable,
-    #     rngs=dict(dropout=rng),
-    #     train=True)
-    # # use the following to add checkpoints
-    # import jaxlib
-    # if isinstance(x, jnp.DeviceArray):
-    #   pass
-    # ------------------------------------------
-
-    # --------------------------------------------------------
-    # logging.info('Saving debug checkpoint: {}'.format(workdir))
-    # checkpointer.save(state)
-    # --------------------------------------------------------
 
     # step_offset > 0 if restarting from checkpoint
     step_offset = int(state.step)
     logging.info("step_offset: {}".format(step_offset))
 
     # ------------------------------------------
-    # build eval_tags_step
-    eval_step_fn = functools.partial(
-        eval_tags_step, model=model, rng=rng
-    )  # (state, batch) -> metrics
-    eval_axes = PartitionSpec(
-        "data",
-        None,
-    )
+    # Create partitioned eval_tags_step
+    eval_step_fn = functools.partial(eval_tags_step, model=model, rng=rng)
+    eval_axes = PartitionSpec("data", None)
     partitioned_eval_tags_step = partitioner.partition(
         eval_step_fn,
         in_axis_resources=(state_axes, partitioner.data_partition_spec),
         out_axis_resources=eval_axes,
     )
-
-    # ------------------------------------------
-    # batch = next(iter(data_loader_tags))
-    # logging.info('To run eval_tags_step:')
-    # z_txt = eval_tags_step(state, batch, model=model, rng=rng)
-    # z_txt = partitioned_eval_tags_step(state, batch)
     # ------------------------------------------
 
     # ------------------------------------------
-    # to create partitioned train_step
-    train_step_fn = functools.partial(
-        train_step, model=model, rng=rng
-    )  # (state, batch) -> (state, metrics)
+    # Create partitioned train_step
+    train_step_fn = functools.partial(train_step, model=model, rng=rng)
     partitioned_train_step = partitioner.partition(
         train_step_fn,
         in_axis_resources=(state_axes, partitioner.data_partition_spec),
         out_axis_resources=(state_axes, None),
         donate_argnums=(0,),
     )
+    # ------------------------------------------
 
-    eval_step_fn = functools.partial(
-        eval_step, model=model, rng=rng
-    )  # (state, batch) -> metrics
+    # ------------------------------------------
+    # Create partitioned eval_step
+    eval_step_fn = functools.partial(eval_step, model=model, rng=rng)
     eval_axes = None
     partitioned_eval_step = partitioner.partition(
         eval_step_fn,
         in_axis_resources=(state_axes, partitioner.data_partition_spec, None),
         out_axis_resources=eval_axes,
     )
-    # ------------------------------------------
-
-    # ------------------------------------------
-    # debug
-    # encoded_tags = compute_encoded_tags(state, batched_tags, partitioned_eval_tags_step)
-    # batch = next(iter(data_loader_val))
-    # logging.info('To run eval_step:')
-    # outcome = eval_step(state, batch, encoded_tags, model=model, rng=rng)
-    # outcome = partitioned_eval_step(state, batch, encoded_tags)
-    # logging.info(jax.tree_map(lambda x: x.shape, outcome))
     # ------------------------------------------
 
     # ------------------------------------------
@@ -595,13 +481,10 @@ def train_and_evaluate(
     epoch_offset = (step_offset + 1) // steps_per_epoch
     step = epoch_offset * steps_per_epoch
 
-    # assert step == int(jnp.reshape(state.step, (-1,))[0])  # sanity when loading
     data_layout = partitioner.get_data_layout(config.batch_size)
     shard_id = data_layout.shard_id
 
     for epoch in range(epoch_offset, int(config.num_epochs)):
-        # data_loader_train.sampler.set_epoch(epoch)  # reset random seed
-
         # ------------------------------------------------------------
         # train one epoch (one "virtual" epoch)
         # ------------------------------------------------------------
@@ -609,40 +492,24 @@ def train_and_evaluate(
             batch = next(data_loader_train)
             state, metrics = partitioned_train_step(state, batch)
 
-            # if epoch == epoch_offset and i == 0:
-            #   costs = partitioned_train_step.lower(state, batch).compile().cost_analysis()
-            #   logging.info(f"flops: {costs[0].get('flops', None)}")
-
-            # print("z0", intermediates['z0'])
-            # print("z1", intermediates['z1'])
-            # print("q0", intermediates['q0'])
-            # print("q1", intermediates['q1'])
-
             if epoch == epoch_offset and i == 0 and partitioner._num_partitions > 8:
                 print_sanity_check(batch, shard_id)
 
-            epoch_1000x = int(
-                step * config.batch_size / 1281167 * 1000
-            )  # normalize to IN1K epoch anyway
+            # normalize to IN1K epoch anyway
+            epoch_1000x = int(step * config.batch_size / 1281167 * 1000)
 
             if epoch == epoch_offset and i == 0:
                 logging.info("Initial compilation completed.")
-                start_time = time.time()  # log the time after compilation
-
-            # if epoch == epoch_offset and i == 0:
-            #   jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
-            #   logging.info('Saving init debug checkpoint: {}'.format(workdir))
-            #   checkpointer.save(state)
+                # log the time after compilation
+                start_time = time.time()
 
             if config.get("log_every_steps"):
                 train_metrics.append(metrics)
                 if (step + 1) % config.log_every_steps == 0:
                     # Wait until computations are done before exiting
-                    jax.random.normal(jax.random.PRNGKey(0),
-                                      ()).block_until_ready()
+                    jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
                     train_metrics = common_utils.get_metrics(
-                        jax.tree_map(lambda x: jnp.reshape(
-                            x, (-1,)), train_metrics)
+                        jax.tree_map(lambda x: jnp.reshape(x, (-1,)), train_metrics)
                     )
                     summary = {
                         f"train_{k}": float(v)
@@ -656,8 +523,7 @@ def train_and_evaluate(
 
                     # to make it consistent with PyTorch log
                     summary["loss"] = summary["train_loss"]  # add extra name
-                    summary["lr"] = summary.pop(
-                        "train_learning_rate")  # rename
+                    summary["lr"] = summary.pop("train_learning_rate")  # rename
                     # step for tensorboard
                     summary["step_tensorboard"] = epoch_1000x
 
@@ -670,10 +536,8 @@ def train_and_evaluate(
         # ------------------------------------------------------------
         # finished one epoch: eval
         # ------------------------------------------------------------
-        # vis_every_epochs = 20 if epoch < 400 else config.vis_every_epochs
         vis_every_epochs = config.vis_every_epochs
         if (epoch + 1) % vis_every_epochs == 0 or epoch == epoch_offset:
-            # --------------------------------------------------------------------
             summary = run_eval(
                 state,
                 batched_tags,
@@ -691,21 +555,6 @@ def train_and_evaluate(
             ] = epoch  # step for tensorboard (no need to minus 1)
             writer.write_scalars(step + 1, summary)
             writer.flush()
-
-            # --------------------------------------------------------------------
-
-            # eval_batch = batch  # we visualize the same bach for simplicty
-            # metrics = partitioned_eval_step(state, eval_batch)
-
-            # imgs_vis = metrics.pop('imgs_vis')
-            # if imgs_vis is not None:
-            #   imgs_vis = imgs_vis * jnp.asarray(STDDEV_RGB) + jnp.asarray(MEAN_RGB)
-            #   imgs_vis = jnp.uint8(jnp.clip(imgs_vis, 0, 255.))
-            #   writer.write_images(step=epoch_1000x, images=dict(imgs_vis=imgs_vis))
-
-            # summary = jax.tree_map(lambda x: x.mean(), metrics)
-            # values = [f"{k}: {v:.6f}" for k, v in sorted(summary.items())]
-            # logging.info('eval epoch: %d, %s', epoch, ', '.join(values))
 
         # ------------------------------------------------------------
         # finished one epoch: save
@@ -752,8 +601,7 @@ def compute_encoded_tags(
         [1000, -1, encoded_tags.shape[-1]]
     )  # [1000, 7, 512]
     encoded_tags = encoded_tags.mean(axis=1)
-    encoded_tags /= jnp.linalg.norm(encoded_tags,
-                                    axis=-1, keepdims=True) + 1e-8
+    encoded_tags /= jnp.linalg.norm(encoded_tags, axis=-1, keepdims=True) + 1e-8
     assert encoded_tags.shape[0] == 1000
     # ----------------
 
@@ -770,19 +618,13 @@ def run_eval(
     config,
 ):
     tic = time.time()
-    encoded_tags = compute_encoded_tags(
-        state, batched_tags, partitioned_eval_tags_step)
+    encoded_tags = compute_encoded_tags(state, batched_tags, partitioned_eval_tags_step)
 
     steps_per_eval = math.ceil(50000 / config.batch_size)
     eval_metrics = []
     for i in range(steps_per_eval):
         eval_batch = next(data_loader_val)
         metrics = partitioned_eval_step(state, eval_batch, encoded_tags)
-
-        # if i == 0:
-        #     costs = partitioned_eval_step.lower(state, eval_batch, encoded_tags).compile().cost_analysis()
-        #     print(costs)
-        #     logging.info(f"eval flops: {costs[0].get('flops', None)}")
 
         eval_metrics.append(metrics)
         if config.eval_only and i % 10 == 0:
@@ -793,10 +635,9 @@ def run_eval(
             )
 
     eval_metrics = jax.device_get(eval_metrics)
-    eval_metrics = jax.tree_map(
-        lambda *args: np.concatenate(args), *eval_metrics)
+    eval_metrics = jax.tree_map(lambda *args: np.concatenate(args), *eval_metrics)
 
-    valid = np.where(eval_metrics["label"] >= 0)  # remove padded patch
+    valid = np.where(eval_metrics["label"] >= 0)
     eval_metrics.pop("label")
     eval_metrics = jax.tree_util.tree_map(lambda x: x[valid], eval_metrics)
 
@@ -819,78 +660,6 @@ def remove_optimizer_state(ckpt_optimizer_state, optimizer_state):
     return ckpt_optimizer_state
 
 
-def load_old_state(old_config, state, init_batch, steps_per_epoch, path_chkpt):
-    # pretrain from different embedding size
-    old_config.model.model_img.patches.size = (16, 16)
-    model_old = models_mae.ImageTextLearner(config=old_config.model)
-    old_partitioner = t5x.partitioning.PjitPartitioner(
-        **old_config.partitioning, backend="cpu"
-    )
-    old_partitioner._logical_axis_rules += (("_null0", None),)
-    old_partitioner._logical_axis_rules += (("_null1", None),)
-    old_partitioner._logical_axis_rules += (("_null2", None),)
-    old_partitioner._logical_axis_rules += (("classes", None),)
-    old_p_init_fn, old_state_axes, old_state_shape = create_train_state(
-        old_config, model_old, steps_per_epoch, old_partitioner, init_batch=init_batch
-    )
-    rng = random.PRNGKey(old_config.seed_jax)
-    rng_init, rng = jax.random.split(rng)
-    old_state = old_p_init_fn(rng_init)
-    old_checkpointer = t5x.checkpoints.Checkpointer(
-        train_state=old_state_shape,
-        partitioner=old_partitioner,
-        checkpoints_dir="./tmp",
-        keep=None,  # TODO: move to config
-    )
-    old_state = old_checkpointer.restore(
-        path=path_chkpt,
-        fallback_state=old_state.state_dict(),
-        state_transformation_fns=[remove_optimizer_state],
-    )
-
-    params_new = old_state.params
-    params_new = flax.core.frozen_dict.unfreeze(params_new)
-    p = params_new["img_encoder"]["embedding"]["kernel"]
-    new_shape = state.params["img_encoder"]["embedding"]["kernel"].shape
-
-    logging.info(f"resize patch embedding to {new_shape}.")
-    p = jax.image.resize(
-        image=p,
-        shape=new_shape,
-        method=jax.image.ResizeMethod.CUBIC,
-    )
-    params_new["img_encoder"]["embedding"]["kernel"] = p
-
-    old_pos_shape = params_new["img_encoder"]["posembed_encoder"]["pos_embedding"].shape
-    pos_shape = state.params["img_encoder"]["posembed_encoder"]["pos_embedding"].shape
-    # print(old_pos_shape, pos_shape)
-    if old_pos_shape != pos_shape:
-        params_new["img_encoder"]["posembed_encoder"]["pos_embedding"] = state.params[
-            "img_encoder"
-        ]["posembed_encoder"]["pos_embedding"]
-        logging.info(
-            f"drop pos embedding due to {old_pos_shape} vs {pos_shape}")
-
-    params_new = flax.core.frozen_dict.freeze(params_new)
-    # print(params_new["img_encoder"]['posembed_encoder'].keys())
-    # print(state_axes.params["img_encoder"]['posembed_encoder'].keys())
-
-    del (
-        old_state,
-        old_checkpointer,
-        old_partitioner,
-        model_old,
-        old_state_axes,
-        old_state_shape,
-    )
-
-    return params_new
-
-    # del (
-    #   old_state, model_old, old_p_init_fn, old_state_shape, old_state_axes, old_checkpointer, old_partitioner
-    # )
-
-
 def remove_pos_embed(ckpt_optimizer_state, optimizer_state):
     if (
         "posembed_encoder" in ckpt_optimizer_state["target"]["img_encoder"]
@@ -906,20 +675,5 @@ def remove_pos_embed(ckpt_optimizer_state, optimizer_state):
         )
         if not (shape_ckpt == shape_opt):
             logging.info("Removing pre-trained posembed_encoder.")
-            ckpt_optimizer_state["target"]["img_encoder"].pop(
-                "posembed_encoder")
+            ckpt_optimizer_state["target"]["img_encoder"].pop("posembed_encoder")
     return ckpt_optimizer_state
-
-
-# def rename_embedding(ckpt_optimizer_state, optimizer_state):
-#   if 'kernel' in ckpt_optimizer_state['target']["img_encoder"]["embedding"] and \
-#     'kernel' in optimizer_state['target']["img_encoder"]["embedding"]:
-#     shape_ckpt = ckpt_optimizer_state['target']["img_encoder"]['embedding']['kernel']['metadata']['shape']
-#     shape_opt = list(optimizer_state['target']["img_encoder"]['embedding']['kernel'].shape)
-#     if not (shape_ckpt == shape_opt):
-#       logging.info(f'Rename pre-trained embedding.')
-
-#       ckpt_optimizer_state['target']["img_encoder"]["embedding_tmp"] =  ckpt_optimizer_state['target']["img_encoder"]['embedding']
-#       ckpt_optimizer_state['target']["img_encoder"].pop('embedding')
-
-#   return ckpt_optimizer_state
