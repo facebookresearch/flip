@@ -1,3 +1,10 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+
+# References:
+# https://github.com/google/flax/tree/main/examples/imagenet
+
+
 from absl import app
 from absl import flags
 from absl import logging
@@ -35,8 +42,7 @@ def main(argv):
     # it unavailable to JAX.
     tf.config.experimental.set_visible_devices([], "GPU")
 
-    logging.info("JAX process: %d / %d",
-                 jax.process_index(), jax.process_count())
+    logging.info("JAX process: %d / %d", jax.process_index(), jax.process_count())
     logging.info("JAX local devices: %r", jax.local_devices())
 
     # Add a note so that we can tell which task is which JAX host.

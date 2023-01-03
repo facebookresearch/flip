@@ -1,3 +1,10 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+
+# References:
+# https://github.com/google/flax/tree/main/examples/imagenet
+
+
 import datetime
 import time
 import os
@@ -41,82 +48,6 @@ except ImportError:
     from jax.interpreters.pxla import PartitionSpec
 
 
-def create_imagenet_input_iter(
-    dataset,
-    local_batch_size,
-    data_layout,
-    image_size,
-    dtype,
-    train,
-    cache,
-    seed=0,
-    aug=None,
-):
-    dataset_builder = tfds.builder(dataset)
-    ds = input_pipeline_imagenet.create_split(
-        dataset_builder,
-        local_batch_size,
-        data_layout,
-        image_size=image_size,
-        dtype=dtype,
-        train=train,
-        cache=cache,
-        seed=seed,
-        aug=aug,
-    )
-
-    ds = map(functools.partial(prepare_tf_data, batch_size=local_batch_size), ds)
-    return ds
-
-
-def create_laion_input_iter(
-    dataset_path,
-    local_batch_size,
-    data_layout,
-    image_size,
-    train,
-    cache,
-    seed=0,
-    cfg=None,
-):
-    ds = input_pipeline_laion.create_split(
-        dataset_path,
-        local_batch_size,
-        data_layout,
-        image_size=image_size,
-        train=train,
-        cache=cache,
-        seed=seed,
-        cfg=cfg,
-    )
-
-    ds = map(functools.partial(prepare_tf_data, batch_size=local_batch_size), ds)
-    return ds
-
-
-def create_tags_input_iter(
-    tags,
-    local_batch_size,
-    image_size,
-    train,
-    cache,
-    seed=0,
-    cfg=None,
-):
-    ds = input_pipeline_laion.create_tags_split(
-        tags,
-        local_batch_size,
-        image_size=image_size,
-        train=train,
-        cache=cache,
-        seed=seed,
-        cfg=cfg,
-    )
-
-    ds = map(functools.partial(prepare_tf_data, batch_size=local_batch_size), ds)
-    return ds
-
-
 def prepare_tf_data(xs, batch_size):
     """Convert a input batch from tf Tensors to numpy arrays."""
 
@@ -155,6 +86,39 @@ def build_dataloaders(config, partitioner):
     image_size = config.image_size
     input_dtype = tf.float32
 
+    # training set is LAION.
+    data_loader_train = input_pipeline_laion.create_split(
+        config.laion_path,
+        local_batch_size,
+        data_layout,
+        image_size=image_size,
+        train=True,
+        cache=False,
+        seed=config.seed_tf,
+        cfg=config,
+    )
+    data_loader_train = map(
+        functools.partial(prepare_tf_data, batch_size=local_batch_size),
+        data_loader_train,
+    )
+
+    # val set is imagenet
+    data_loader_val = input_pipeline_imagenet.create_split(
+        tfds.builder(config.eval_dataset),
+        local_batch_size,
+        data_layout,
+        image_size=image_size,
+        dtype=input_dtype,
+        train=False,
+        cache=config.cache,
+        seed=config.seed_tf,
+        aug=config.aug,
+    )
+    data_loader_val = map(
+        functools.partial(prepare_tf_data, batch_size=local_batch_size),
+        data_loader_val,
+    )
+
     # ImageNet tags
     from vocab.class_names import CLIP_IMAGENET_CLASS_NAMES
 
@@ -162,11 +126,11 @@ def build_dataloaders(config, partitioner):
     if imagenet_templates == "short":
         from vocab.class_names import CLIP_IMAGENET_TEMPLATES_SHORT as templates
 
-        tag_batch = 8
+        tag_batch_size = 8
     elif imagenet_templates == "long":
         from vocab.class_names import CLIP_IMAGENET_TEMPLATES_FULL as templates
 
-        tag_batch = 64
+        tag_batch_size = 64
     else:
         raise NotImplementedError
 
@@ -176,39 +140,18 @@ def build_dataloaders(config, partitioner):
             tags.append(t(c))
 
     print(f"length of templates: {len(templates)}")
-
-    data_loader_tags = create_tags_input_iter(
+    data_loader_tags = input_pipeline_laion.create_tags_split(
         tags,
-        tag_batch,
-        image_size,
+        tag_batch_size,
+        image_size=None,
         train=False,
         cache=False,
         seed=config.seed_tf,
         cfg=config,
     )
-
-    data_loader_train = create_laion_input_iter(
-        config.laion_path,
-        local_batch_size,
-        data_layout,
-        image_size,
-        train=True,
-        cache=False,  # config.cache,
-        seed=config.seed_tf,
-        cfg=config,
-    )
-
-    # val set is imagenet
-    data_loader_val = create_imagenet_input_iter(
-        config.eval_dataset,
-        local_batch_size,
-        data_layout,
-        image_size,
-        input_dtype,
-        train=False,
-        cache=config.cache,
-        seed=config.seed_tf,
-        aug=config.aug,
+    data_loader_tags = map(
+        functools.partial(prepare_tf_data, batch_size=tag_batch_size),
+        data_loader_tags,
     )
 
     return data_loader_train, data_loader_val, data_loader_tags
@@ -410,7 +353,7 @@ def train_and_evaluate(
         state = checkpointer.restore(
             path=path_chkpt,
             fallback_state=state.state_dict(),
-            state_transformation_fns=[remove_optimizer_state, remove_pos_embed],
+            state_transformation_fns=[ckp.remove_optimizer_state, ckp.remove_pos_embed],
         )
     else:
         logging.info("Initializing train_state...")
@@ -652,28 +595,3 @@ def run_eval(
 
     summary = jax.tree_map(lambda x: x.mean(), eval_metrics)
     return summary
-
-
-def remove_optimizer_state(ckpt_optimizer_state, optimizer_state):
-    logging.info("pop state")
-    ckpt_optimizer_state.pop("state")
-    return ckpt_optimizer_state
-
-
-def remove_pos_embed(ckpt_optimizer_state, optimizer_state):
-    if (
-        "posembed_encoder" in ckpt_optimizer_state["target"]["img_encoder"]
-        and "posembed_encoder" in optimizer_state["target"]["img_encoder"]
-    ):
-        shape_ckpt = ckpt_optimizer_state["target"]["img_encoder"]["posembed_encoder"][
-            "pos_embedding"
-        ]["metadata"]["shape"]
-        shape_opt = list(
-            optimizer_state["target"]["img_encoder"]["posembed_encoder"][
-                "pos_embedding"
-            ].shape
-        )
-        if not (shape_ckpt == shape_opt):
-            logging.info("Removing pre-trained posembed_encoder.")
-            ckpt_optimizer_state["target"]["img_encoder"].pop("posembed_encoder")
-    return ckpt_optimizer_state
