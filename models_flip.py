@@ -443,7 +443,7 @@ class LanguageTransformer(nn.Module):
         x = self.encoder_layers["token_emb"](x)
         x = self.encoder_layers["pos_emb"](x)
 
-        mask_ratio = self.mask_ratio if train or self.test_mask else 0.0
+        mask_ratio = self.mask_ratio if train else 0.0
         if mask_ratio > 0:
             raise NotImplementedError
         else:
