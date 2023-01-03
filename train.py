@@ -12,9 +12,6 @@ import numpy as np
 import math
 import jax.profiler
 
-import models_mae
-import input_pipeline_laion
-import input_pipeline_imagenet
 import tensorflow_datasets as tfds
 import tensorflow as tf
 import ml_collections
@@ -34,6 +31,10 @@ import t5x.rng
 import t5x.partitioning
 from t5x.train_state_initializer import create_train_state
 
+
+import models_flip
+import input_pipeline_laion
+import input_pipeline_imagenet
 from utils import logging_util
 from utils import checkpoint_util as ckp
 
@@ -317,7 +318,7 @@ def train_and_evaluate(
     # ------------------------------------
     # Create model
     # ------------------------------------
-    model = models_mae.FLIP(config=config.model)
+    model = models_flip.FLIP(config=config.model)
     init_batch = next(data_loader_train)
     p_init_fn, state_axes, state_shape = create_train_state(
         config, model, steps_per_epoch, partitioner, init_batch=init_batch

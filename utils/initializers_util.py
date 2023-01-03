@@ -1,3 +1,7 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+
+
 from typing import Any, Callable
 
 from jax import random

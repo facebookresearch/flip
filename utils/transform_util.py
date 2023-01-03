@@ -1,3 +1,7 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+
+
 import tensorflow as tf
 from tensorflow.python.ops import random_ops
 

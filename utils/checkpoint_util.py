@@ -1,17 +1,8 @@
-# from typing import Tuple, Any
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
 
 from absl import logging
 
-# import tree as nest
-# import numpy as np
-
-# import jax
-# import jaxlib
-# import flax
-# from flax.training import checkpoints
-# import jax.numpy as jnp
-
-# import jax.tree_util as tu
 import t5x.checkpoints
 
 

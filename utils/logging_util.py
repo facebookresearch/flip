@@ -1,3 +1,6 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+
 import logging as _logging
 from absl import logging
 

@@ -1,19 +1,9 @@
-# Copyright 2022 The Flax Authors.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
 
-"""Input pipeline for LAION dataset.
-"""
+# References:
+# https://github.com/google/flax/tree/main/examples/imagenet
+
 
 import tensorflow as tf
 import tensorflow_text as tftx
@@ -213,12 +203,6 @@ def create_split(
     shard_id = data_layout.shard_id
     num_shards = data_layout.num_shards
 
-    # if laion_path is None:
-    #     # 400m by default
-    #     laion_dataset_path = "gs://kmh-gcp/laion-400m/tfrecord_dataset_img480"
-    # else:
-    #     laion_dataset_path = laion_path
-    # laion_dataset_path =
     logging.info(f"laion data path{dataset_path}")
     filenames = tf.io.gfile.glob(dataset_path + "/*.tfrecord")
     filenames.sort()

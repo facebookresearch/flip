@@ -1,3 +1,6 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+
 import jax.numpy as jnp
 
 import tree as nest
