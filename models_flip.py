@@ -504,7 +504,7 @@ class VisionTransformer(nn.Module):
         x = self.encoder_layers["pos_emb"](x)
 
         # masking: length -> length * mask_ratio
-        mask_ratio = self.mask_ratio if train or self.test_mask else 0.0
+        mask_ratio = self.mask_ratio if train else 0.0
         assert full_prob == 0.0
         if full_prob > 0 and random.uniform(self.make_rng("dropout")) <= full_prob:
             mask_ratio = 0.0

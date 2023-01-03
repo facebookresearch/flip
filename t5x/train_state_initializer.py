@@ -1,3 +1,7 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+
+
 from absl import logging
 import jax
 import jax.numpy as jnp
