@@ -13,13 +13,8 @@ import functools
 from utils.transform_util import (
     decode_and_random_crop,
     normalize_image,
-    color_jitter,
 )
 
-from utils.autoaug_util import (
-    distort_image_with_autoaugment,
-    distort_image_with_randaugment,
-)
 from utils import logging_util
 
 
@@ -150,27 +145,6 @@ def preprocess_image(image_bytes, dtype=tf.float32, image_size=None, aug=None):
     image = tf.reshape(image, [image_size, image_size, 3])
     if aug.flip:
         image = tf.image.random_flip_left_right(image)
-
-    # advance augs
-    if aug.color_jit is not None:
-        image = (
-            color_jitter(image / 255.0, *aug.color_jit) * 255.0
-        )  # color_jitter accept [0, 1] images
-
-    if aug.autoaug == "autoaug":
-        image = tf.clip_by_value(image, 0.0, 255.0)
-        image = tf.cast(image, dtype=tf.uint8)
-        image = distort_image_with_autoaugment(image, "v0")
-        image = tf.cast(image, dtype=tf.float32)
-    elif aug.autoaug == "randaug":
-        image = tf.clip_by_value(image, 0.0, 255.0)
-        image = tf.cast(image, dtype=tf.uint8)
-        image = distort_image_with_randaugment(image, num_layers=2, magnitude=9)
-        image = tf.cast(image, dtype=tf.float32)
-    elif aug.autoaug is None:
-        pass
-    else:
-        raise NotImplementedError
 
     image = normalize_image(image)
     image = tf.image.convert_image_dtype(image, dtype=dtype)
