@@ -598,7 +598,7 @@ class FLIP(nn.Module):
             bias_init=mlp_bias_init,
             use_bias=clr.proj_out_bias,
             kernel_axes=("_null0", "_null1"),
-            name="{}_mlp0".format(prefix),
+            name="{}_mlp1".format(prefix),
         )(z)
         return z
 
