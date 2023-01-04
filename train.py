@@ -264,14 +264,6 @@ def eval_tags_step(state, batch, model, rng):
     return z_txt
 
 
-def profile_memory(workdir):
-    jax.profiler.save_device_memory_profile("/tmp/memory.prof")
-    if jax.process_index() == 0:
-        logging.info("Saving memory.prof...")
-        os.system("cd ~; gsutil cp /tmp/memory.prof {}".format(workdir))
-        logging.info("Saved memory.prof.")
-
-
 def train_and_evaluate(
     config: ml_collections.ConfigDict, workdir: str
 ) -> train_state.TrainState:
@@ -517,8 +509,6 @@ def train_and_evaluate(
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
     logging.info("Elapsed time: {}".format(total_time_str))
 
-    if config.profile_memory:
-        profile_memory(workdir)
     jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
 
     return state

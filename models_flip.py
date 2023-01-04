@@ -188,7 +188,6 @@ class Encoder(nn.Module):
     droppath_rate: float = 0.0
     prefix: str = "encoder"
     rescale_init: float = 1.0
-    # ln_pre: bool = False
     remat_policy: str = "none"
 
     @nn.compact
@@ -217,9 +216,6 @@ class Encoder(nn.Module):
             )  # "deterministic" is a static argument in Encoder1DBlock
 
         x = inputs
-
-        # if self.ln_pre:
-        #     x = t5x.layers.LayerNorm(name=self.prefix + "_norm_pre", axes=("embed",))(x)
 
         for lyr in range(self.num_layers):
             deterministic = not train
@@ -343,12 +339,11 @@ class VisionTransformer(nn.Module):
 
     mask_ratio: float
     sincos: bool
-    norm_pix_loss: bool
     patches: Any
     transformer: Any
     hidden_size: int
-    classifier: str = "token"
     dtype: Any = jnp.float32
+    use_cls_token: bool = True
 
     def patchify(self, imgs):
         """
@@ -377,9 +372,6 @@ class VisionTransformer(nn.Module):
         return imgs
 
     def apply_encoder(self, inputs, train, full_prob=0.0):
-        use_cls_token = self.classifier == "token"
-        assert use_cls_token  # kaiming: TODO: support both?
-
         x = self.encoder_layers["patch_emb"](inputs)
 
         n, h, w, c = x.shape
@@ -397,7 +389,7 @@ class VisionTransformer(nn.Module):
         n = x.shape[0]
         ids_restore = jnp.reshape(ids_restore, [n, h, w])  # carries the shape info
 
-        if use_cls_token:
+        if self.use_cls_token:
             cls = self.encoder_layers["cls_token"]
             cls = jnp.tile(cls, [n, 1, 1])
             x = jnp.concatenate([cls, x], axis=1)
@@ -414,8 +406,7 @@ class VisionTransformer(nn.Module):
         # ------------------------
         # define encoder
         # ------------------------
-        use_cls_token = self.classifier == "token"
-        assert use_cls_token  # kaiming: TODO: support both?
+        assert self.use_cls_token
 
         encoder_layers = {}  # cannot directly declare self.encoder_layers
         encoder_layers["patch_emb"] = t5x.layers.Conv(
@@ -430,10 +421,10 @@ class VisionTransformer(nn.Module):
         )
         encoder_layers["pos_emb"] = posembed_util.Add2DPositionEmbs(
             sincos=self.sincos,
-            use_cls_token=use_cls_token,
+            use_cls_token=self.use_cls_token,
             name="posembed_encoder",
         )
-        if use_cls_token:
+        if self.use_cls_token:
             encoder_layers["cls_token"] = t5x.layers.param_with_axes(
                 "cls",
                 clstoken_init,
@@ -463,12 +454,10 @@ class FLIP(nn.Module):
 
     def get_config_img(self):
         cfg = self.config.model_img.copy_and_resolve_references()  # copy
-        cfg.name = "img_encoder"  # force name
         return cfg
 
     def get_config_txt(self):
         cfg = self.config.model_txt.copy_and_resolve_references()  # copy
-        cfg.name = "txt_encoder"  # force name
         return cfg
 
     def setup(self):
@@ -553,15 +542,15 @@ class FLIP(nn.Module):
         # apply contrastive learning
         if self.config.clr.clr_loss:
             if encode_img:
-                if self.config.clr.get("img_cls_token", False):
+                if not self.config.clr.img_avg_token:
                     z_img = x_img[:, 0, :]  # use cls_token
                 else:
-                    z_img = x_img.mean(axis=1)  # avearge pool anyway
+                    z_img = x_img.mean(axis=1)
                 z_img = self.apply_projection_head(z_img, prefix="img")
 
                 z_img /= jnp.linalg.norm(z_img, axis=-1, keepdims=True) + 1e-8
             if encode_txt:
-                if self.config.clr.get("txt_cls_token", True):
+                if self.config.clr.txt_avg_token:
                     z_txt = x_txt[:, 0, :]
                 else:
                     z_txt = x_txt.mean(axis=1)
