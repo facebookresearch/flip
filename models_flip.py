@@ -1,16 +1,5 @@
-# Copyright 2021 Google LLC.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
 
 import functools
 from typing import Any, Callable, Optional, Tuple
@@ -45,7 +34,6 @@ if INIT_VER == "mae_jax_v2":
     masktoken_init = fixed_gaussian_init
     posemb_init = fixed_gaussian_init  # not used if sincos
 
-    # patch_kernel_init = fixed_gaussian_init
     patch_kernel_init = initializers_util.patch_kernel()
     patch_bias_init = nn.initializers.zeros  # different from PyTorch?
 
@@ -61,110 +49,6 @@ if INIT_VER == "mae_jax_v2":
 
 else:
     raise NotImplementedError
-
-
-class IdentityLayer(nn.Module):
-    """Identity layer, convenient for giving a name to an array."""
-
-    @nn.compact
-    def __call__(self, x):
-        return x
-
-
-class Add2DPositionEmbs(nn.Module):
-    """Adds (optionally learned) positional embeddings to the inputs."""
-
-    sincos: bool
-    use_cls_token: bool
-    dtype: Any = jnp.float32
-
-    def get_pos_emb(self, x):
-        _, l, c = x.shape
-        h = w = int(l**0.5)
-        assert h * w == l
-
-        num_clstokens = 1 if self.use_cls_token else 0
-        pos_emb_shape = (1, num_clstokens + h * w, c)  # (batch_size, seq_len, emb_dim).
-
-        if not self.sincos:
-            raise NotImplementedError
-            init_fn = posemb_init
-        else:
-            pe_array = posembed_util.get_2d_sincos_pos_embed(
-                c, (h, w), cls_token=self.use_cls_token
-            )  # in numpy array
-            init_fn = initializers_util.constant(value=pe_array, dtype=self.dtype)
-
-        pe = t5x.layers.param_with_axes(
-            "pos_embedding",
-            init_fn,
-            pos_emb_shape,
-            jnp.float32,
-            axes=("_null0", "length", "embed"),
-        )
-
-        # kaiming: in MAE, we should always set posembed for cls_token as zero.
-        # when loading for finetuning, this zero posembed can be tuned.
-        # but this is not addressed here if sincos=False
-
-        return pe
-
-    @nn.compact
-    def __call__(self, inputs):
-        """Applies Add2DPositionEmbs module.
-
-        By default this layer uses a fixed sinusoidal embedding table. If a
-        learned position embedding is desired, pass an initializer to
-        posemb_init.
-
-        Args:
-          inputs: Inputs to the layer.
-
-        Returns:
-          Output tensor with shape `(bs, timesteps, in_dim)`.
-        """
-        pe = self.get_pos_emb(inputs)
-        pe = jax.lax.stop_gradient(pe) if self.sincos else self.pe
-
-        if self.use_cls_token:
-            output = inputs + pe[:, 1:, :]
-        else:
-            output = inputs + pe
-
-        return output
-
-
-class Add1DPositionEmbs(nn.Module):
-    """Adds (optionally learned) positional embeddings to the inputs."""
-
-    sincos: bool
-    dtype: Any = jnp.float32
-    posemb_init: Any = None
-
-    def get_pos_emb(self, x):
-        _, l, c = x.shape
-        pos_emb_shape = (1, l, c)  # (batch_size, seq_len, emb_dim).
-
-        if not self.sincos:
-            init_fn = self.posemb_init
-        else:
-            raise NotImplementedError
-
-        pe = t5x.layers.param_with_axes(
-            "pos_embedding",
-            init_fn,
-            pos_emb_shape,
-            jnp.float32,
-            axes=("_null0", "length", "embed"),
-        )
-
-        return pe
-
-    @nn.compact
-    def __call__(self, inputs):
-        pe = self.get_pos_emb(inputs)
-        output = inputs + pe
-        return output
 
 
 class MlpBlock(nn.Module):
@@ -429,7 +313,7 @@ class LanguageTransformer(nn.Module):
             axes=["classes", "embed"],  # do not use 'vocab'
             name="token_embedding",
         )
-        encoder_layers["pos_emb"] = Add1DPositionEmbs(
+        encoder_layers["pos_emb"] = posembed_util.Add1DPositionEmbs(
             sincos=self.sincos, posemb_init=fixed_gaussian_init, name="posembed_encoder"
         )
         encoder_layers["blocks"] = Encoder(
@@ -544,8 +428,10 @@ class VisionTransformer(nn.Module):
             bias_init=patch_bias_init,
             kernel_axes=("_null0", "_null1", "_null2", "embed"),
         )
-        encoder_layers["pos_emb"] = Add2DPositionEmbs(
-            sincos=self.sincos, use_cls_token=use_cls_token, name="posembed_encoder"
+        encoder_layers["pos_emb"] = posembed_util.Add2DPositionEmbs(
+            sincos=self.sincos,
+            use_cls_token=use_cls_token,
+            name="posembed_encoder",
         )
         if use_cls_token:
             encoder_layers["cls_token"] = t5x.layers.param_with_axes(

@@ -1,7 +1,110 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
 
+from typing import Any, Tuple
 import numpy as np
+import flax.linen as nn
+import jax.numpy as jnp
+
+import jax
+import t5x.layers
+
+from utils import initializers_util
+
+Array = Any
+PRNGKey = Any
+Shape = Tuple[int]
+Dtype = Any
+
+
+class Add2DPositionEmbs(nn.Module):
+    """Adds 2D positional embeddings to the inputs."""
+
+    sincos: bool
+    use_cls_token: bool
+    dtype: Any = jnp.float32
+
+    def get_pos_emb(self, x):
+        _, l, c = x.shape
+        h = w = int(l**0.5)
+        assert h * w == l
+
+        num_clstokens = 1 if self.use_cls_token else 0
+        # (batch_size, seq_len, emb_dim).
+        pos_emb_shape = (1, num_clstokens + h * w, c)
+
+        if not self.sincos:
+            raise NotImplementedError
+        else:
+            pe_array = get_2d_sincos_pos_embed(c, (h, w), cls_token=self.use_cls_token)
+            init_fn = initializers_util.constant(value=pe_array, dtype=self.dtype)
+
+        pe = t5x.layers.param_with_axes(
+            "pos_embedding",
+            init_fn,
+            pos_emb_shape,
+            jnp.float32,
+            axes=("_null0", "length", "embed"),
+        )
+
+        return pe
+
+    @nn.compact
+    def __call__(self, inputs):
+        """Applies Add2DPositionEmbs module.
+
+        By default this layer uses a fixed sinusoidal embedding table. If a
+        learned position embedding is desired, pass an initializer to
+        posemb_init.
+
+        Args:
+          inputs: Inputs to the layer.
+
+        Returns:
+          Output tensor with shape `(bs, timesteps, in_dim)`.
+        """
+        pe = self.get_pos_emb(inputs)
+        pe = jax.lax.stop_gradient(pe) if self.sincos else self.pe
+
+        if self.use_cls_token:
+            output = inputs + pe[:, 1:, :]
+        else:
+            output = inputs + pe
+
+        return output
+
+
+class Add1DPositionEmbs(nn.Module):
+    """Adds (optionally learned) positional embeddings to the inputs."""
+
+    sincos: bool
+    dtype: Any = jnp.float32
+    posemb_init: Any = None
+
+    def get_pos_emb(self, x):
+        _, l, c = x.shape
+        pos_emb_shape = (1, l, c)  # (batch_size, seq_len, emb_dim).
+
+        if not self.sincos:
+            init_fn = self.posemb_init
+        else:
+            raise NotImplementedError
+
+        pe = t5x.layers.param_with_axes(
+            "pos_embedding",
+            init_fn,
+            pos_emb_shape,
+            jnp.float32,
+            axes=("_null0", "length", "embed"),
+        )
+
+        return pe
+
+    @nn.compact
+    def __call__(self, inputs):
+        pe = self.get_pos_emb(inputs)
+        output = inputs + pe
+        return output
 
 
 # --------------------------------------------------------
