@@ -70,7 +70,7 @@ and [pod slice setup](https://cloud.google.com/tpu/docs/jax-quickstart-tpu-vm).
 
 By default, we train ViT-B/L models using v3-256 TPUs and ViT-H models with v3-512 TPUs. 
 
-#### 1. Pretraining FLIP models vai masking
+#### 1. Pretraining FLIP models via masking
 ##### Running locally
 
 ```
@@ -98,7 +98,7 @@ python3 main.py --workdir=$WORKDIR --config=configs/cfg_flip_large.py \
 --config.model.model_img.mask_ratio=0.0 --config.learning_rate=4e-8
 --config.num_epochs=100 --config.warmup_epochs=20 \
 ```
-To avoid out of memory issue, we may optionally turn on `config.partitioning.partition_states=True` and activation checkpointing by `config.model.model_img.transformer.remat_policy=actcp`, and reduce batch size `config.batch_size`.
+To avoid out of memory issue, we may need to optionally turn on `config.partitioning.partition_states` and activation checkpointing by `config.model.model_img.transformer.remat_policy=actcp`, and reduce batch size `config.batch_size`.
 
 
 ### Evaluation
