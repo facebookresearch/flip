@@ -550,7 +550,7 @@ class FLIP(nn.Module):
 
                 z_img /= jnp.linalg.norm(z_img, axis=-1, keepdims=True) + 1e-8
             if encode_txt:
-                if self.config.clr.txt_avg_token:
+                if not self.config.clr.txt_avg_token:
                     z_txt = x_txt[:, 0, :]
                 else:
                     z_txt = x_txt.mean(axis=1)
