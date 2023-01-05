@@ -69,7 +69,9 @@ Our FLIP models are trained on Google Cloud TPU To set up Google Cloud TPU, plea
 and [pod slice setup](https://cloud.google.com/tpu/docs/jax-quickstart-tpu-vm).
 
 By default, we train ViT-B/L models using v3-256 TPUs and ViT-H models with v3-512 TPUs. 
-#### Running locally
+
+#### 1. Pretraining FLIP models vai masking
+##### Running locally
 
 ```
 export TFDS_DATA_DIR=gs://$GCS_TFDS_BUCKET/datasets
@@ -79,7 +81,7 @@ python3 main.py \
     --config.batch_size=256 \
 ```
 
-#### Running on cloud
+##### Running on cloud
 
 ```
 gcloud alpha compute tpus tpu-vm ssh $VM_NAME --zone $ZONE \
@@ -87,6 +89,16 @@ gcloud alpha compute tpus tpu-vm ssh $VM_NAME --zone $ZONE \
 export TFDS_DATA_DIR=gs://$GCS_TFDS_BUCKET/datasets &&
 python3 main.py --workdir=$WORKDIR --config=configs/cfg_flip_large.py
 ```
+
+#### 2. Unmasked tuning 
+
+For unmasked tuning, we use the same configs except the following parameters: 
+```
+python3 main.py --workdir=$WORKDIR --config=configs/cfg_flip_large.py \
+--config.model.model_img.mask_ratio=0.0 --config.learning_rate=4e-8
+--config.num_epochs=100 --config.warmup_epochs=20 \
+```
+To avoid out of memory issue, we may optionally turn on `config.partitioning.partition_states=True` and activation checkpointing by `config.model.model_img.transformer.remat_policy=actcp`, and reduce batch size `config.batch_size`.
 
 
 ### Evaluation
