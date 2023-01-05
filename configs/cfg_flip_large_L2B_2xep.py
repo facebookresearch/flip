@@ -7,13 +7,14 @@ import configs.default as default
 
 def get_config():
     """
-    default config for ViT-L on LAION-400M with 10000 ImageNet epochs
+    default config for ViT-L on LAION-2B with 20000 ImageNet epochs
     """
     config = default.get_config()
 
-    # config.laion_path = LAION-400M path
-    # 10000 imagenet epochs ~= 32 epoch LAION-400M
-    config.num_epochs = 10000.0
+    config.num_epochs = 20000.0
     config.model.model_img.mask_ratio = 0.5
+
+    # config.laion_path = LAION2B path
+    config.learning_rate = 2e-6
 
     return config
