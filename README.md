@@ -79,6 +79,7 @@ python3 main.py \
     --workdir=${workdir} \
     --config=$1 \
     --config.batch_size=256 \
+    --config.laion_path=LAION_PATH \
 ```
 
 ##### Running on cloud
@@ -87,7 +88,7 @@ python3 main.py \
 gcloud alpha compute tpus tpu-vm ssh $VM_NAME --zone $ZONE \
 --worker=all --command "
 export TFDS_DATA_DIR=gs://$GCS_TFDS_BUCKET/datasets &&
-python3 main.py --workdir=$WORKDIR --config=configs/cfg_flip_large.py
+python3 main.py --workdir=$WORKDIR --config=configs/cfg_flip_large.py --config.laion_path=LAION_PATH 
 ```
 
 #### 2. Unmasked tuning 
@@ -95,6 +96,7 @@ python3 main.py --workdir=$WORKDIR --config=configs/cfg_flip_large.py
 For unmasked tuning, we use the same configs except the following parameters: 
 ```
 python3 main.py --workdir=$WORKDIR --config=configs/cfg_flip_large.py \
+--config.laion_path=LAION_PATH \
 --config.model.model_img.mask_ratio=0.0 --config.learning_rate=4e-8
 --config.num_epochs=100 --config.warmup_epochs=20 \
 ```
