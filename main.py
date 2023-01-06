@@ -57,10 +57,6 @@ def main(argv):
 
     logging.info(FLAGS.config)
 
-    if jax.local_devices()[0].platform != "tpu":
-        logging.error("Not using TPU. Exit.")
-        exit()
-
     train.train_and_evaluate(FLAGS.config, FLAGS.workdir)
 
 
