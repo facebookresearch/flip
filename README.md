@@ -1,5 +1,9 @@
 ## Scaling Language-Image Pre-training via Masking
 
+<p align="center">
+  <img src="https://user-images.githubusercontent.com/5648235/210933226-b157339a-7aa8-47e9-864a-75cc65e52c99.png" width="480">
+</p>
+
 This repository contains the official JAX implementation of **FLIP**, as described in the paper [Scaling Language-Image Pre-training via Masking](https://arxiv.org/abs/2212.00794)
 
 ```
@@ -28,13 +32,13 @@ The following table provides zero-shot results on ImageNet-1K and links to pre-t
 <th valign="bottom">zero-shot IN-1K</th>
 <th valign="bottom">model</th>
 <!-- TABLE BODY -->
-<tr><td align="left">ViT-B</td>
+<tr><td align="left">ViT-B/16</td>
 <td align="center">LAION-400M</td>
 <td align="center">12.8B</td>
 <td align="center">68.0</td>
 <td align="center">download</td>
 </tr>
-<tr><td align="left">ViT-L</td>
+<tr><td align="left">ViT-L/16</td>
 <td align="center">LAION-400M</td>
 <td align="center">12.8B</td>
 <td align="center">74.3</td>
@@ -46,7 +50,7 @@ The following table provides zero-shot results on ImageNet-1K and links to pre-t
 <td align="center">75.5</td>
 <td align="center">download</td>
 </tr>
-<tr><td align="left">ViT-L</td>
+<tr><td align="left">ViT-L/16</td>
 <td align="center">LAION-2B</td>
 <td align="center">25.6B</td>
 <td align="center">76.6</td>
@@ -100,7 +104,7 @@ python3 main.py --workdir=$WORKDIR --config=configs/cfg_flip_large.py \
 --config.model.model_img.mask_ratio=0.0 --config.learning_rate=4e-8
 --config.num_epochs=100 --config.warmup_epochs=20 \
 ```
-To avoid out of memory issue, we may need to optionally turn on `config.partitioning.partition_states` and activation checkpointing by `config.model.model_img.transformer.remat_policy=actcp`, and reduce batch size `config.batch_size`.
+To avoid out of memory issue, we may need to optionally turn on activation checkpointing by `config.model.model_img.transformer.remat_policy=actcp` and reduce batch size `config.batch_size`.
 
 
 ### Evaluation

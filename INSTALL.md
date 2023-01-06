@@ -1,6 +1,6 @@
 ## Installation
 
-We train FLIP models on TPU by default. We use python 3.8.10 and install the following dependencies:
+We train FLIP models on TPU by default and use `tpu-vm-base` TPU software version. We use python 3.8.10 and install the following dependencies:
 
 ```
 sudo pip3 install clu==0.0.7
