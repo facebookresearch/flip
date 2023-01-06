@@ -16,4 +16,7 @@ def get_config():
     config.num_epochs = 10000.0
     config.model.model_img.mask_ratio = 0.5
 
+    # save memory
+    config.partitioning.partition_states = True
+
     return config

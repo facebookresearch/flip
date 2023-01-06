@@ -32,4 +32,9 @@ def get_config():
 
     config.model.clr.proj_dim_out = 1024
 
+    # save memory
+    config.partitioning.partition_states = True
+    # flatten params in optmizer
+    config.opt.flatten_params = True
+
     return config

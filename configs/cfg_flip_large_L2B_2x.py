@@ -14,6 +14,9 @@ def get_config():
     config.num_epochs = 20000.0
     config.model.model_img.mask_ratio = 0.5
 
+    # save memory
+    config.partitioning.partition_states = True
+
     # config.laion_path = LAION2B path
     config.learning_rate = 2e-6
 
