@@ -4,7 +4,7 @@
   <img src="https://user-images.githubusercontent.com/5648235/210933226-b157339a-7aa8-47e9-864a-75cc65e52c99.png" width="480">
 </p>
 
-This repository contains the official JAX implementation of **FLIP**, as described in the paper [Scaling Language-Image Pre-training via Masking](https://arxiv.org/abs/2212.00794)
+This repository contains the official JAX implementation of **FLIP**, as described in the paper [Scaling Language-Image Pre-training via Masking](https://arxiv.org/abs/2212.00794).
 
 ```
 @article{li2022scaling,
