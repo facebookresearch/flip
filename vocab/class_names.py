@@ -1,6 +1,9 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
 
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
 # references:
 # https://github.com/google-research/big_vision/blob/6ff6d080d62c1f47e2e4eeb8b6474deb38dfe406/big_vision/datasets/imagenet/class_names.py
 

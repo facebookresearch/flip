@@ -1,8 +1,14 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
 
-# references:
-# https://github.com/google-research/t5x/tree/main/t5x
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+# --------------------------------------------------------
+# References:
+# The code is adapted and modified from https://github.com/google-research/t5x/tree/main/t5x
+# LICENSE: https://github.com/google-research/t5x/blob/2a62e14fd2806a28c8b24c7674fdd5423aa95e3d/LICENSE
+# --------------------------------------------------------
 
 
 """T5X Optimizer Support.

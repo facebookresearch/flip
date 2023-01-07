@@ -1,6 +1,9 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
 
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
 # references:
 # https://github.com/deepmind/optax/blob/a783f85538f1ba95fc83c2fbbf821ed5e314cdec/optax/_src/alias.py#L187
 

@@ -1,8 +1,14 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
 
-# references:
-# https://github.com/google-research/t5x/tree/main/t5x
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+# --------------------------------------------------------
+# References:
+# The code is adapted and modified from https://github.com/google-research/t5x/tree/main/t5x
+# LICENSE: https://github.com/google-research/t5x/blob/2a62e14fd2806a28c8b24c7674fdd5423aa95e3d/LICENSE
+# --------------------------------------------------------
 
 """Utilities for reading and writing sharded checkpoints.
 
@@ -300,7 +306,8 @@ def _maybe_update_ts_from_gcs_to_file(ckpt_contents):
 
         if arr_or_ts_spec_dict["kvstore"]["driver"] == "gcs":
             ts_spec_dict = arr_or_ts_spec_dict
-            path = ts_spec_dict.pop("path")
+            # path = ts_spec_dict.pop("path")
+            path = ts_spec_dict.pop("path", ts_spec_dict["kvstore"]["path"])
             driver = "file"
             ts_spec_dict["kvstore"] = {"path": path, "driver": driver}
         elif arr_or_ts_spec_dict["kvstore"]["driver"] == "gfile":
@@ -972,6 +979,7 @@ class Checkpointer(object):
         # If a ckpt was saved in gcs and is being loaded locally, then convert the
         # driver to file or gfile. If the ckpt was not saved in gcs, do not change.
         else:
+            # ckpt_contents = _maybe_update_ts_from_file_to_gcs(ckpt_contents)
             ckpt_contents = _maybe_update_ts_from_gcs_to_file(ckpt_contents)
 
         ckpt_state_dict = self._get_optimizer_state_dict(
