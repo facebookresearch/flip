@@ -18,7 +18,12 @@ from optax._src import numerics
 from optax._src import utils
 
 from optax._src import transform
-from optax._src.transform import _bias_correction, ScaleByAdamState
+from optax._src.transform import ScaleByAdamState
+
+try:
+    from optax._src.transform import _bias_correction as bias_correction
+except ImportError:
+    from optax._src.transform import bias_correction
 
 
 ScalarOrSchedule = Union[float, base.Schedule]
@@ -148,8 +153,8 @@ def _scale_by_adam(
         mu = _update_moment(updates, state.mu, b1, 1, flatten_params=flatten_params)
         nu = _update_moment(updates, state.nu, b2, 2, flatten_params=flatten_params)
         count_inc = numerics.safe_int32_increment(state.count)
-        mu_hat = _bias_correction(mu, b1, count_inc)
-        nu_hat = _bias_correction(nu, b2, count_inc)
+        mu_hat = bias_correction(mu, b1, count_inc)
+        nu_hat = bias_correction(nu, b2, count_inc)
         updates = jax.tree_map(
             lambda m, v: m / (jnp.sqrt(v + eps_root) + eps), mu_hat, nu_hat
         )

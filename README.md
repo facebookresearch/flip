@@ -103,6 +103,7 @@ python3 main.py --workdir=$WORKDIR --config=configs/cfg_flip_large.py \
 --config.laion_path=LAION_PATH \
 --config.model.model_img.mask_ratio=0.0 --config.learning_rate=4e-8
 --config.num_epochs=100 --config.warmup_epochs=20 \
+ --config.pretrain_dir=${PRETRAIN} \
 ```
 To avoid out of memory issue, we may need to optionally turn on activation checkpointing by `config.model.model_img.transformer.remat_policy=actcp` and reduce batch size `config.batch_size`.
 

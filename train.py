@@ -10,7 +10,6 @@
 
 import datetime
 import time
-import os
 import numpy as np
 import math
 import jax.profiler
@@ -40,6 +39,9 @@ import input_pipeline_laion
 import input_pipeline_imagenet
 from utils import logging_util
 from utils import checkpoint_util as ckp
+from utils import (
+    summary_util as summary_util,
+)  # must be after 'from clu import metric_writers'
 
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
