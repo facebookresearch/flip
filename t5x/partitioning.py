@@ -11,7 +11,6 @@
 # --------------------------------------------------------
 
 
-
 """Utilities for partitioning."""
 
 import abc
@@ -186,7 +185,7 @@ def get_mesh(
         g % m for g, m in zip(global_hardware_mesh, model_parallel_submesh)
     ), mesh_err
     assert not any(g % l for g, l in zip(global_hardware_mesh, local_hardware_mesh))
-    devices = np.empty(global_hardware_mesh, dtype=np.object)
+    devices = np.empty(global_hardware_mesh, dtype=object)
     for device in input_devices:
         device_coords = get_coords(device)
         devices[device_coords] = device
@@ -299,7 +298,7 @@ def get_mesh(
 
 def get_cpu_mesh() -> Mesh:
     """Trivial mesh for CPU Testing."""
-    devices = np.empty((jax.host_count(), jax.local_device_count()), dtype=np.object)
+    devices = np.empty((jax.host_count(), jax.local_device_count()), dtype=object)
     for device in jax.devices():
         devices[device.process_index, device.id % jax.local_device_count()] = device
     return Mesh(devices, ["data", "model"])
@@ -307,7 +306,7 @@ def get_cpu_mesh() -> Mesh:
 
 def get_gpu_mesh() -> Mesh:
     """Simple mesh for GPUs."""
-    devices = np.empty((jax.host_count(), jax.local_device_count()), dtype=np.object)
+    devices = np.empty((jax.host_count(), jax.local_device_count()), dtype=object)
     for device in jax.devices():
         devices[device.process_index, device.id % jax.local_device_count()] = device
     return Mesh(devices, ["data", "model"])
