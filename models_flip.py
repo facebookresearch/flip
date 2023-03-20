@@ -374,7 +374,7 @@ class VisionTransformer(nn.Module):
         imgs = jnp.reshape(x, (x.shape[0], h * p, w * q, 3))
         return imgs
 
-    def apply_encoder(self, inputs, train, full_prob=0.0):
+    def apply_encoder(self, inputs, train):
         x = self.encoder_layers["patch_emb"](inputs)
 
         n, h, w, c = x.shape
@@ -384,9 +384,6 @@ class VisionTransformer(nn.Module):
 
         # masking: length -> length * mask_ratio
         mask_ratio = self.mask_ratio if train else 0.0
-        assert full_prob == 0.0
-        if full_prob > 0 and random.uniform(self.make_rng("dropout")) <= full_prob:
-            mask_ratio = 0.0
 
         x, mask, ids_restore = random_mask(self.make_rng("dropout"), x, mask_ratio)
         n = x.shape[0]
