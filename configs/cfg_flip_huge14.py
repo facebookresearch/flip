@@ -37,7 +37,7 @@ def get_config():
 
     # save memory
     config.partitioning.partition_states = True
-    # flatten params in optmizer
+    # flatten params in optimizer
     config.opt.flatten_params = True
 
     return config
