@@ -19,11 +19,11 @@ def get_config():
     config.laion_path = ""
 
     config.learning_rate = 4e-6  # this is the base lr per 256 batch-size
-    config.warmup_epochs = 40.0  # virutual imagenet epochs
+    config.warmup_epochs = 40.0  # virtual imagenet epochs
     config.min_abs_lr = 0.0
     config.warmup_abs_lr = 0.0
 
-    config.num_epochs = 10000.0  # virutual imagenet epochs
+    config.num_epochs = 10000.0  # virtual imagenet epochs
     config.log_every_steps = 200
     config.save_every_epochs = 100
 
